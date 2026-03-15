@@ -1,0 +1,40 @@
+# Environment
+.env
+.env.local
+.env.production
+
+# Go
+backend/bin/
+backend/coverage.*
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Docker
+docker/data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SSL certs (never commit)
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+
+# Logs
+*.log
+*.zip
