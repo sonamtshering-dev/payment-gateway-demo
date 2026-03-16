@@ -91,7 +91,7 @@ func (s *Service) AdminUpdatePaymentStatus(ctx context.Context, paymentID uuid.U
 	}
 
 	s.repo.CreateTransactionLog(ctx, &models.TransactionLog{
-		ID:          uuid.New(),
+		ID:          utils.NewID(),
 		PaymentID:   paymentID,
 		Status:      string(status),
 		RawResponse: fmt.Sprintf("manual update by admin: %s", note),

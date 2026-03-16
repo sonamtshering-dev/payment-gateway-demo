@@ -25,7 +25,7 @@ func GenerateAccessToken(merchantID uuid.UUID, email string, isAdmin bool, secre
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    "upay-gateway",
 			Subject:   merchantID.String(),
-			ID:        uuid.New().String(),
+			ID:        NewID().String(),
 		},
 	}
 

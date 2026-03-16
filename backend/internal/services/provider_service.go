@@ -36,7 +36,7 @@ func (s *Service) ConnectProvider(ctx context.Context, merchantID uuid.UUID, req
 		return nil, err
 	}
 	p := &models.MerchantProvider{
-		ID:           uuid.New(),
+		ID:           utils.NewID(),
 		MerchantID:   merchantID,
 		Provider:     req.Provider,
 		MerchantName: req.MerchantName,
@@ -49,7 +49,7 @@ func (s *Service) ConnectProvider(ctx context.Context, merchantID uuid.UUID, req
 		return nil, fmt.Errorf("failed to save provider: %w", err)
 	}
 	upi := &models.MerchantUPI{
-		ID:         uuid.New(),
+		ID:         utils.NewID(),
 		MerchantID: merchantID,
 		UPIID:      encryptedUPI,
 		Label:      req.Provider + " - " + req.MerchantName,

@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/upay/gateway/internal/repository"
 	"github.com/upay/gateway/internal/models"
+	"github.com/upay/gateway/internal/utils"
 )
 
 func (s *Service) GetSubscription(ctx context.Context, merchantID uuid.UUID) (*repository.MerchantSubscription, error) {
@@ -20,7 +21,7 @@ func (s *Service) CreateSubscription(ctx context.Context, merchantID, planID uui
 		return nil, fmt.Errorf("plan not found")
 	}
 	sub := &repository.MerchantSubscription{
-		ID:         uuid.New(),
+		ID:         utils.NewID(),
 		MerchantID: merchantID,
 		PlanID:     planID,
 		Status:     "active",

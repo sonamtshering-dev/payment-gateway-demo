@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	qrcode "github.com/skip2/go-qrcode"
+	
 
 	"github.com/upay/gateway/internal/config"
 	"github.com/upay/gateway/internal/models"
@@ -57,7 +56,7 @@ func (s *Service) Register(ctx context.Context, req models.RegisterRequest) (*mo
 	}
 
 	merchant := &models.Merchant{
-		ID:            uuid.New(),
+		ID:            utils.NewID(),
 		Name:          req.Name,
 		Email:         req.Email,
 		PasswordHash:  passwordHash,
@@ -116,7 +115,7 @@ func (s *Service) generateAuthResponse(ctx context.Context, merchant *models.Mer
 	refreshToken, _ := utils.GenerateRefreshToken()
 
 	rt := &models.RefreshToken{
-		ID:         uuid.New(),
+		ID:         utils.NewID(),
 		MerchantID: merchant.ID,
 		TokenHash:  utils.HashToken(refreshToken),
 		ExpiresAt:  time.Now().Add(s.config.JWT.RefreshExpiry),
@@ -180,14 +179,13 @@ func (s *Service) CreatePayment(ctx context.Context, req models.CreatePaymentReq
 
 	upiLink := utils.GenerateUPILink(decryptedUPI, merchant.Name, req.Amount, req.OrderID)
 
-	qrBytes, err := qrcode.Encode(upiLink, qrcode.Medium, 512)
+	qrBase64, err := utils.GenerateQRBase64(upiLink)
 	if err != nil {
 		return nil, err
 	}
 
-	qrBase64 := base64.StdEncoding.EncodeToString(qrBytes)
 
-	paymentID := uuid.New()
+	paymentID := utils.NewID()
 
 	expires := time.Now().Add(s.config.Security.PaymentSessionTTL)
 
@@ -213,9 +211,9 @@ func (s *Service) CreatePayment(ctx context.Context, req models.CreatePaymentReq
 	}
 
 	return &models.CreatePaymentResponse{
+		QRCodeBase64:  qrBase64,
 		PaymentID:     paymentID,
 		UPIIntentLink: upiLink,
-		QRCodeBase64:  "data:image/png;base64," + qrBase64,
 		Amount:        req.Amount,
 		Currency:      req.Currency,
 		ExpiresAt:     expires,
@@ -249,7 +247,7 @@ func (s *Service) GetPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*m
 		PaidAt:        payment.PaidAt,
 		ExpiresAt:     payment.ExpiresAt,
 		CreatedAt:     payment.CreatedAt,
-		QRCodeBase64:  "data:image/png;base64," + payment.QRCodeData,
+		QRCodeBase64:  payment.QRCodeData,
 		UPIIntentLink: payment.UPIIntentLink,
 		CustomerRef:   payment.CustomerReference,
 	}, nil
@@ -342,7 +340,7 @@ func (s *Service) AddUPI(ctx context.Context, merchantID uuid.UUID, req models.A
 	}
 
 	upi := &models.MerchantUPI{
-		ID:         uuid.New(),
+		ID:         utils.NewID(),
 		MerchantID: merchantID,
 		UPIID:      encryptedUPI,
 		Label:      req.Label,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/upay/gateway/internal/models"
+	"github.com/upay/gateway/internal/utils"
 )
 
 // ─── helpers ───────────────────────────────────────────────────────────────
@@ -123,7 +124,7 @@ func (r *Repository) CreatePlan(ctx context.Context, req models.CreatePlanReques
 		badge = &req.Badge
 	}
 
-	id := uuid.New()
+	id := utils.NewID()
 	now := time.Now()
 
 	_, err = r.db.Exec(ctx, `

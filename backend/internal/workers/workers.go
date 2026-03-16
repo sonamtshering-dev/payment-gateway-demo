@@ -142,7 +142,7 @@ func (w *Worker) deliverWebhook(ctx context.Context, payload models.WebhookPaylo
 	if !success {
 		nextRetry := time.Now().Add(2 * time.Minute)
 		w.repo.CreateWebhookDelivery(ctx, &models.WebhookDelivery{
-			ID: uuid.New(), PaymentID: payment.ID, MerchantID: merchant.ID,
+			ID: utils.NewID(), PaymentID: payment.ID, MerchantID: merchant.ID,
 			URL: merchant.WebhookURL, Payload: string(payloadBytes),
 			ResponseCode: responseCode, ResponseBody: responseBody,
 			Attempt: 1, Success: false, NextRetryAt: &nextRetry, CreatedAt: time.Now(),
@@ -150,7 +150,7 @@ func (w *Worker) deliverWebhook(ctx context.Context, payload models.WebhookPaylo
 		log.Warn().Str("payment_id", payload.PaymentID).Int("status", responseCode).Msg("Webhook delivery failed")
 	} else {
 		w.repo.CreateWebhookDelivery(ctx, &models.WebhookDelivery{
-			ID: uuid.New(), PaymentID: payment.ID, MerchantID: merchant.ID,
+			ID: utils.NewID(), PaymentID: payment.ID, MerchantID: merchant.ID,
 			URL: merchant.WebhookURL, Payload: string(payloadBytes),
 			ResponseCode: responseCode, ResponseBody: responseBody,
 			Attempt: 1, Success: true, CreatedAt: time.Now(),

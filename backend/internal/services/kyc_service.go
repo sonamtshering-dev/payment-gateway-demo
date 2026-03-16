@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/upay/gateway/internal/repository"
+	"github.com/upay/gateway/internal/utils"
 )
 
 func (s *Service) GetKYC(ctx context.Context, merchantID uuid.UUID) (*repository.MerchantKYC, error) {
@@ -20,7 +21,7 @@ func (s *Service) SubmitKYC(ctx context.Context, merchantID uuid.UUID, aadhaar, 
 	}
 	now := time.Now()
 	kyc := &repository.MerchantKYC{
-		ID:            uuid.New(),
+		ID:            utils.NewID(),
 		MerchantID:    merchantID,
 		AadhaarNumber: aadhaar,
 		PANNumber:     pan,
