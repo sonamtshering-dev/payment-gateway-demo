@@ -22,9 +22,9 @@ type LoginRequest struct {
 }
 
 type AuthResponse struct {
-	AccessToken  string   `json:"access_token"`
-	RefreshToken string   `json:"refresh_token"`
-	ExpiresIn    int64    `json:"expires_in"`
+	AccessToken  string         `json:"access_token"`
+	RefreshToken string         `json:"refresh_token"`
+	ExpiresIn    int64          `json:"expires_in"`
 	Merchant     MerchantPublic `json:"merchant"`
 }
 
@@ -38,6 +38,7 @@ type MerchantPublic struct {
 	Email     string    `json:"email"`
 	APIKey    string    `json:"api_key"`
 	IsActive  bool      `json:"is_active"`
+	IsAdmin   bool      `json:"is_admin"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -46,9 +47,9 @@ type MerchantPublic struct {
 // ============================================================================
 
 type CreatePaymentRequest struct {
-	MerchantID        string `json:"merchant_id" binding:"required,uuid"`
+	MerchantID        string `json:"merchant_id" binding:"omitempty,uuid"`
 	OrderID           string `json:"order_id" binding:"required,min=1,max=64"`
-	Amount            int64  `json:"amount" binding:"required,min=100"` // min ₹1 (100 paise)
+	Amount            int64  `json:"amount" binding:"required,min=100"`
 	Currency          string `json:"currency" binding:"required,eq=INR"`
 	CustomerReference string `json:"customer_reference" binding:"max=128"`
 }
@@ -74,6 +75,10 @@ type PaymentStatusResponse struct {
 	PaidAt        *time.Time    `json:"paid_at,omitempty"`
 	ExpiresAt     time.Time     `json:"expires_at"`
 	CreatedAt     time.Time     `json:"created_at"`
+
+	QRCodeBase64  string `json:"qr_code_base64,omitempty"`
+	UPIIntentLink string `json:"upi_intent_link,omitempty"`
+	CustomerRef   string `json:"customer_reference,omitempty"`
 }
 
 type VerifyPaymentRequest struct {
@@ -125,7 +130,7 @@ type DashboardStats struct {
 	SuccessfulPayments int64   `json:"successful_payments"`
 	FailedPayments     int64   `json:"failed_payments"`
 	PendingPayments    int64   `json:"pending_payments"`
-	TotalVolume        int64   `json:"total_volume"` // in paise
+	TotalVolume        int64   `json:"total_volume"`
 	SuccessRate        float64 `json:"success_rate"`
 	TodayTransactions  int64   `json:"today_transactions"`
 	TodayVolume        int64   `json:"today_volume"`

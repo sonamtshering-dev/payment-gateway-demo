@@ -88,6 +88,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 
 // POST /api/v1/payments/create
 func (h *Handler) CreatePayment(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 	var req models.CreatePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{
@@ -97,6 +98,7 @@ func (h *Handler) CreatePayment(c *gin.Context) {
 		return
 	}
 
+	req.MerchantID = merchantID.String()
 	resp, err := h.service.CreatePayment(c.Request.Context(), req, c.ClientIP())
 	if err != nil {
 		status := http.StatusBadRequest
@@ -215,6 +217,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 			Email:     merchant.Email,
 			APIKey:    merchant.APIKey,
 			IsActive:  merchant.IsActive,
+				IsAdmin:   merchant.IsAdmin,
 			CreatedAt: merchant.CreatedAt,
 		},
 	})

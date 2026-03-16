@@ -163,3 +163,15 @@ func (h *Handler) AdminGetSystemStats(c *gin.Context) {
 
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: stats})
 }
+
+
+func (h *Handler) AdminListPayments(c *gin.Context) {
+	filter := models.TransactionFilter{Page: 1, Limit: 50}
+	c.ShouldBindQuery(&filter)
+	result, err := h.service.GetMerchantTransactions(c.Request.Context(), uuid.Nil, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: result})
+}

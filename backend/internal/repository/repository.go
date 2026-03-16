@@ -557,3 +557,52 @@ func (r *Repository) CreateAuditLog(ctx context.Context, log *models.AuditLog) e
 	)
 	return err
 }
+
+func (r *Repository) GetActiveUPIs(ctx context.Context, merchantID uuid.UUID) ([]models.MerchantUPI, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT id, merchant_id, upi_id, label, is_active, priority
+		FROM merchant_upis WHERE merchant_id=$1 AND is_active=true
+	`, merchantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var upis []models.MerchantUPI
+	for rows.Next() {
+		var u models.MerchantUPI
+		if err := rows.Scan(&u.ID, &u.MerchantID, &u.UPIID, &u.Label, &u.IsActive, &u.Priority); err != nil {
+			continue
+		}
+		upis = append(upis, u)
+	}
+	return upis, nil
+}
+
+// GetPlatformUPI returns the admin/platform UPI for collecting subscription payments
+func (r *Repository) GetPlatformUPI(ctx context.Context) (*models.MerchantUPI, error) {
+	var u models.MerchantUPI
+	err := r.db.QueryRow(ctx, `
+		SELECT u.id, u.merchant_id, u.upi_id, u.label, u.is_active, u.priority
+		FROM merchant_upis u
+		JOIN merchants m ON m.id = u.merchant_id
+		WHERE m.is_admin = true AND u.is_active = true
+		ORDER BY u.priority ASC LIMIT 1
+	`).Scan(&u.ID, &u.MerchantID, &u.UPIID, &u.Label, &u.IsActive, &u.Priority)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (r *Repository) GetAdminMerchant(ctx context.Context) (*models.Merchant, error) {
+	var m models.Merchant
+	err := r.db.QueryRow(ctx, `
+		SELECT id, name, email, password_hash, api_key, api_secret, webhook_url, webhook_secret, is_active, is_admin, daily_limit, created_at, updated_at
+		FROM merchants WHERE is_admin = true AND is_active = true LIMIT 1
+	`).Scan(&m.ID, &m.Name, &m.Email, &m.PasswordHash, &m.APIKey, &m.APISecret,
+		&m.WebhookURL, &m.WebhookSecret, &m.IsActive, &m.IsAdmin, &m.DailyLimit, &m.CreatedAt, &m.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
+}

@@ -120,7 +120,7 @@ func main() {
 	r.Use(middleware.RequestID())
 	r.Use(middleware.StructuredLogger())
 	r.Use(middleware.SecurityHeaders())
-	r.Use(middleware.CORS([]string{"http://localhost:3000", "https://dashboard.upay.dev"}))
+	r.Use(middleware.CORS([]string{"http://localhost:3000", "https://dashboard.novapay.in"}))
 	r.Use(middleware.RateLimiter(rdb, cfg.Security.RateLimitPerMinute, time.Minute))
 	r.Use(middleware.RequestBodyLimit(1 << 20)) // 1MB max body
 	r.Use(middleware.MetricsCollector())
@@ -132,6 +132,10 @@ func main() {
 	// Health + Metrics (internal)
 	r.GET("/health", h.HealthCheck)
 	r.GET("/metrics", middleware.MetricsEndpoint())
+
+	// Public — no auth required (landing page pricing)
+	r.GET("/api/v1/public/plans", h.GetPublicPlans)
+	r.GET("/api/v1/public/payment/:payment_id", h.GetPaymentStatus)
 
 	v1 := r.Group("/api/v1")
 	{
@@ -172,6 +176,21 @@ func main() {
 			// Security
 			dashboard.POST("/rotate-keys", h.RotateAPIKeys)
 			dashboard.POST("/change-password", h.ChangePassword)
+
+			// Provider connections
+			dashboard.GET("/providers",        h.GetProviders)
+			dashboard.POST("/providers",       h.ConnectProvider)
+			dashboard.PUT("/providers/:id",    h.UpdateProvider)
+			dashboard.DELETE("/providers/:id", h.DeleteProvider)
+					dashboard.GET("/subscription", h.GetSubscription)
+					dashboard.POST("/subscription", h.CreateSubscription)
+					dashboard.DELETE("/subscription", h.CancelSubscription)
+					dashboard.GET("/subscription/detail", h.GetSubscriptionWithPlan)
+					dashboard.POST("/subscription/pay", h.InitiateSubscriptionPayment)
+					dashboard.GET("/kyc", h.GetKYC)
+					dashboard.POST("/kyc", h.SubmitKYC)
+					dashboard.POST("/payments/create", h.CreatePayment)
+					dashboard.GET("/payments/status/:payment_id", h.GetPaymentStatus)
 		}
 
 		// ---- ADMIN (JWT + admin role) ----
@@ -184,7 +203,17 @@ func main() {
 			admin.GET("/fraud-alerts", h.AdminGetFraudAlerts)
 			admin.PUT("/fraud-alerts/:id/resolve", h.AdminResolveFraudAlert)
 			admin.PUT("/payments/:id/status", h.AdminUpdatePaymentStatus)
+					admin.GET("/payments", h.AdminListPayments)
+					admin.GET("/kyc", h.AdminListKYC)
+					admin.PUT("/kyc/:merchant_id", h.AdminReviewKYC)
+					admin.POST("/subscriptions/:merchant_id/extend", h.AdminExtendSubscription)
 			admin.GET("/stats", h.AdminGetSystemStats)
+
+			// Plans — admin controlled (shown on landing page)
+			admin.GET("/plans",        h.AdminListPlans)
+			admin.POST("/plans",       h.AdminCreatePlan)
+			admin.PUT("/plans/:id",    h.AdminUpdatePlan)
+			admin.DELETE("/plans/:id", h.AdminDeletePlan)
 		}
 	}
 
@@ -208,7 +237,7 @@ func main() {
 	}
 
 	go func() {
-		log.Info().Str("addr", addr).Msg("UPay Gateway starting")
+		log.Info().Str("addr", addr).Msg("NovaPay Gateway starting")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("Server failed")
 		}
@@ -252,5 +281,5 @@ func main() {
 	rdb.Close()
 	db.Close()
 
-	log.Info().Msg("UPay Gateway shutdown complete")
+	log.Info().Msg("NovaPay Gateway shutdown complete")
 }

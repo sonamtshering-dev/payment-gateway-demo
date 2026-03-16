@@ -1,390 +1,606 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Shield, Users, CreditCard, AlertTriangle, TrendingUp,
-  LogOut, CheckCircle, XCircle, Clock, RefreshCw, X,
-  ToggleLeft, ToggleRight, Bell
-} from 'lucide-react';
-import api from '@/lib/api';
+import { LogOut, RefreshCw, Search, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 
-// ============================================================================
-// UTILS
-// ============================================================================
-const formatCompact = (paise: number) => {
-  const r = paise / 100;
-  if (r >= 10000000) return `₹${(r / 10000000).toFixed(1)}Cr`;
-  if (r >= 100000) return `₹${(r / 100000).toFixed(1)}L`;
-  if (r >= 1000) return `₹${(r / 1000).toFixed(1)}K`;
-  return `₹${r.toFixed(0)}`;
+const fmt = (p: number) => { const r=p/100; if(r>=10000000) return `₹${(r/10000000).toFixed(1)}Cr`; if(r>=100000) return `₹${(r/100000).toFixed(1)}L`; if(r>=1000) return `₹${(r/1000).toFixed(1)}K`; return `₹${r.toFixed(0)}`; };
+const dateStr = (s: string) => { try { return new Date(s).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'}); } catch { return '-'; } };
+const toArr = (v: any): any[] => { if (Array.isArray(v)) return v; return []; };
+
+const TABS = ['Overview','Merchants','Payments','KYC','Fraud Alerts','Subscriptions','Plans'];
+
+const S = {
+  page:   { minHeight:'100vh', background:'#07090f', color:'#eef2ff', fontFamily:'DM Sans,sans-serif' } as React.CSSProperties,
+  topbar: { height:62, background:'#0b0f1a', borderBottom:'1px solid rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 28px', position:'sticky' as const, top:0, zIndex:50 } as React.CSSProperties,
+  body:   { padding:28, maxWidth:1200, margin:'0 auto' } as React.CSSProperties,
+  tabs:   { display:'flex', gap:4, background:'#111827', border:'1px solid rgba(255,255,255,0.06)', borderRadius:12, padding:4, marginBottom:28, flexWrap:'wrap' as const } as React.CSSProperties,
+  tab:    (active:boolean) => ({ background:active?'rgba(0,229,176,0.12)':'transparent', color:active?'#00e5b0':'#64748b', border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:active?700:400, cursor:'pointer', fontFamily:'DM Sans,sans-serif', transition:'all 0.15s' }) as React.CSSProperties,
+  card:   { background:'#111827', border:'1px solid rgba(255,255,255,0.06)', borderRadius:14, padding:24 } as React.CSSProperties,
+  grid4:  { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:14, marginBottom:24 } as React.CSSProperties,
+  statCard: { background:'#111827', border:'1px solid rgba(255,255,255,0.06)', borderRadius:12, padding:'18px 20px' } as React.CSSProperties,
+  inp:    { background:'#0b0f1a', border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, padding:'9px 14px', color:'#eef2ff', fontSize:13, fontFamily:'DM Sans,sans-serif', outline:'none', width:'100%', boxSizing:'border-box' as const } as React.CSSProperties,
+  label:  { display:'block', fontSize:11, fontWeight:700, color:'#64748b', textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:6 } as React.CSSProperties,
+  btn:    (color:string) => ({ background:`rgba(${color},0.08)`, border:`1px solid rgba(${color},0.2)`, borderRadius:8, padding:'6px 14px', color:`rgb(${color})`, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'DM Sans,sans-serif' }) as React.CSSProperties,
+  tHead:  { display:'grid', padding:'10px 16px', borderBottom:'1px solid rgba(255,255,255,0.06)', fontSize:11, fontWeight:700, color:'#4b5563', textTransform:'uppercase' as const, letterSpacing:'0.08em' } as React.CSSProperties,
+  tRow:   { padding:'13px 16px', borderBottom:'1px solid rgba(255,255,255,0.04)', fontSize:13, alignItems:'center', transition:'background 0.15s' } as React.CSSProperties,
+  badge:  (color:string) => ({ background:`rgba(${color},0.10)`, color:`rgb(${color})`, fontSize:10, fontWeight:700, padding:'3px 9px', borderRadius:100, letterSpacing:'0.05em' }) as React.CSSProperties,
+  overlay:{ position:'fixed' as const, inset:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 } as React.CSSProperties,
+  modal:  { background:'#111827', border:'1px solid rgba(255,255,255,0.08)', borderRadius:16, padding:32, width:520, maxWidth:'92vw', maxHeight:'90vh', overflowY:'auto' as const } as React.CSSProperties,
 };
 
-const severityConfig: Record<string, { color: string; bg: string }> = {
-  critical: { color: '#dc2626', bg: '#fef2f2' },
-  high:     { color: '#ea580c', bg: '#fff7ed' },
-  medium:   { color: '#d97706', bg: '#fffbeb' },
-  low:      { color: '#65a30d', bg: '#f7fee7' },
-};
+const EMPTY_PLAN = { name:'', price:'', billing_cycle:'per month', badge:'', is_featured:false, cta_label:'', sort_order:0, qr_limit:0, link_limit:0, api_limit:0, features:'' };
 
-// ============================================================================
-// TOAST
-// ============================================================================
-const ToastContext = React.createContext<((msg: string, type?: string) => void) | null>(null);
-function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<{ id: number; msg: string; type: string }[]>([]);
-  const add = useCallback((msg: string, type = 'success') => {
-    const id = Date.now();
-    setToasts(t => [...t, { id, msg, type }]);
-    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3500);
-  }, []);
-  return (
-    <ToastContext.Provider value={add}>
-      {children}
-      <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {toasts.map(t => (
-          <div key={t.id} style={{
-            padding: '12px 18px', borderRadius: 12, fontSize: 13, fontWeight: 500,
-            background: t.type === 'error' ? '#fef2f2' : '#ecfdf5',
-            color: t.type === 'error' ? '#dc2626' : '#059669',
-            border: `1px solid ${t.type === 'error' ? '#fecaca' : '#a7f3d0'}`,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            display: 'flex', alignItems: 'center', gap: 8, minWidth: 260,
-          }}>
-            {t.type === 'error' ? <XCircle size={16}/> : <CheckCircle size={16}/>}
-            {t.msg}
-          </div>
-        ))}
-      </div>
-    </ToastContext.Provider>
-  );
-}
-const useToast = () => React.useContext(ToastContext)!;
-
-// ============================================================================
-// COMPONENTS
-// ============================================================================
-const Skeleton = ({ h = 20, w = '100%', r = 8 }: { h?: number; w?: string | number; r?: number }) => (
-  <div style={{ height: h, width: w, borderRadius: r, background: 'linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }}/>
-);
-
-const StatCard = ({ title, value, sub, icon: Icon, color = '#6366f1' }: any) => (
-  <div style={{ background: '#fff', borderRadius: 16, padding: 24, border: '1px solid #e5e7eb' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-      <div>
-        <p style={{ fontSize: 13, color: '#6b7280', fontWeight: 500, margin: 0 }}>{title}</p>
-        <p style={{ fontSize: 28, fontWeight: 700, color: '#111827', margin: '8px 0 4px' }}>{value}</p>
-        {sub && <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>{sub}</p>}
-      </div>
-      <div style={{ width: 48, height: 48, borderRadius: 12, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Icon size={22} color="#fff"/>
-      </div>
-    </div>
-  </div>
-);
-
-// ============================================================================
-// MERCHANTS PAGE
-// ============================================================================
-const MerchantsPage = () => {
+export default function AdminPage() {
+  const { merchant, isLoading, logout } = useAuth();
+  const router = useRouter();
+  const [tab, setTab] = useState('Overview');
+  const [stats, setStats]         = useState<any>(null);
   const [merchants, setMerchants] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const toast = useToast();
+  const [payments, setPayments]   = useState<any[]>([]);
+  const [kycs, setKycs]           = useState<any[]>([]);
+  const [frauds, setFrauds]       = useState<any[]>([]);
+  const [plans, setPlans]         = useState<any[]>([]);
+  const [search, setSearch]       = useState('');
+  const [extendModal, setExtendModal]   = useState<any>(null);
+  const [extendDays, setExtendDays]     = useState(30);
+  const [rejectModal, setRejectModal]   = useState<any>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [planModal, setPlanModal]       = useState<any>(null); // null=closed, 'new'=create, object=edit
+  const [planForm, setPlanForm]         = useState<any>(EMPTY_PLAN);
+  const [planSaving, setPlanSaving]     = useState(false);
+  const [deletingPlan, setDeletingPlan] = useState('');
+  const [success, setSuccess] = useState('');
+  const [error, setError]     = useState('');
 
-  const load = () => {
-    setLoading(true);
-    api.adminListMerchants().then((r: any) => { if (r.success) setMerchants(r.data?.data || []); }).finally(() => setLoading(false));
+  const token = typeof window !== 'undefined' ? localStorage.getItem('upay_access_token') : '';
+  const headers = { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` };
+
+  useEffect(() => { if (!isLoading && (!merchant || !merchant.is_admin)) router.replace('/dashboard'); }, [merchant, isLoading]);
+
+  const flash = (msg:string, isErr=false) => {
+    if (isErr) { setError(msg); setTimeout(()=>setError(''),4000); }
+    else { setSuccess(msg); setTimeout(()=>setSuccess(''),4000); }
   };
 
-  useEffect(() => { load(); }, []);
-
-  const toggle = async (id: string, current: boolean) => {
-    try {
-      const r: any = await api.adminToggleMerchant(id);
-      if (r.success) {
-        setMerchants(m => m.map((x: any) => x.id === id ? { ...x, is_active: !current } : x));
-        toast(`Merchant ${current ? 'deactivated' : 'activated'}`);
-      } else toast(r.error || 'Failed', 'error');
-    } catch (e: any) { toast(e.message, 'error'); }
-  };
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: 0 }}>All Merchants</h2>
-        <button onClick={load} style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '7px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#6b7280' }}>
-          <RefreshCw size={14}/> Refresh
-        </button>
-      </div>
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-        {loading ? (
-          <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[1,2,3].map(i => <Skeleton key={i} h={56} r={8}/>)}
-          </div>
-        ) : merchants.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#9ca3af' }}>
-            <Users size={40} style={{ marginBottom: 12, opacity: 0.3 }}/>
-            <p style={{ fontSize: 15 }}>No merchants found</p>
-          </div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: '#f9fafb' }}>
-                {['Name', 'Email', 'API Key', 'Daily Limit', 'Created', 'Status', 'Action'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '12px 16px', color: '#6b7280', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {merchants.map((m: any) => (
-                <tr key={m.id} style={{ borderBottom: '1px solid #f3f4f6' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#fafafe')}
-                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-                  <td style={{ padding: '14px 16px', fontWeight: 600 }}>
-                    {m.name}
-                    {m.is_admin && <span style={{ marginLeft: 6, fontSize: 10, background: '#eef2ff', color: '#4f46e5', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>ADMIN</span>}
-                  </td>
-                  <td style={{ padding: '14px 16px', color: '#6b7280' }}>{m.email}</td>
-                  <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{m.api_key?.slice(0, 16)}...</td>
-                  <td style={{ padding: '14px 16px', color: '#6b7280' }}>{formatCompact(m.daily_limit || 0)}</td>
-                  <td style={{ padding: '14px 16px', color: '#9ca3af', fontSize: 12 }}>{new Date(m.created_at).toLocaleDateString()}</td>
-                  <td style={{ padding: '14px 16px' }}>
-                    <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, color: m.is_active ? '#10b981' : '#ef4444', background: m.is_active ? '#ecfdf5' : '#fef2f2' }}>
-                      {m.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '14px 16px' }}>
-                    <button onClick={() => toggle(m.id, m.is_active)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: m.is_active ? '#ef4444' : '#10b981', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, padding: 0 }}>
-                      {m.is_active ? <><ToggleRight size={18}/> Deactivate</> : <><ToggleLeft size={18}/> Activate</>}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// ============================================================================
-// FRAUD ALERTS PAGE
-// ============================================================================
-const FraudPage = () => {
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const toast = useToast();
-
-  useEffect(() => {
-    api.adminGetFraudAlerts().then((r: any) => { if (r.success) setAlerts(r.data?.data || []); }).finally(() => setLoading(false));
+  const loadPlans = useCallback(async () => {
+    const d = await fetch('/api/v1/admin/plans', {headers}).then(r=>r.json()).catch(()=>({}));
+    if (d?.success) setPlans(toArr(d.data));
   }, []);
 
-  const resolve = async (id: string) => {
+  const load = useCallback(async () => {
     try {
-      const r: any = await api.adminResolveFraudAlert(id);
-      if (r.success) { setAlerts(a => a.map((x: any) => x.id === id ? { ...x, resolved: true } : x)); toast('Alert resolved'); }
-      else toast(r.error || 'Failed', 'error');
-    } catch (e: any) { toast(e.message, 'error'); }
+      const [s,m,f] = await Promise.all([
+        fetch('/api/v1/admin/stats',{headers}).then(r=>r.json()).catch(()=>({})),
+        fetch('/api/v1/admin/merchants',{headers}).then(r=>r.json()).catch(()=>({})),
+        fetch('/api/v1/admin/fraud-alerts',{headers}).then(r=>r.json()).catch(()=>({})),
+      ]);
+      if (s?.success) setStats(s.data);
+      if (m?.success) setMerchants(toArr(m.data?.data ?? m.data));
+      if (f?.success) setFrauds(toArr(f.data?.data ?? f.data?.alerts ?? f.data));
+    } catch(e) { console.error('load error', e); }
+    fetch('/api/v1/admin/kyc',{headers}).then(r=>r.json()).then(d=>{ if(d?.success) setKycs(toArr(d.data)); }).catch(()=>{});
+    fetch('/api/v1/admin/payments',{headers}).then(r=>r.json()).then(d=>{ if(d?.success) setPayments(toArr(d.data?.data ?? d.data?.transactions ?? d.data)); }).catch(()=>{});
+    loadPlans();
+  }, [loadPlans]);
+
+  useEffect(() => { if (merchant?.is_admin) load(); }, [merchant]);
+
+  const toggleMerchant = async (id:string, active:boolean) => {
+    await fetch(`/api/v1/admin/merchants/${id}/toggle`,{method:'PUT',headers});
+    setMerchants(ms=>toArr(ms).map((m:any)=>m.id===id?{...m,is_active:!active}:m));
+    flash(active?'Merchant disabled':'Merchant enabled');
   };
 
-  const unresolved = alerts.filter((a: any) => !a.resolved).length;
+  const resolveFraud = async (id:string) => {
+    await fetch(`/api/v1/admin/fraud-alerts/${id}/resolve`,{method:'PUT',headers});
+    setFrauds(fs=>toArr(fs).map((f:any)=>f.id===id?{...f,resolved:true}:f));
+    flash('Fraud alert resolved');
+  };
 
-  if (loading) return <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{[1,2,3].map(i => <Skeleton key={i} h={100} r={12}/>)}</div>;
+  const reviewKYC = async (merchantId:string, status:string, reason='') => {
+    const r = await fetch(`/api/v1/admin/kyc/${merchantId}`,{method:'PUT',headers,body:JSON.stringify({status,rejection_reason:reason})});
+    const d = await r.json();
+    if (!r.ok) { flash(d.error||'Failed',true); return; }
+    setKycs(ks=>toArr(ks).map((k:any)=>k.merchant_id===merchantId?{...k,status}:k));
+    setRejectModal(null); setRejectReason('');
+    flash(`KYC ${status}`);
+  };
+
+  const extendSub = async () => {
+    if (!extendModal) return;
+    const r = await fetch(`/api/v1/admin/subscriptions/${extendModal.id}/extend`,{method:'POST',headers,body:JSON.stringify({days:extendDays})});
+    const d = await r.json();
+    if (!r.ok) { flash(d.error||'Failed',true); return; }
+    setExtendModal(null);
+    flash(`Subscription extended by ${extendDays} days`);
+  };
+
+  const openNewPlan = () => {
+    setPlanForm(EMPTY_PLAN);
+    setPlanModal('new');
+  };
+
+  const openEditPlan = (plan: any) => {
+    setPlanForm({
+      name: plan.name || '',
+      price: String((plan.price||0) / 100), // convert paise to rupees for display
+      billing_cycle: plan.billing_cycle || 'per month',
+      badge: plan.badge || '',
+      is_featured: plan.is_featured || false,
+      cta_label: plan.cta_label || '',
+      sort_order: plan.sort_order || 0,
+      qr_limit: plan.qr_limit || 0,
+      link_limit: plan.link_limit || 0,
+      api_limit: plan.api_limit || 0,
+      features: toArr(plan.features).join('\n'),
+    });
+    setPlanModal(plan);
+  };
+
+  const savePlan = async () => {
+    if (!planForm.name || !planForm.cta_label) { flash('Name and CTA Label are required', true); return; }
+    setPlanSaving(true);
+    const body = {
+      name: planForm.name,
+      price: Math.round(parseFloat(planForm.price||'0') * 100), // rupees to paise
+      billing_cycle: planForm.billing_cycle,
+      badge: planForm.badge,
+      is_featured: planForm.is_featured,
+      cta_label: planForm.cta_label,
+      sort_order: parseInt(planForm.sort_order)||0,
+      qr_limit: parseInt(planForm.qr_limit)||0,
+      link_limit: parseInt(planForm.link_limit)||0,
+      api_limit: parseInt(planForm.api_limit)||0,
+      features: planForm.features.split('\n').map((f:string)=>f.trim()).filter(Boolean),
+    };
+    try {
+      const isEdit = planModal !== 'new';
+      const url = isEdit ? `/api/v1/admin/plans/${planModal.id}` : '/api/v1/admin/plans';
+      const method = isEdit ? 'PUT' : 'POST';
+      const r = await fetch(url, {method, headers, body: JSON.stringify(body)});
+      const d = await r.json();
+      if (!r.ok) { flash(d.error||'Failed to save plan', true); return; }
+      flash(isEdit ? 'Plan updated!' : 'Plan created!');
+      setPlanModal(null);
+      loadPlans();
+    } catch(e:any) { flash(e.message, true); }
+    finally { setPlanSaving(false); }
+  };
+
+  const deletePlan = async (id: string) => {
+    if (!confirm('Delete this plan? This cannot be undone.')) return;
+    setDeletingPlan(id);
+    try {
+      const r = await fetch(`/api/v1/admin/plans/${id}`, {method:'DELETE', headers});
+      if (!r.ok) { const d = await r.json(); flash(d.error||'Failed', true); return; }
+      flash('Plan deleted');
+      setPlans(ps=>ps.filter(p=>p.id!==id));
+    } catch(e:any) { flash(e.message, true); }
+    finally { setDeletingPlan(''); }
+  };
+
+  const filtered = (arr: any[]): any[] => {
+    const safe = toArr(arr);
+    if (!search) return safe;
+    return safe.filter(m => JSON.stringify(m).toLowerCase().includes(search.toLowerCase()));
+  };
+
+  const pf = (k:string, v:any) => setPlanForm((f:any)=>({...f,[k]:v}));
+
+  if (isLoading) return <div style={{...S.page,display:'flex',alignItems:'center',justifyContent:'center'}}><p style={{color:'#64748b'}}>Loading...</p></div>;
+
+  const merchantList = toArr(merchants);
+  const paymentList  = toArr(payments);
+  const kycList      = toArr(kycs);
+  const fraudList    = toArr(frauds);
+  const planList     = toArr(plans);
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-        <div style={{ padding: '10px 18px', borderRadius: 12, background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 600 }}>
-          {unresolved} Unresolved Alert{unresolved !== 1 ? 's' : ''}
+    <div style={S.page}>
+      {/* Topbar */}
+      <div style={S.topbar}>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <div style={{width:32,height:32,borderRadius:9,background:'linear-gradient(135deg,#00e5b0,#0ea5e9)',display:'flex',alignItems:'center',justifyContent:'center',color:'#07090f',fontWeight:800,fontSize:14}}>N</div>
+          <span style={{fontFamily:'Syne,sans-serif',fontSize:17,fontWeight:800}}>NovaPay</span>
+          <span style={{background:'rgba(239,68,68,0.10)',color:'#ef4444',fontSize:10,fontWeight:700,padding:'3px 9px',borderRadius:6,marginLeft:4}}>ADMIN</span>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <div style={{background:'rgba(0,229,176,0.08)',border:'1px solid rgba(0,229,176,0.2)',color:'#00e5b0',fontSize:11,fontWeight:700,padding:'5px 12px',borderRadius:8}}>● Live</div>
+          <button onClick={logout} style={{background:'none',border:'1px solid rgba(255,255,255,0.08)',borderRadius:8,padding:'7px 14px',color:'#64748b',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',gap:6}}>
+            <LogOut size={14}/> Logout
+          </button>
         </div>
       </div>
-      {alerts.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 0', color: '#9ca3af' }}>
-          <CheckCircle size={40} style={{ marginBottom: 12, opacity: 0.3 }}/>
-          <p style={{ fontSize: 15, fontWeight: 500 }}>No fraud alerts</p>
+
+      <div style={S.body}>
+        {error   && <div style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.18)',borderRadius:8,padding:'10px 16px',color:'#f87171',fontSize:13,marginBottom:16}}>{error}</div>}
+        {success && <div style={{background:'rgba(0,229,176,0.08)',border:'1px solid rgba(0,229,176,0.18)',borderRadius:8,padding:'10px 16px',color:'#00e5b0',fontSize:13,marginBottom:16}}>{success}</div>}
+
+        {/* Tabs */}
+        <div style={S.tabs}>
+          {TABS.map(t => <button key={t} style={S.tab(tab===t)} onClick={()=>setTab(t)}>{t}</button>)}
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {alerts.map((alert: any) => (
-            <div key={alert.id} style={{ background: '#fff', borderRadius: 14, padding: '18px 22px', border: '1px solid #e5e7eb', borderLeft: `4px solid ${severityConfig[alert.severity]?.color || '#6b7280'}` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <AlertTriangle size={16} color={severityConfig[alert.severity]?.color}/>
-                  <span style={{ fontWeight: 600, fontSize: 14, color: '#111827', textTransform: 'capitalize' }}>{alert.alert_type.replace(/_/g, ' ')}</span>
-                  <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, color: severityConfig[alert.severity]?.color, backgroundColor: severityConfig[alert.severity]?.bg, textTransform: 'uppercase' }}>{alert.severity}</span>
+
+        {/* Search bar */}
+        {['Merchants','KYC','Fraud Alerts','Payments'].includes(tab) && (
+          <div style={{display:'flex',gap:10,marginBottom:20}}>
+            <div style={{position:'relative' as const,flex:1}}>
+              <Search size={14} style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'#64748b'}}/>
+              <input style={{...S.inp,paddingLeft:36}} placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            </div>
+            <button onClick={load} style={{...S.btn('0,229,176'),display:'flex',alignItems:'center',gap:6,whiteSpace:'nowrap' as const}}><RefreshCw size={13}/>Refresh</button>
+          </div>
+        )}
+
+        {/* ── OVERVIEW ── */}
+        {tab==='Overview' && (
+          <>
+            <div style={S.grid4}>
+              {[
+                {label:'Total Revenue',    value:fmt(stats?.total_volume||0),              color:'#00e5b0', icon:'💸'},
+                {label:'Total Merchants',  value:(stats?.total_merchants||merchantList.length).toLocaleString(), color:'#0ea5e9', icon:'🏪'},
+                {label:'Total Payments',   value:(stats?.total_transactions||0).toLocaleString(),  color:'#8b5cf6', icon:'💳'},
+                {label:'Success Rate',     value:`${(stats?.success_rate||0).toFixed(1)}%`, color:'#00e5b0', icon:'✅'},
+                {label:"Today's Volume",   value:fmt(stats?.today_volume||0),              color:'#f59e0b', icon:'📈'},
+                {label:'Failed Payments',  value:(stats?.failed_payments||0).toLocaleString(),     color:'#ef4444', icon:'❌'},
+                {label:'Pending KYC',      value:kycList.filter(k=>k.status==='pending').length.toLocaleString(), color:'#f59e0b', icon:'📋'},
+                {label:'Active Merchants', value:merchantList.filter(m=>m.is_active).length.toLocaleString(), color:'#00e5b0', icon:'✔'},
+              ].map(c=>(
+                <div key={c.label} style={S.statCard}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
+                    <div style={{fontSize:11,color:'#64748b',fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.08em'}}>{c.label}</div>
+                    <span style={{fontSize:18}}>{c.icon}</span>
+                  </div>
+                  <div style={{fontFamily:'Syne,sans-serif',fontSize:26,fontWeight:800,color:c.color,letterSpacing:-1}}>{c.value}</div>
                 </div>
-                <span style={{ fontSize: 12, color: '#9ca3af' }}>{new Date(alert.created_at).toLocaleString()}</span>
-              </div>
-              <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 10px', paddingLeft: 26 }}>{alert.details}</p>
-              <div style={{ paddingLeft: 26 }}>
-                {!alert.resolved ? (
-                  <button onClick={() => resolve(alert.id)} style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '5px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Mark Resolved</button>
-                ) : (
-                  <span style={{ fontSize: 12, color: '#10b981', fontWeight: 600 }}>✓ Resolved</span>
-                )}
+              ))}
+            </div>
+            <div style={{...S.card,marginTop:0}}>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:15,fontWeight:700,marginBottom:16}}>Quick Actions</div>
+              <div style={{display:'flex',gap:10,flexWrap:'wrap' as const}}>
+                {TABS.slice(1).map(t=>(
+                  <button key={t} onClick={()=>setTab(t)} style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:'10px 18px',color:'#8b9ab5',cursor:'pointer',fontSize:13,fontFamily:'DM Sans,sans-serif'}}>
+                    {t} →
+                  </button>
+                ))}
               </div>
             </div>
-          ))}
+          </>
+        )}
+
+        {/* ── MERCHANTS ── */}
+        {tab==='Merchants' && (
+          <div style={S.card}>
+            <div style={{...S.tHead,gridTemplateColumns:'1.5fr 1.5fr 1fr 1fr 1fr'}}>
+              <span>Merchant</span><span>Email</span><span>Status</span><span>Joined</span><span>Actions</span>
+            </div>
+            {filtered(merchantList).length===0 && <div style={{padding:'48px',textAlign:'center' as const,color:'#4b5563'}}>No merchants found</div>}
+            {filtered(merchantList).map((m:any)=>(
+              <div key={m.id} style={{...S.tRow,display:'grid',gridTemplateColumns:'1.5fr 1.5fr 1fr 1fr 1fr'}}
+                onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.02)')}
+                onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+              >
+                <span style={{fontWeight:500}}>{m.name}</span>
+                <span style={{color:'#64748b',fontSize:12}}>{m.email}</span>
+                <span><span style={S.badge(m.is_active?'0,229,176':'100,116,139')}>{m.is_active?'ACTIVE':'DISABLED'}</span></span>
+                <span style={{color:'#4b5563',fontSize:12}}>{m.created_at?dateStr(m.created_at):'-'}</span>
+                <div style={{display:'flex',gap:6}}>
+                  <button onClick={()=>toggleMerchant(m.id,m.is_active)} style={S.btn(m.is_active?'245,158,11':'0,229,176')}>{m.is_active?'Disable':'Enable'}</button>
+                  <button onClick={()=>setExtendModal(m)} style={S.btn('139,92,246')}>Extend</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── PAYMENTS ── */}
+        {tab==='Payments' && (
+          <div style={S.card}>
+            {paymentList.length===0 ? (
+              <div style={{padding:'48px',textAlign:'center' as const,color:'#4b5563'}}>
+                <div style={{fontSize:40,marginBottom:12}}>💳</div>
+                <div style={{fontFamily:'Syne,sans-serif',fontSize:16,fontWeight:700}}>No payments yet</div>
+              </div>
+            ) : (
+              <>
+                <div style={{...S.tHead,gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr'}}>
+                  <span>Order ID</span><span>Merchant</span><span>Amount</span><span>Status</span><span>Date</span>
+                </div>
+                {filtered(paymentList).map((p:any,i:number)=>(
+                  <div key={p.id||i} style={{...S.tRow,display:'grid',gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr'}}
+                    onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.02)')}
+                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+                  >
+                    <span style={{fontFamily:'monospace',fontSize:12,color:'#8b9ab5'}}>{p.order_id||p.id?.slice(0,8)}</span>
+                    <span style={{color:'#64748b',fontSize:12}}>{p.merchant_id?.slice(0,8)||'-'}</span>
+                    <span style={{fontFamily:'Syne,sans-serif',fontWeight:700}}>₹{((p.amount||0)/100).toLocaleString('en-IN')}</span>
+                    <span><span style={S.badge(p.status==='paid'?'0,229,176':p.status==='pending'?'245,158,11':'239,68,68')}>{(p.status||'').toUpperCase()}</span></span>
+                    <span style={{color:'#4b5563',fontSize:12}}>{p.created_at?dateStr(p.created_at):'-'}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── KYC ── */}
+        {tab==='KYC' && (
+          <div style={S.card}>
+            <div style={{...S.tHead,gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr'}}>
+              <span>Business</span><span>PAN</span><span>Aadhaar</span><span>Status</span><span>Actions</span>
+            </div>
+            {filtered(kycList).length===0 && <div style={{padding:'48px',textAlign:'center' as const,color:'#4b5563'}}>No KYC submissions yet</div>}
+            {filtered(kycList).map((k:any)=>(
+              <div key={k.id} style={{...S.tRow,display:'grid',gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr'}}
+                onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.02)')}
+                onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+              >
+                <span style={{fontWeight:500}}>{k.business_name}</span>
+                <span style={{fontFamily:'monospace',fontSize:12,color:'#8b9ab5'}}>{k.pan_number}</span>
+                <span style={{fontFamily:'monospace',fontSize:12,color:'#8b9ab5'}}>{k.aadhaar_number?.slice(0,4)+'****'+k.aadhaar_number?.slice(-4)}</span>
+                <span><span style={S.badge(k.status==='approved'?'0,229,176':k.status==='rejected'?'239,68,68':'245,158,11')}>{(k.status||'').toUpperCase()}</span></span>
+                <div style={{display:'flex',gap:6}}>
+                  {k.status==='pending' && <>
+                    <button onClick={()=>reviewKYC(k.merchant_id,'approved')} style={S.btn('0,229,176')}>Approve</button>
+                    <button onClick={()=>setRejectModal(k)} style={S.btn('239,68,68')}>Reject</button>
+                  </>}
+                  {k.status!=='pending' && <span style={{color:'#4b5563',fontSize:12}}>Reviewed</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── FRAUD ALERTS ── */}
+        {tab==='Fraud Alerts' && (
+          <div style={S.card}>
+            <div style={{...S.tHead,gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr'}}>
+              <span>Description</span><span>Merchant</span><span>Severity</span><span>Status</span><span>Action</span>
+            </div>
+            {filtered(fraudList).length===0 && <div style={{padding:'48px',textAlign:'center' as const,color:'#4b5563'}}>No fraud alerts</div>}
+            {filtered(fraudList).map((f:any)=>(
+              <div key={f.id} style={{...S.tRow,display:'grid',gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr'}}
+                onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.02)')}
+                onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+              >
+                <span style={{fontSize:12,color:'#8b9ab5'}}>{f.description||f.type}</span>
+                <span style={{fontSize:12,color:'#64748b'}}>{f.merchant_id?.slice(0,8)||'-'}</span>
+                <span><span style={S.badge(f.severity==='critical'?'239,68,68':f.severity==='high'?'249,115,22':'245,158,11')}>{(f.severity||'').toUpperCase()}</span></span>
+                <span><span style={S.badge(f.resolved?'0,229,176':'245,158,11')}>{f.resolved?'RESOLVED':'OPEN'}</span></span>
+                {!f.resolved && <button onClick={()=>resolveFraud(f.id)} style={S.btn('0,229,176')}>Resolve</button>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── SUBSCRIPTIONS ── */}
+        {tab==='Subscriptions' && (
+          <div style={S.card}>
+            <div style={{...S.tHead,gridTemplateColumns:'1.5fr 1.5fr 1fr 1fr'}}>
+              <span>Merchant</span><span>Email</span><span>Status</span><span>Actions</span>
+            </div>
+            {filtered(merchantList).length===0 && <div style={{padding:'48px',textAlign:'center' as const,color:'#4b5563'}}>No merchants</div>}
+            {filtered(merchantList).map((m:any)=>(
+              <div key={m.id} style={{...S.tRow,display:'grid',gridTemplateColumns:'1.5fr 1.5fr 1fr 1fr'}}
+                onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.02)')}
+                onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+              >
+                <span style={{fontWeight:500}}>{m.name}</span>
+                <span style={{color:'#64748b',fontSize:12}}>{m.email}</span>
+                <span><span style={S.badge(m.is_active?'0,229,176':'100,116,139')}>{m.is_active?'ACTIVE':'INACTIVE'}</span></span>
+                <button onClick={()=>setExtendModal(m)} style={S.btn('139,92,246')}>Extend Sub</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── PLANS ── */}
+        {tab==='Plans' && (
+          <div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+              <div>
+                <div style={{fontFamily:'Syne,sans-serif',fontSize:20,fontWeight:800}}>Pricing Plans</div>
+                <div style={{color:'#64748b',fontSize:13,marginTop:4}}>Manage the plans shown on your landing page and subscription page.</div>
+              </div>
+              <button onClick={openNewPlan} style={{background:'linear-gradient(135deg,#00e5b0,#0ea5e9)',border:'none',borderRadius:10,padding:'10px 20px',color:'#07090f',fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',gap:8}}>
+                <Plus size={15}/> New Plan
+              </button>
+            </div>
+
+            {/* Plan cards grid */}
+            {planList.length===0 ? (
+              <div style={{...S.card,textAlign:'center' as const,padding:64}}>
+                <div style={{fontSize:40,marginBottom:12}}>📦</div>
+                <div style={{fontFamily:'Syne,sans-serif',fontSize:18,fontWeight:700,marginBottom:8}}>No plans yet</div>
+                <div style={{color:'#64748b',fontSize:14,marginBottom:24}}>Create your first pricing plan to show on the landing page.</div>
+                <button onClick={openNewPlan} style={{background:'linear-gradient(135deg,#00e5b0,#0ea5e9)',border:'none',borderRadius:10,padding:'12px 28px',color:'#07090f',fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:800,cursor:'pointer'}}>
+                  Create First Plan
+                </button>
+              </div>
+            ) : (
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:16}}>
+                {planList.map((plan:any)=>(
+                  <div key={plan.id} style={{background:'#111827',border:plan.is_featured?'1px solid rgba(0,229,176,0.3)':'1px solid rgba(255,255,255,0.06)',borderRadius:16,padding:24,position:'relative' as const}}>
+                    {plan.badge && (
+                      <div style={{position:'absolute' as const,top:16,right:16,background:'#00e5b0',color:'#07090f',fontSize:9,fontWeight:800,padding:'4px 10px',borderRadius:5}}>
+                        {plan.badge.toUpperCase()}
+                      </div>
+                    )}
+                    <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:12}}>
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:'#64748b',textTransform:'uppercase' as const,letterSpacing:'0.1em',marginBottom:6}}>{plan.name}</div>
+                        <div style={{fontFamily:'Syne,sans-serif',fontSize:32,fontWeight:800,letterSpacing:-1}}>
+                          {plan.price===0 ? 'Free' : `₹${(plan.price/100).toLocaleString('en-IN')}`}
+                        </div>
+                        <div style={{fontSize:12,color:'#64748b',marginTop:2}}>{plan.billing_cycle}</div>
+                      </div>
+                      {plan.is_featured && <span style={S.badge('0,229,176')}>FEATURED</span>}
+                    </div>
+
+                    {/* Limits */}
+                    <div style={{background:'rgba(255,255,255,0.03)',borderRadius:8,padding:'10px 12px',marginBottom:12}}>
+                      {[['QR codes', plan.qr_limit===0?'Unlimited':plan.qr_limit],['Payment links',plan.link_limit===0?'Unlimited':plan.link_limit],['API calls/day',plan.api_limit===0?'Unlimited':plan.api_limit]].map(([k,v])=>(
+                        <div key={k} style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:4}}>
+                          <span style={{color:'#64748b'}}>{k}</span>
+                          <span style={{color:'#eef2ff',fontWeight:600}}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Features */}
+                    <ul style={{listStyle:'none',padding:0,margin:'0 0 16px',display:'flex',flexDirection:'column' as const,gap:5}}>
+                      {toArr(plan.features).slice(0,4).map((f:string,i:number)=>(
+                        <li key={i} style={{display:'flex',gap:6,fontSize:12,color:'#8b9ab5'}}>
+                          <span style={{color:'#00e5b0',fontWeight:700}}>✓</span>{f}
+                        </li>
+                      ))}
+                      {toArr(plan.features).length>4 && <li style={{fontSize:11,color:'#4b5563'}}>+{toArr(plan.features).length-4} more</li>}
+                    </ul>
+
+                    {/* CTA label preview */}
+                    <div style={{fontSize:11,color:'#4b5563',marginBottom:12}}>CTA: <span style={{color:'#8b9ab5'}}>{plan.cta_label}</span></div>
+
+                    {/* Actions */}
+                    <div style={{display:'flex',gap:8}}>
+                      <button onClick={()=>openEditPlan(plan)} style={{...S.btn('0,229,176'),flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+                        <Pencil size={12}/> Edit
+                      </button>
+                      <button onClick={()=>deletePlan(plan.id)} disabled={deletingPlan===plan.id} style={{...S.btn('239,68,68'),flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+                        <Trash2 size={12}/> {deletingPlan===plan.id?'Deleting...':'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── PLAN MODAL ── */}
+      {planModal && (
+        <div style={S.overlay}>
+          <div style={S.modal}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:24}}>
+              <h2 style={{fontFamily:'Syne,sans-serif',fontSize:18,fontWeight:800,margin:0}}>{planModal==='new'?'Create New Plan':'Edit Plan'}</h2>
+              <button onClick={()=>setPlanModal(null)} style={{background:'none',border:'none',color:'#64748b',cursor:'pointer',padding:4}}><X size={18}/></button>
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+              <div>
+                <label style={S.label}>Plan Name *</label>
+                <input style={S.inp} value={planForm.name} onChange={e=>pf('name',e.target.value)} placeholder="e.g. Starter"/>
+              </div>
+              <div>
+                <label style={S.label}>Price (₹) — 0 for free</label>
+                <input style={S.inp} type="number" min="0" value={planForm.price} onChange={e=>pf('price',e.target.value)} placeholder="999"/>
+              </div>
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+              <div>
+                <label style={S.label}>Billing Cycle</label>
+                <select style={{...S.inp}} value={planForm.billing_cycle} onChange={e=>pf('billing_cycle',e.target.value)}>
+                  <option value="forever">forever</option>
+                  <option value="per month">per month</option>
+                  <option value="per year">per year</option>
+                  <option value="contact us">contact us</option>
+                </select>
+              </div>
+              <div>
+                <label style={S.label}>Badge (optional)</label>
+                <input style={S.inp} value={planForm.badge} onChange={e=>pf('badge',e.target.value)} placeholder="Most Popular"/>
+              </div>
+            </div>
+
+            <div style={{marginBottom:16}}>
+              <label style={S.label}>CTA Button Label *</label>
+              <input style={S.inp} value={planForm.cta_label} onChange={e=>pf('cta_label',e.target.value)} placeholder="Get started / Start free trial"/>
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,marginBottom:16}}>
+              <div>
+                <label style={S.label}>QR Limit (0=∞)</label>
+                <input style={S.inp} type="number" min="0" value={planForm.qr_limit} onChange={e=>pf('qr_limit',e.target.value)}/>
+              </div>
+              <div>
+                <label style={S.label}>Link Limit (0=∞)</label>
+                <input style={S.inp} type="number" min="0" value={planForm.link_limit} onChange={e=>pf('link_limit',e.target.value)}/>
+              </div>
+              <div>
+                <label style={S.label}>API Limit (0=∞)</label>
+                <input style={S.inp} type="number" min="0" value={planForm.api_limit} onChange={e=>pf('api_limit',e.target.value)}/>
+              </div>
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+              <div>
+                <label style={S.label}>Sort Order</label>
+                <input style={S.inp} type="number" min="0" value={planForm.sort_order} onChange={e=>pf('sort_order',e.target.value)}/>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:10,paddingTop:20}}>
+                <input type="checkbox" id="featured" checked={planForm.is_featured} onChange={e=>pf('is_featured',e.target.checked)} style={{width:16,height:16,cursor:'pointer'}}/>
+                <label htmlFor="featured" style={{...S.label,margin:0,cursor:'pointer'}}>Featured plan</label>
+              </div>
+            </div>
+
+            <div style={{marginBottom:24}}>
+              <label style={S.label}>Features (one per line)</label>
+              <textarea
+                style={{...S.inp, minHeight:100, resize:'vertical' as const}}
+                value={planForm.features}
+                onChange={e=>pf('features',e.target.value)}
+                placeholder={"100 QR codes / month\n5 payment links\nBasic analytics\nEmail support"}
+              />
+              <div style={{fontSize:11,color:'#4b5563',marginTop:4}}>Each line becomes a feature bullet on the pricing card.</div>
+            </div>
+
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={()=>setPlanModal(null)} style={{flex:1,background:'none',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:'11px 0',color:'#64748b',cursor:'pointer',fontSize:14}}>
+                Cancel
+              </button>
+              <button onClick={savePlan} disabled={planSaving} style={{flex:2,background:'linear-gradient(135deg,#00e5b0,#0ea5e9)',border:'none',borderRadius:10,padding:'11px 0',color:'#07090f',fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                <Check size={15}/>{planSaving?'Saving...':planModal==='new'?'Create Plan':'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EXTEND MODAL ── */}
+      {extendModal && (
+        <div style={S.overlay}>
+          <div style={{...S.modal,maxHeight:'unset',width:400}}>
+            <h2 style={{fontFamily:'Syne,sans-serif',fontSize:18,fontWeight:800,marginBottom:6}}>Extend Subscription</h2>
+            <p style={{color:'#64748b',fontSize:13,marginBottom:20}}>{extendModal.name}</p>
+            <label style={S.label}>Days to extend</label>
+            <input type="number" min={1} value={extendDays} onChange={e=>setExtendDays(parseInt(e.target.value)||1)} style={{...S.inp,marginBottom:20}}/>
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={()=>setExtendModal(null)} style={{flex:1,background:'none',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:'10px 0',color:'#64748b',cursor:'pointer',fontSize:14}}>Cancel</button>
+              <button onClick={extendSub} style={{flex:2,background:'linear-gradient(135deg,#00e5b0,#0ea5e9)',border:'none',borderRadius:10,padding:'10px 0',color:'#07090f',fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:800,cursor:'pointer'}}>Extend {extendDays} days</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── REJECT MODAL ── */}
+      {rejectModal && (
+        <div style={S.overlay}>
+          <div style={{...S.modal,maxHeight:'unset',width:400}}>
+            <h2 style={{fontFamily:'Syne,sans-serif',fontSize:18,fontWeight:800,marginBottom:6}}>Reject KYC</h2>
+            <p style={{color:'#64748b',fontSize:13,marginBottom:20}}>{rejectModal.business_name}</p>
+            <label style={S.label}>Rejection Reason</label>
+            <textarea value={rejectReason} onChange={e=>setRejectReason(e.target.value)}
+              style={{...S.inp,minHeight:80,resize:'vertical' as const,marginBottom:20}}
+              placeholder="Reason for rejection..."/>
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={()=>setRejectModal(null)} style={{flex:1,background:'none',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:'10px 0',color:'#64748b',cursor:'pointer',fontSize:14}}>Cancel</button>
+              <button onClick={()=>reviewKYC(rejectModal.merchant_id,'rejected',rejectReason)} style={{flex:2,background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:10,padding:'10px 0',color:'#ef4444',fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:800,cursor:'pointer'}}>Reject KYC</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
-  );
-};
-
-// ============================================================================
-// OVERVIEW PAGE
-// ============================================================================
-const OverviewPage = () => {
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.adminGetStats().then((r: any) => { if (r.success) setStats(r.data); }).finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 20 }}>
-      {[1,2,3,4].map(i => <div key={i} style={{ background: '#fff', borderRadius: 16, padding: 24, border: '1px solid #e5e7eb' }}><Skeleton h={14} w="60%" r={6}/><Skeleton h={32} w="80%" r={6}/></div>)}
-    </div>
-  );
-
-  return (
-    <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 20, marginBottom: 28 }}>
-        <StatCard title="Total Merchants" value={(stats?.total_merchants || 0).toLocaleString()} sub="Registered" icon={Users} color="linear-gradient(135deg,#6366f1,#8b5cf6)"/>
-        <StatCard title="Active Merchants" value={(stats?.active_merchants || 0).toLocaleString()} sub="Currently active" icon={CheckCircle} color="linear-gradient(135deg,#10b981,#059669)"/>
-        <StatCard title="Total Volume" value={formatCompact(stats?.total_volume || 0)} sub="All time" icon={TrendingUp} color="linear-gradient(135deg,#f59e0b,#d97706)"/>
-        <StatCard title="Total Transactions" value={(stats?.total_transactions || 0).toLocaleString()} sub="All merchants" icon={CreditCard} color="linear-gradient(135deg,#3b82f6,#2563eb)"/>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 20 }}>
-        <StatCard title="Fraud Alerts" value={(stats?.unresolved_fraud_alerts || 0).toLocaleString()} sub="Unresolved" icon={AlertTriangle} color="linear-gradient(135deg,#ef4444,#dc2626)"/>
-        <StatCard title="Success Rate" value={`${(stats?.success_rate || 0).toFixed(1)}%`} sub="System-wide" icon={TrendingUp} color="linear-gradient(135deg,#8b5cf6,#7c3aed)"/>
-        <StatCard title="Today's Volume" value={formatCompact(stats?.today_volume || 0)} sub={`${stats?.today_transactions || 0} transactions`} icon={CreditCard} color="linear-gradient(135deg,#06b6d4,#0891b2)"/>
-      </div>
-    </div>
-  );
-};
-
-// ============================================================================
-// MAIN ADMIN LAYOUT
-// ============================================================================
-const NAV_ITEMS = [
-  { id: 'overview',  label: 'Overview',       icon: TrendingUp },
-  { id: 'merchants', label: 'Merchants',       icon: Users },
-  { id: 'fraud',     label: 'Fraud Alerts',    icon: AlertTriangle },
-];
-
-export default function AdminPage() {
-  const { merchant, logout, isLoading } = useAuth();
-  const router = useRouter();
-  const [activePage, setActivePage] = useState('overview');
-
-  useEffect(() => {
-    if (!isLoading && merchant && !merchant.is_admin) {
-      router.replace('/dashboard');
-    }
-    if (!isLoading && !merchant) {
-      router.replace('/auth/login');
-    }
-  }, [merchant, isLoading, router]);
-
-  if (isLoading || !merchant) return null;
-
-  const renderPage = () => {
-    switch (activePage) {
-      case 'overview':  return <OverviewPage/>;
-      case 'merchants': return <MerchantsPage/>;
-      case 'fraud':     return <FraudPage/>;
-      default:          return <OverviewPage/>;
-    }
-  };
-
-  const initials = merchant.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || 'A';
-
-  return (
-    <ToastProvider>
-      <style>{`
-        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-      `}</style>
-      <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'Inter',-apple-system,sans-serif", background: '#f8f9fc' }}>
-        {/* Sidebar */}
-        <aside style={{ width: 260, background: '#111827', display: 'flex', flexDirection: 'column', position: 'fixed', height: '100vh', zIndex: 10 }}>
-          <div style={{ padding: '24px 22px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#ef4444,#dc2626)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Shield size={20} color="#fff"/>
-              </div>
-              <div>
-                <span style={{ fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>UPay</span>
-                <span style={{ fontSize: 10, color: '#ef4444', marginLeft: 4, fontWeight: 700, background: 'rgba(239,68,68,0.15)', padding: '2px 6px', borderRadius: 4 }}>MASTER ADMIN</span>
-              </div>
-            </div>
-          </div>
-
-          <nav style={{ flex: 1, padding: '16px 12px' }}>
-            {NAV_ITEMS.map(item => {
-              const Icon = item.icon;
-              const active = activePage === item.id;
-              return (
-                <button key={item.id} onClick={() => setActivePage(item.id)} style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '11px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                  marginBottom: 4, fontSize: 14, fontWeight: active ? 600 : 400,
-                  background: active ? 'rgba(239,68,68,0.15)' : 'transparent',
-                  color: active ? '#ef4444' : 'rgba(255,255,255,0.6)', transition: 'all 0.15s', fontFamily: 'inherit',
-                }}>
-                  <Icon size={18}/>{item.label}
-                </button>
-              );
-            })}
-
-            <div style={{ marginTop: 16, padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <button onClick={() => router.push('/dashboard')} style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                padding: '11px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                fontSize: 14, background: 'transparent', color: 'rgba(255,255,255,0.4)',
-                fontFamily: 'inherit', transition: 'all 0.15s',
-              }}>
-                <CreditCard size={18}/> Merchant Dashboard
-              </button>
-            </div>
-          </nav>
-
-          <div style={{ padding: '16px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px' }}>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: '#ef4444' }}>
-                {initials}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{merchant.name}</p>
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Master Admin</p>
-              </div>
-              <button onClick={logout} title="Logout" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'rgba(255,255,255,0.4)' }}>
-                <LogOut size={16}/>
-              </button>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main */}
-        <main style={{ flex: 1, marginLeft: 260 }}>
-          <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 5 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: 0, textTransform: 'capitalize' }}>
-              {activePage === 'overview' ? 'System Overview' : activePage}
-            </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ padding: '6px 12px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 12, fontWeight: 600, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Shield size={13}/> Admin Mode
-              </div>
-              <button style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: 8, cursor: 'pointer' }}>
-                <Bell size={18} color="#6b7280"/>
-              </button>
-            </div>
-          </header>
-          <div style={{ padding: '28px 32px' }}>{renderPage()}</div>
-        </main>
-      </div>
-    </ToastProvider>
   );
 }
