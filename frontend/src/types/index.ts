@@ -4,16 +4,17 @@ export interface Merchant {
   email: string;
   api_key: string;
   is_active: boolean;
+  is_admin: boolean;
+  webhook_url?: string;
+  daily_limit?: number;
   created_at: string;
 }
-
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;
   expires_in: number;
   merchant: Merchant;
 }
-
 export interface DashboardStats {
   total_transactions: number;
   successful_payments: number;
@@ -24,7 +25,6 @@ export interface DashboardStats {
   today_transactions: number;
   today_volume: number;
 }
-
 export interface Payment {
   id: string;
   merchant_id: string;
@@ -40,7 +40,6 @@ export interface Payment {
   created_at: string;
   updated_at: string;
 }
-
 export interface MerchantUPI {
   id: string;
   merchant_id: string;
@@ -50,7 +49,6 @@ export interface MerchantUPI {
   priority: number;
   created_at: string;
 }
-
 export interface FraudAlert {
   id: string;
   payment_id: string;
@@ -61,7 +59,6 @@ export interface FraudAlert {
   resolved: boolean;
   created_at: string;
 }
-
 export interface PaginatedResponse<T> {
   data: T[];
   page: number;
@@ -69,7 +66,6 @@ export interface PaginatedResponse<T> {
   total: number;
   total_pages: number;
 }
-
 export interface APIResponse<T> {
   success: boolean;
   message?: string;

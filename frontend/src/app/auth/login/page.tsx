@@ -3,10 +3,11 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import api from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,22 +17,26 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
-      const res = await api.login(email, password);
-      if (res.success && res.data) {
-        localStorage.setItem('upay_access_token', res.data.access_token);
-        localStorage.setItem('upay_refresh_token', res.data.refresh_token);
-        api.setToken(res.data.access_token);
-        router.push('/dashboard');
-      } else {
-        setError(res.error || 'Login failed');
-      }
+      await login(email, password);
+      router.push('/dashboard');
     } catch (e: any) {
-      setError(e.message || 'Network error');
+      setError(e.message || 'Login failed');
     } finally {
       setLoading(false);
     }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '11px 14px',
+    borderRadius: 10,
+    border: '1px solid #e5e7eb',
+    fontSize: 14,
+    outline: 'none',
+    marginBottom: 16,
+    boxSizing: 'border-box',
+    fontFamily: 'inherit',
   };
 
   return (
@@ -61,47 +66,51 @@ export default function LoginPage() {
           }}>{error}</div>
         )}
 
-        <div>
+        <form onSubmit={handleSubmit}>
           <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
             Email
           </label>
           <input
-            type="email" value={email} onChange={e => setEmail(e.target.value)}
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
             placeholder="you@company.com"
-            style={{
-              width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #e5e7eb',
-              fontSize: 14, outline: 'none', marginBottom: 16, boxSizing: 'border-box',
-            }}
+            required
+            style={inputStyle}
           />
 
           <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
             Password
           </label>
           <input
-            type="password" value={password} onChange={e => setPassword(e.target.value)}
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
             placeholder="••••••••"
-            style={{
-              width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #e5e7eb',
-              fontSize: 14, outline: 'none', marginBottom: 24, boxSizing: 'border-box',
-            }}
+            required
+            style={{ ...inputStyle, marginBottom: 24 }}
           />
 
           <button
-            onClick={handleSubmit}
+            type="submit"
             disabled={loading || !email || !password}
             style={{
               width: '100%', padding: '12px', borderRadius: 10, border: 'none',
-              background: loading ? '#a5b4fc' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              color: '#fff', fontSize: 15, fontWeight: 600, cursor: loading ? 'wait' : 'pointer',
+              background: loading || !email || !password
+                ? '#a5b4fc'
+                : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              color: '#fff', fontSize: 15, fontWeight: 600,
+              cursor: loading ? 'wait' : 'pointer',
               transition: 'opacity 0.15s',
+              fontFamily: 'inherit',
             }}
           >
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
-        </div>
+        </form>
 
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: '#6b7280' }}>
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <Link href="/auth/register" style={{ color: '#6366f1', fontWeight: 600, textDecoration: 'none' }}>
             Register
           </Link>

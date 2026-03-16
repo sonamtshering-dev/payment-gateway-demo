@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '@/lib/api';
 import type { DashboardStats, Payment, MerchantUPI, PaginatedResponse } from '@/types';
 
@@ -33,6 +33,7 @@ function useFetch<T>(fetcher: () => Promise<any>, deps: any[] = []): UseFetchRes
     } finally {
       setIsLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   useEffect(() => { fetch(); }, [fetch]);
@@ -68,26 +69,36 @@ export function useUPIs() {
 }
 
 // ============================================================================
-// POLLING HOOK (for payment status)
+// POLLING HOOK — fixed with useRef to prevent stale closure bug
 // ============================================================================
 
 export function usePolling<T>(
   fetcher: () => Promise<any>,
   intervalMs: number,
   shouldStop?: (data: T) => boolean
-): UseFetchResult<T> {
+): UseFetchResult<T> & { stop: () => void } {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [stopped, setStopped] = useState(false);
+  const stoppedRef = useRef(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetch = useCallback(async () => {
+  const stop = useCallback(() => {
+    stoppedRef.current = true;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  const doFetch = useCallback(async () => {
+    if (stoppedRef.current) return;
     try {
       const res = await fetcher();
       if (res.success) {
         setData(res.data);
         if (shouldStop && shouldStop(res.data)) {
-          setStopped(true);
+          stop();
         }
       }
     } catch (e: any) {
@@ -95,18 +106,17 @@ export function usePolling<T>(
     } finally {
       setIsLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    fetch();
-    if (stopped) return;
+    stoppedRef.current = false;
+    doFetch();
+    intervalRef.current = setInterval(doFetch, intervalMs);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [doFetch, intervalMs]);
 
-    const id = setInterval(() => {
-      if (!stopped) fetch();
-    }, intervalMs);
-
-    return () => clearInterval(id);
-  }, [fetch, intervalMs, stopped]);
-
-  return { data, isLoading, error, refetch: fetch };
+  return { data, isLoading, error, refetch: doFetch, stop };
 }
