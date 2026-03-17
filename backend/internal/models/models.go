@@ -21,6 +21,8 @@ type Merchant struct {
 	WebhookSecret string      `json:"-" db:"webhook_secret"`
 	IsActive     bool         `json:"is_active" db:"is_active"`
 	IsAdmin      bool         `json:"is_admin" db:"is_admin"`
+	LogoURL      *string       `json:"logo_url" db:"logo_url"`
+	BusinessName *string       `json:"business_name" db:"business_name"`
 	DailyLimit   int64        `json:"daily_limit" db:"daily_limit"` // in paise
 	CreatedAt    time.Time    `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time    `json:"updated_at" db:"updated_at"`

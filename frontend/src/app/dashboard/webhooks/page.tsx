@@ -25,13 +25,13 @@ export default function WebhooksPage() {
 
   return (
     <div style={{ maxWidth: 740 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: '0 0 24px' }}>Webhook configuration</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f1d35', margin: '0 0 24px' }}>Webhook configuration</h1>
 
       {message && <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#059669' }}>{message}</div>}
       {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#dc2626' }}>{error}</div>}
 
       <div style={{ background: '#fff', borderRadius: 14, padding: '24px 28px', border: '1px solid #e5e7eb', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 12px' }}>Endpoint URL</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#0f1d35', margin: '0 0 12px' }}>Endpoint URL</h2>
         <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 14px' }}>
           We'll send a POST request to this URL when a payment status changes. Must be HTTPS.
         </p>
@@ -47,7 +47,7 @@ export default function WebhooksPage() {
       </div>
 
       <div style={{ background: '#fff', borderRadius: 14, padding: '24px 28px', border: '1px solid #e5e7eb', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 12px' }}>Payload format</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#0f1d35', margin: '0 0 12px' }}>Payload format</h2>
         <pre style={{
           background: '#1e1e2e', color: '#cdd6f4', padding: 18, borderRadius: 12,
           fontSize: 12.5, lineHeight: 1.6, overflow: 'auto',
@@ -70,7 +70,7 @@ User-Agent: UPay-Gateway/1.0
       </div>
 
       <div style={{ background: '#fff', borderRadius: 14, padding: '24px 28px', border: '1px solid #e5e7eb' }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 12px' }}>Retry policy</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#0f1d35', margin: '0 0 12px' }}>Retry policy</h2>
         <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7 }}>
           Failed deliveries are retried with exponential backoff: 2 min, 4 min, 8 min, 16 min, 32 min (5 attempts max).
           Return HTTP 2xx to acknowledge. Any other status triggers a retry.

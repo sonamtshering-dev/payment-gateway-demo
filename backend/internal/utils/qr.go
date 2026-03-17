@@ -1,73 +1,33 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
+	"image/png"
 	"os"
 
 	qrcode "github.com/yeqown/go-qrcode/v2"
 	"github.com/yeqown/go-qrcode/writer/standard"
 )
 
-// QRConfig holds optional QR customization per payment
-type QRConfig struct {
-	FgColor string // hex e.g. "#0f172a"
-	BgColor string // hex e.g. "#ffffff"
-	LogoURL string // optional merchant logo path
-}
-
-// DefaultQRConfig returns NovaPay branded defaults
-func DefaultQRConfig() QRConfig {
-	return QRConfig{
-		FgColor: "#0f172a",
-		BgColor: "#ffffff",
-	}
-}
-
-// GenerateQRBase64 generates a styled QR code and returns base64 string
+// GenerateQRBase64 generates a styled QR code and returns base64 PNG string
 func GenerateQRBase64(content string) (string, error) {
-	return GenerateQRBase64WithConfig(content, DefaultQRConfig())
-}
-
-// GenerateQRBase64WithConfig generates QR with custom branding
-func GenerateQRBase64WithConfig(content string, cfg QRConfig) (string, error) {
 	qrc, err := qrcode.New(content)
 	if err != nil {
 		return "", fmt.Errorf("qr create: %w", err)
 	}
 
-	fgColor := cfg.FgColor
-	bgColor := cfg.BgColor
-	if fgColor == "" {
-		fgColor = "#0f172a"
-	}
-	if bgColor == "" {
-		bgColor = "#ffffff"
-	}
-
-	opts := []standard.ImageOption{
-		standard.WithBgColorRGBHex(bgColor),
-		standard.WithFgColorRGBHex(fgColor),
-		standard.WithQRWidth(10),
-		standard.WithBorderWidth(3),
-	}
-
-	// Add logo — merchant logo takes priority, fallback to NovaPay brand logo
-	logoPath := cfg.LogoURL
-	if logoPath == "" {
-		// Try default NovaPay brand logo
-		if _, err := os.Stat("/app/assets/logo.jpeg"); err == nil {
-			logoPath = "/app/assets/logo.jpeg"
-		}
-	}
-	if logoPath != "" {
-		opts = append(opts, standard.WithLogoImageFileJPEG(logoPath))
-	}
-
-	tmpFile := fmt.Sprintf("/tmp/qr-%d.jpeg", os.Getpid())
+	tmpFile := fmt.Sprintf("/tmp/qr-%d.png", os.Getpid())
 	defer os.Remove(tmpFile)
 
-	w, err := standard.New(tmpFile, opts...)
+	w, err := standard.New(tmpFile,
+		standard.WithBgColorRGBHex("#ffffff"),
+		standard.WithFgColorRGBHex("#0f172a"),
+		standard.WithQRWidth(8),
+		standard.WithBorderWidth(3),
+		standard.WithBuiltinImageEncoder(standard.PNG_FORMAT),
+	)
 	if err != nil {
 		return "", fmt.Errorf("qr writer: %w", err)
 	}
@@ -81,5 +41,11 @@ func GenerateQRBase64WithConfig(content string, cfg QRConfig) (string, error) {
 		return "", fmt.Errorf("qr read: %w", err)
 	}
 
-	return "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data), nil
+	// Validate PNG
+	if _, err := png.Decode(bytes.NewReader(data)); err != nil {
+		// Not PNG — still encode as-is with correct prefix
+		return "data:image/png;base64," + base64.StdEncoding.EncodeToString(data), nil
+	}
+
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(data), nil
 }

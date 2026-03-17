@@ -48,6 +48,8 @@ func (w *Worker) StartWithWaitGroup(ctx context.Context, wg *sync.WaitGroup) {
 	go func() { defer wg.Done(); w.paymentExpiryWorker(ctx) }()
 	go func() { defer wg.Done(); w.webhookDispatchWorker(ctx) }()
 	go func() { defer wg.Done(); w.webhookRetryWorker(ctx) }()
+	wg.Add(1)
+	go func() { defer wg.Done(); w.subscriptionExpiryWorker(ctx) }()
 }
 
 func (w *Worker) paymentExpiryWorker(ctx context.Context) {
@@ -184,6 +186,27 @@ func (w *Worker) webhookRetryWorker(ctx context.Context) {
 			}
 			if len(deliveries) > 0 {
 				log.Info().Int("count", len(deliveries)).Msg("Re-queued webhook retries")
+			}
+		}
+	}
+}
+
+func (w *Worker) subscriptionExpiryWorker(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("Subscription expiry worker stopped")
+			return
+		case <-ticker.C:
+			expired, err := w.repo.ExpireSubscriptions(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Error expiring subscriptions")
+				continue
+			}
+			if expired > 0 {
+				log.Info().Int64("count", expired).Msg("Expired subscriptions")
 			}
 		}
 	}

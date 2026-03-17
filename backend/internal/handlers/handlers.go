@@ -22,6 +22,13 @@ func New(service *services.Service) *Handler {
 // ============================================================================
 
 // POST /api/v1/auth/register
+
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
 func (h *Handler) Register(c *gin.Context) {
 	var req models.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -212,13 +219,15 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data: models.MerchantPublic{
-			ID:        merchant.ID,
-			Name:      merchant.Name,
-			Email:     merchant.Email,
-			APIKey:    merchant.APIKey,
-			IsActive:  merchant.IsActive,
-				IsAdmin:   merchant.IsAdmin,
-			CreatedAt: merchant.CreatedAt,
+			ID:           merchant.ID,
+			Name:         merchant.Name,
+			Email:        merchant.Email,
+			APIKey:       merchant.APIKey,
+			IsActive:     merchant.IsActive,
+			IsAdmin:      merchant.IsAdmin,
+			CreatedAt:    merchant.CreatedAt,
+			LogoURL:      derefStr(merchant.LogoURL),
+			BusinessName: derefStr(merchant.BusinessName),
 		},
 	})
 }
@@ -343,4 +352,26 @@ func (h *Handler) HealthCheck(c *gin.Context) {
 		"service": "upay-gateway",
 		"version": "1.0.0",
 	})
+}
+
+func (h *Handler) GetReferralStats(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
+	stats, err := h.service.GetReferralStats(merchantID.String())
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"success": true, "data": stats})
+}
+
+func (h *Handler) EmailSubscribe(c *gin.Context) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.Email == "" {
+		c.JSON(400, gin.H{"success": false, "error": "valid email required"})
+		return
+	}
+	h.service.AddEmailSubscriber(body.Email)
+	c.JSON(200, gin.H{"success": true, "message": "Subscribed!"})
 }

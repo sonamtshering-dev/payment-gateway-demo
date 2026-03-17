@@ -11,25 +11,25 @@ const toArr = (v: any): any[] => { if (Array.isArray(v)) return v; return []; };
 const TABS = ['Overview','Merchants','Payments','KYC','Fraud Alerts','Subscriptions','Plans'];
 
 const S = {
-  page:   { minHeight:'100vh', background:'#07090f', color:'#eef2ff', fontFamily:'DM Sans,sans-serif' } as React.CSSProperties,
-  topbar: { height:62, background:'#0b0f1a', borderBottom:'1px solid rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 28px', position:'sticky' as const, top:0, zIndex:50 } as React.CSSProperties,
+  page:   { minHeight:'100vh', background:'#020817', color:'#dbeafe', fontFamily:'DM Sans,sans-serif' } as React.CSSProperties,
+  topbar: { height:62, background:'#030d1f', borderBottom:'1px solid rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 28px', position:'sticky' as const, top:0, zIndex:50 } as React.CSSProperties,
   body:   { padding:28, maxWidth:1200, margin:'0 auto' } as React.CSSProperties,
-  tabs:   { display:'flex', gap:4, background:'#111827', border:'1px solid rgba(255,255,255,0.06)', borderRadius:12, padding:4, marginBottom:28, flexWrap:'wrap' as const } as React.CSSProperties,
-  tab:    (active:boolean) => ({ background:active?'rgba(0,229,176,0.12)':'transparent', color:active?'#00e5b0':'#64748b', border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:active?700:400, cursor:'pointer', fontFamily:'DM Sans,sans-serif', transition:'all 0.15s' }) as React.CSSProperties,
-  card:   { background:'#111827', border:'1px solid rgba(255,255,255,0.06)', borderRadius:14, padding:24 } as React.CSSProperties,
+  tabs:   { display:'flex', gap:4, background:'#0f1d35', border:'1px solid rgba(255,255,255,0.06)', borderRadius:12, padding:4, marginBottom:28, flexWrap:'wrap' as const } as React.CSSProperties,
+  tab:    (active:boolean) => ({ background:active?'rgba(59,130,246,0.12)':'transparent', color:active?'#3b82f6':'#64748b', border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:active?700:400, cursor:'pointer', fontFamily:'DM Sans,sans-serif', transition:'all 0.15s' }) as React.CSSProperties,
+  card:   { background:'#0f1d35', border:'1px solid rgba(255,255,255,0.06)', borderRadius:14, padding:24 } as React.CSSProperties,
   grid4:  { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:14, marginBottom:24 } as React.CSSProperties,
-  statCard: { background:'#111827', border:'1px solid rgba(255,255,255,0.06)', borderRadius:12, padding:'18px 20px' } as React.CSSProperties,
-  inp:    { background:'#0b0f1a', border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, padding:'9px 14px', color:'#eef2ff', fontSize:13, fontFamily:'DM Sans,sans-serif', outline:'none', width:'100%', boxSizing:'border-box' as const } as React.CSSProperties,
+  statCard: { background:'#0f1d35', border:'1px solid rgba(255,255,255,0.06)', borderRadius:12, padding:'18px 20px' } as React.CSSProperties,
+  inp:    { background:'#030d1f', border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, padding:'9px 14px', color:'#dbeafe', fontSize:13, fontFamily:'DM Sans,sans-serif', outline:'none', width:'100%', boxSizing:'border-box' as const } as React.CSSProperties,
   label:  { display:'block', fontSize:11, fontWeight:700, color:'#64748b', textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:6 } as React.CSSProperties,
   btn:    (color:string) => ({ background:`rgba(${color},0.08)`, border:`1px solid rgba(${color},0.2)`, borderRadius:8, padding:'6px 14px', color:`rgb(${color})`, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'DM Sans,sans-serif' }) as React.CSSProperties,
   tHead:  { display:'grid', padding:'10px 16px', borderBottom:'1px solid rgba(255,255,255,0.06)', fontSize:11, fontWeight:700, color:'#4b5563', textTransform:'uppercase' as const, letterSpacing:'0.08em' } as React.CSSProperties,
   tRow:   { padding:'13px 16px', borderBottom:'1px solid rgba(255,255,255,0.04)', fontSize:13, alignItems:'center', transition:'background 0.15s' } as React.CSSProperties,
   badge:  (color:string) => ({ background:`rgba(${color},0.10)`, color:`rgb(${color})`, fontSize:10, fontWeight:700, padding:'3px 9px', borderRadius:100, letterSpacing:'0.05em' }) as React.CSSProperties,
   overlay:{ position:'fixed' as const, inset:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 } as React.CSSProperties,
-  modal:  { background:'#111827', border:'1px solid rgba(255,255,255,0.08)', borderRadius:16, padding:32, width:520, maxWidth:'92vw', maxHeight:'90vh', overflowY:'auto' as const } as React.CSSProperties,
+  modal:  { background:'#0f1d35', border:'1px solid rgba(255,255,255,0.08)', borderRadius:16, padding:32, width:520, maxWidth:'92vw', maxHeight:'90vh', overflowY:'auto' as const } as React.CSSProperties,
 };
 
-const EMPTY_PLAN = { name:'', price:'', billing_cycle:'per month', badge:'', is_featured:false, cta_label:'', sort_order:0, qr_limit:0, link_limit:0, api_limit:0, features:'' };
+const EMPTY_PLAN = { name:'', price:'', billing_cycle:'per month', badge:'', is_featured:false, cta_label:'', sort_order:0, qr_limit:0, link_limit:0, api_limit:0, discount_6month:15, discount_1year:25, features:'' };
 
 export default function AdminPage() {
   const { merchant, isLoading, logout } = useAuth();
@@ -133,6 +133,8 @@ export default function AdminPage() {
       qr_limit: plan.qr_limit || 0,
       link_limit: plan.link_limit || 0,
       api_limit: plan.api_limit || 0,
+      discount_6month: plan.discount_6month ?? 15,
+      discount_1year: plan.discount_1year ?? 25,
       features: toArr(plan.features).join('\n'),
     });
     setPlanModal(plan);
@@ -152,6 +154,8 @@ export default function AdminPage() {
       qr_limit: parseInt(planForm.qr_limit)||0,
       link_limit: parseInt(planForm.link_limit)||0,
       api_limit: parseInt(planForm.api_limit)||0,
+      discount_6month: parseInt(planForm.discount_6month)||15,
+      discount_1year: parseInt(planForm.discount_1year)||25,
       features: planForm.features.split('\n').map((f:string)=>f.trim()).filter(Boolean),
     };
     try {
@@ -201,12 +205,12 @@ export default function AdminPage() {
       {/* Topbar */}
       <div style={S.topbar}>
         <div style={{display:'flex',alignItems:'center',gap:12}}>
-          <div style={{width:32,height:32,borderRadius:9,background:'linear-gradient(135deg,#00e5b0,#0ea5e9)',display:'flex',alignItems:'center',justifyContent:'center',color:'#07090f',fontWeight:800,fontSize:14}}>N</div>
+          <div style={{width:32,height:32,borderRadius:9,background:'linear-gradient(135deg,#3b82f6,#1d4ed8)',display:'flex',alignItems:'center',justifyContent:'center',color:'#020817',fontWeight:800,fontSize:14}}>N</div>
           <span style={{fontFamily:'Syne,sans-serif',fontSize:17,fontWeight:800}}>NovaPay</span>
           <span style={{background:'rgba(239,68,68,0.10)',color:'#ef4444',fontSize:10,fontWeight:700,padding:'3px 9px',borderRadius:6,marginLeft:4}}>ADMIN</span>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:12}}>
-          <div style={{background:'rgba(0,229,176,0.08)',border:'1px solid rgba(0,229,176,0.2)',color:'#00e5b0',fontSize:11,fontWeight:700,padding:'5px 12px',borderRadius:8}}>● Live</div>
+          <div style={{background:'rgba(59,130,246,0.08)',border:'1px solid rgba(59,130,246,0.2)',color:'#3b82f6',fontSize:11,fontWeight:700,padding:'5px 12px',borderRadius:8}}>● Live</div>
           <button onClick={logout} style={{background:'none',border:'1px solid rgba(255,255,255,0.08)',borderRadius:8,padding:'7px 14px',color:'#64748b',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',gap:6}}>
             <LogOut size={14}/> Logout
           </button>
@@ -215,7 +219,7 @@ export default function AdminPage() {
 
       <div style={S.body}>
         {error   && <div style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.18)',borderRadius:8,padding:'10px 16px',color:'#f87171',fontSize:13,marginBottom:16}}>{error}</div>}
-        {success && <div style={{background:'rgba(0,229,176,0.08)',border:'1px solid rgba(0,229,176,0.18)',borderRadius:8,padding:'10px 16px',color:'#00e5b0',fontSize:13,marginBottom:16}}>{success}</div>}
+        {success && <div style={{background:'rgba(59,130,246,0.08)',border:'1px solid rgba(59,130,246,0.18)',borderRadius:8,padding:'10px 16px',color:'#3b82f6',fontSize:13,marginBottom:16}}>{success}</div>}
 
         {/* Tabs */}
         <div style={S.tabs}>
@@ -238,14 +242,14 @@ export default function AdminPage() {
           <>
             <div style={S.grid4}>
               {[
-                {label:'Total Revenue',    value:fmt(stats?.total_volume||0),              color:'#00e5b0', icon:'💸'},
-                {label:'Total Merchants',  value:(stats?.total_merchants||merchantList.length).toLocaleString(), color:'#0ea5e9', icon:'🏪'},
+                {label:'Total Revenue',    value:fmt(stats?.total_volume||0),              color:'#3b82f6', icon:'💸'},
+                {label:'Total Merchants',  value:(stats?.total_merchants||merchantList.length).toLocaleString(), color:'#1d4ed8', icon:'🏪'},
                 {label:'Total Payments',   value:(stats?.total_transactions||0).toLocaleString(),  color:'#8b5cf6', icon:'💳'},
-                {label:'Success Rate',     value:`${(stats?.success_rate||0).toFixed(1)}%`, color:'#00e5b0', icon:'✅'},
+                {label:'Success Rate',     value:`${(stats?.success_rate||0).toFixed(1)}%`, color:'#3b82f6', icon:'✅'},
                 {label:"Today's Volume",   value:fmt(stats?.today_volume||0),              color:'#f59e0b', icon:'📈'},
                 {label:'Failed Payments',  value:(stats?.failed_payments||0).toLocaleString(),     color:'#ef4444', icon:'❌'},
                 {label:'Pending KYC',      value:kycList.filter(k=>k.status==='pending').length.toLocaleString(), color:'#f59e0b', icon:'📋'},
-                {label:'Active Merchants', value:merchantList.filter(m=>m.is_active).length.toLocaleString(), color:'#00e5b0', icon:'✔'},
+                {label:'Active Merchants', value:merchantList.filter(m=>m.is_active).length.toLocaleString(), color:'#3b82f6', icon:'✔'},
               ].map(c=>(
                 <div key={c.label} style={S.statCard}>
                   <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
@@ -403,7 +407,7 @@ export default function AdminPage() {
                 <div style={{fontFamily:'Syne,sans-serif',fontSize:20,fontWeight:800}}>Pricing Plans</div>
                 <div style={{color:'#64748b',fontSize:13,marginTop:4}}>Manage the plans shown on your landing page and subscription page.</div>
               </div>
-              <button onClick={openNewPlan} style={{background:'linear-gradient(135deg,#00e5b0,#0ea5e9)',border:'none',borderRadius:10,padding:'10px 20px',color:'#07090f',fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',gap:8}}>
+              <button onClick={openNewPlan} style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)',border:'none',borderRadius:10,padding:'10px 20px',color:'#020817',fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',gap:8}}>
                 <Plus size={15}/> New Plan
               </button>
             </div>
@@ -414,16 +418,16 @@ export default function AdminPage() {
                 <div style={{fontSize:40,marginBottom:12}}>📦</div>
                 <div style={{fontFamily:'Syne,sans-serif',fontSize:18,fontWeight:700,marginBottom:8}}>No plans yet</div>
                 <div style={{color:'#64748b',fontSize:14,marginBottom:24}}>Create your first pricing plan to show on the landing page.</div>
-                <button onClick={openNewPlan} style={{background:'linear-gradient(135deg,#00e5b0,#0ea5e9)',border:'none',borderRadius:10,padding:'12px 28px',color:'#07090f',fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:800,cursor:'pointer'}}>
+                <button onClick={openNewPlan} style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)',border:'none',borderRadius:10,padding:'12px 28px',color:'#020817',fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:800,cursor:'pointer'}}>
                   Create First Plan
                 </button>
               </div>
             ) : (
               <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:16}}>
                 {planList.map((plan:any)=>(
-                  <div key={plan.id} style={{background:'#111827',border:plan.is_featured?'1px solid rgba(0,229,176,0.3)':'1px solid rgba(255,255,255,0.06)',borderRadius:16,padding:24,position:'relative' as const}}>
+                  <div key={plan.id} style={{background:'#0f1d35',border:plan.is_featured?'1px solid rgba(59,130,246,0.3)':'1px solid rgba(255,255,255,0.06)',borderRadius:16,padding:24,position:'relative' as const}}>
                     {plan.badge && (
-                      <div style={{position:'absolute' as const,top:16,right:16,background:'#00e5b0',color:'#07090f',fontSize:9,fontWeight:800,padding:'4px 10px',borderRadius:5}}>
+                      <div style={{position:'absolute' as const,top:16,right:16,background:'#3b82f6',color:'#020817',fontSize:9,fontWeight:800,padding:'4px 10px',borderRadius:5}}>
                         {plan.badge.toUpperCase()}
                       </div>
                     )}
@@ -443,7 +447,7 @@ export default function AdminPage() {
                       {[['QR codes', plan.qr_limit===0?'Unlimited':plan.qr_limit],['Payment links',plan.link_limit===0?'Unlimited':plan.link_limit],['API calls/day',plan.api_limit===0?'Unlimited':plan.api_limit]].map(([k,v])=>(
                         <div key={k} style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:4}}>
                           <span style={{color:'#64748b'}}>{k}</span>
-                          <span style={{color:'#eef2ff',fontWeight:600}}>{v}</span>
+                          <span style={{color:'#dbeafe',fontWeight:600}}>{v}</span>
                         </div>
                       ))}
                     </div>
@@ -452,7 +456,7 @@ export default function AdminPage() {
                     <ul style={{listStyle:'none',padding:0,margin:'0 0 16px',display:'flex',flexDirection:'column' as const,gap:5}}>
                       {toArr(plan.features).slice(0,4).map((f:string,i:number)=>(
                         <li key={i} style={{display:'flex',gap:6,fontSize:12,color:'#8b9ab5'}}>
-                          <span style={{color:'#00e5b0',fontWeight:700}}>✓</span>{f}
+                          <span style={{color:'#3b82f6',fontWeight:700}}>✓</span>{f}
                         </li>
                       ))}
                       {toArr(plan.features).length>4 && <li style={{fontSize:11,color:'#4b5563'}}>+{toArr(plan.features).length-4} more</li>}
@@ -521,16 +525,41 @@ export default function AdminPage() {
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,marginBottom:16}}>
               <div>
-                <label style={S.label}>QR Limit (0=∞)</label>
-                <input style={S.inp} type="number" min="0" value={planForm.qr_limit} onChange={e=>pf('qr_limit',e.target.value)}/>
+                <label style={S.label}>QR Limit</label>
+                <select style={S.inp} value={planForm.qr_limit} onChange={e=>pf('qr_limit',e.target.value)}>
+                  <option value="0">∞ Unlimited</option>
+                  <option value="50">50 QR codes</option>
+                  <option value="100">100 QR codes</option>
+                  <option value="250">250 QR codes</option>
+                  <option value="500">500 QR codes</option>
+                  <option value="1000">1,000 QR codes</option>
+                  <option value="5000">5,000 QR codes</option>
+                </select>
               </div>
               <div>
-                <label style={S.label}>Link Limit (0=∞)</label>
-                <input style={S.inp} type="number" min="0" value={planForm.link_limit} onChange={e=>pf('link_limit',e.target.value)}/>
+                <label style={S.label}>Link Limit</label>
+                <select style={S.inp} value={planForm.link_limit} onChange={e=>pf('link_limit',e.target.value)}>
+                  <option value="0">∞ Unlimited</option>
+                  <option value="1">1 link</option>
+                  <option value="3">3 links</option>
+                  <option value="5">5 links</option>
+                  <option value="10">10 links</option>
+                  <option value="25">25 links</option>
+                  <option value="50">50 links</option>
+                  <option value="100">100 links</option>
+                </select>
               </div>
               <div>
-                <label style={S.label}>API Limit (0=∞)</label>
-                <input style={S.inp} type="number" min="0" value={planForm.api_limit} onChange={e=>pf('api_limit',e.target.value)}/>
+                <label style={S.label}>API Limit / day</label>
+                <select style={S.inp} value={planForm.api_limit} onChange={e=>pf('api_limit',e.target.value)}>
+                  <option value="0">∞ Unlimited</option>
+                  <option value="100">100 / day</option>
+                  <option value="500">500 / day</option>
+                  <option value="1000">1,000 / day</option>
+                  <option value="5000">5,000 / day</option>
+                  <option value="10000">10,000 / day</option>
+                  <option value="50000">50,000 / day</option>
+                </select>
               </div>
             </div>
 
@@ -545,6 +574,16 @@ export default function AdminPage() {
               </div>
             </div>
 
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+              <div>
+                <label style={S.label}>6-Month Discount %</label>
+                <input style={S.inp} type='number' min='0' max='100' value={planForm.discount_6month} onChange={e=>pf('discount_6month',e.target.value)}/>
+              </div>
+              <div>
+                <label style={S.label}>1-Year Discount %</label>
+                <input style={S.inp} type='number' min='0' max='100' value={planForm.discount_1year} onChange={e=>pf('discount_1year',e.target.value)}/>
+              </div>
+            </div>
             <div style={{marginBottom:24}}>
               <label style={S.label}>Features (one per line)</label>
               <textarea
@@ -560,7 +599,7 @@ export default function AdminPage() {
               <button onClick={()=>setPlanModal(null)} style={{flex:1,background:'none',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:'11px 0',color:'#64748b',cursor:'pointer',fontSize:14}}>
                 Cancel
               </button>
-              <button onClick={savePlan} disabled={planSaving} style={{flex:2,background:'linear-gradient(135deg,#00e5b0,#0ea5e9)',border:'none',borderRadius:10,padding:'11px 0',color:'#07090f',fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+              <button onClick={savePlan} disabled={planSaving} style={{flex:2,background:'linear-gradient(135deg,#3b82f6,#1d4ed8)',border:'none',borderRadius:10,padding:'11px 0',color:'#020817',fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                 <Check size={15}/>{planSaving?'Saving...':planModal==='new'?'Create Plan':'Save Changes'}
               </button>
             </div>
@@ -578,7 +617,7 @@ export default function AdminPage() {
             <input type="number" min={1} value={extendDays} onChange={e=>setExtendDays(parseInt(e.target.value)||1)} style={{...S.inp,marginBottom:20}}/>
             <div style={{display:'flex',gap:10}}>
               <button onClick={()=>setExtendModal(null)} style={{flex:1,background:'none',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:'10px 0',color:'#64748b',cursor:'pointer',fontSize:14}}>Cancel</button>
-              <button onClick={extendSub} style={{flex:2,background:'linear-gradient(135deg,#00e5b0,#0ea5e9)',border:'none',borderRadius:10,padding:'10px 0',color:'#07090f',fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:800,cursor:'pointer'}}>Extend {extendDays} days</button>
+              <button onClick={extendSub} style={{flex:2,background:'linear-gradient(135deg,#3b82f6,#1d4ed8)',border:'none',borderRadius:10,padding:'10px 0',color:'#020817',fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:800,cursor:'pointer'}}>Extend {extendDays} days</button>
             </div>
           </div>
         </div>

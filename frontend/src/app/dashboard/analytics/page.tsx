@@ -10,10 +10,10 @@ export default function AnalyticsPage() {
 
   return (
     <div style={{ maxWidth: 780 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: '0 0 24px' }}>Integration guide</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f1d35', margin: '0 0 24px' }}>Integration guide</h1>
 
       <div style={{ background: '#fff', borderRadius: 14, padding: '24px 28px', border: '1px solid #e5e7eb', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 14px' }}>1. Create a payment session</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#0f1d35', margin: '0 0 14px' }}>1. Create a payment session</h2>
         <pre style={codeBlockStyle}>{`const crypto = require('crypto');
 
 const API_KEY = 'upay_your_key';
@@ -50,7 +50,7 @@ const { data } = await response.json();
       </div>
 
       <div style={{ background: '#fff', borderRadius: 14, padding: '24px 28px', border: '1px solid #e5e7eb', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 14px' }}>2. Display to customer</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#0f1d35', margin: '0 0 14px' }}>2. Display to customer</h2>
         <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, margin: '0 0 12px' }}>
           Show the QR code image and UPI deep link. Alternatively, redirect to the hosted payment page:
         </p>
@@ -63,7 +63,7 @@ const { data } = await response.json();
       </div>
 
       <div style={{ background: '#fff', borderRadius: 14, padding: '24px 28px', border: '1px solid #e5e7eb', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 14px' }}>3. Poll status or use webhooks</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#0f1d35', margin: '0 0 14px' }}>3. Poll status or use webhooks</h2>
         <pre style={codeBlockStyle}>{`// Poll every 4 seconds
 const checkStatus = async (paymentId) => {
   const res = await fetch(
@@ -81,7 +81,7 @@ const checkStatus = async (paymentId) => {
       </div>
 
       <div style={{ background: '#fff', borderRadius: 14, padding: '24px 28px', border: '1px solid #e5e7eb', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 14px' }}>4. Verify webhook signature</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#0f1d35', margin: '0 0 14px' }}>4. Verify webhook signature</h2>
         <pre style={codeBlockStyle}>{`app.post('/webhooks/upay', (req, res) => {
   const signature = req.headers['x-webhook-signature'];
   const payload = JSON.stringify(req.body);

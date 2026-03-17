@@ -28,6 +28,9 @@ func (s *Service) CheckMerchantGating(ctx context.Context, merchantID uuid.UUID)
 		return fmt.Errorf("failed to check subscription")
 	}
 	if sub == nil || sub.Status != "active" {
+		if sub != nil && sub.Status == "expired" {
+			return fmt.Errorf("SUBSCRIPTION_EXPIRED: Your subscription has expired. Please renew to continue using the gateway")
+		}
 		return fmt.Errorf("SUBSCRIPTION_REQUIRED: No active subscription found. Please purchase a plan to use the gateway")
 	}
 
@@ -38,6 +41,25 @@ func (s *Service) CheckMerchantGating(ctx context.Context, merchantID uuid.UUID)
 	}
 	if len(upis) == 0 {
 		return fmt.Errorf("UPI_REQUIRED: No UPI ID configured. Please add a UPI ID in Settings to receive payments")
+	}
+
+
+	// Check plan limits
+	sub2, _ := s.repo.GetMerchantSubscription(ctx, merchantID)
+	if sub2 != nil {
+		plan, _ := s.repo.GetPlanByID(ctx, sub2.PlanID)
+		if plan != nil {
+			qrUsed, linksActive, apiToday, _ := s.repo.GetMerchantUsage(ctx, merchantID)
+			if plan.QRLimit > 0 && qrUsed >= plan.QRLimit {
+				return fmt.Errorf("QR_LIMIT_REACHED: You have reached your plan limit of %d QR codes. Please upgrade your plan", plan.QRLimit)
+			}
+			if plan.LinkLimit > 0 && linksActive >= plan.LinkLimit {
+				return fmt.Errorf("LINK_LIMIT_REACHED: You have reached your plan limit of %d active payment links. Please upgrade your plan", plan.LinkLimit)
+			}
+			if plan.APILimit > 0 && apiToday >= plan.APILimit {
+				return fmt.Errorf("API_LIMIT_REACHED: You have reached your daily API limit of %d calls. Limit resets every 24 hours", plan.APILimit)
+			}
+		}
 	}
 
 	return nil

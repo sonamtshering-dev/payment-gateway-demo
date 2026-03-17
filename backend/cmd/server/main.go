@@ -136,6 +136,7 @@ func main() {
 	// Public — no auth required (landing page pricing)
 	r.GET("/api/v1/public/plans", h.GetPublicPlans)
 	r.GET("/api/v1/public/payment/:payment_id", h.GetPaymentStatus)
+	r.POST("/api/v1/public/subscribe", h.EmailSubscribe)
 
 	v1 := r.Group("/api/v1")
 	{
@@ -187,7 +188,11 @@ func main() {
 					dashboard.DELETE("/subscription", h.CancelSubscription)
 					dashboard.GET("/subscription/detail", h.GetSubscriptionWithPlan)
 					dashboard.POST("/subscription/pay", h.InitiateSubscriptionPayment)
-					dashboard.GET("/kyc", h.GetKYC)
+					dashboard.POST("/logo", h.UploadMerchantLogo)
+					dashboard.DELETE("/logo", h.DeleteMerchantLogo)
+					dashboard.PUT("/business-name", h.UpdateBusinessName)
+					dashboard.GET("/referral", h.GetReferralStats)
+				dashboard.GET("/kyc", h.GetKYC)
 					dashboard.POST("/kyc", h.SubmitKYC)
 					dashboard.POST("/payments/create", h.CreatePayment)
 					dashboard.GET("/payments/status/:payment_id", h.GetPaymentStatus)

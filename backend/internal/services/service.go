@@ -156,6 +156,11 @@ func (s *Service) CreatePayment(ctx context.Context, req models.CreatePaymentReq
 		return nil, fmt.Errorf("merchant not found")
 	}
 
+	// Check merchant gating (KYC + subscription + UPI)
+	if err := s.CheckMerchantGating(ctx, merchantID); err != nil {
+		return nil, err
+	}
+
 	isDup, err := s.repo.CheckDuplicateOrderID(ctx, merchantID, req.OrderID)
 	if err != nil {
 		return nil, err
@@ -236,6 +241,15 @@ func (s *Service) GetPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*m
 		return nil, fmt.Errorf("payment not found")
 	}
 
+	merchant, _ := s.repo.GetMerchantByID(ctx, payment.MerchantID)
+	var merchantLogo, businessName string
+	if merchant != nil {
+		if merchant.LogoURL != nil { merchantLogo = *merchant.LogoURL }
+		if merchant.BusinessName != nil { businessName = *merchant.BusinessName }
+		if businessName == "" {
+			businessName = merchant.Name
+		}
+	}
 	return &models.PaymentStatusResponse{
 		PaymentID:     payment.ID,
 		OrderID:       payment.OrderID,
@@ -250,6 +264,8 @@ func (s *Service) GetPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*m
 		QRCodeBase64:  payment.QRCodeData,
 		UPIIntentLink: payment.UPIIntentLink,
 		CustomerRef:   payment.CustomerReference,
+		MerchantLogo:  merchantLogo,
+		BusinessName:  businessName,
 	}, nil
 }
 
@@ -354,4 +370,19 @@ func (s *Service) AddUPI(ctx context.Context, merchantID uuid.UUID, req models.A
 
 func (s *Service) GetMerchantStats(ctx context.Context, merchantID uuid.UUID) (*models.DashboardStats, error) {
 	return s.repo.GetMerchantStats(ctx, merchantID)
+}
+func (s *Service) UpdateMerchantLogo(ctx context.Context, merchantID uuid.UUID, logoURL string) error {
+	return s.repo.UpdateMerchantField(ctx, merchantID, "logo_url", logoURL)
+}
+
+func (s *Service) UpdateBusinessName(ctx context.Context, merchantID uuid.UUID, name string) error {
+	return s.repo.UpdateMerchantField(ctx, merchantID, "business_name", name)
+}
+
+func (s *Service) GetReferralStats(merchantId string) (map[string]interface{}, error) {
+	return s.repo.GetReferralStats(merchantId)
+}
+
+func (s *Service) AddEmailSubscriber(email string) {
+	s.repo.AddEmailSubscriber(email, "landing")
 }

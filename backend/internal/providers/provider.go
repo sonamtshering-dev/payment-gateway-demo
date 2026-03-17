@@ -2,10 +2,11 @@ package providers
 
 import (
 	"context"
-	"encoding/base64"
+	
 	"fmt"
+	"github.com/upay/gateway/internal/utils"
 
-	qrcode "github.com/skip2/go-qrcode"
+	
 )
 
 // ============================================================================
@@ -75,12 +76,12 @@ func (p *UPIDirectProvider) GenerateQRCode(paymentLink string, size int) (string
 		size = 512
 	}
 
-	qrBytes, err := qrcode.Encode(paymentLink, qrcode.Medium, size)
+	qrData, err := utils.GenerateQRBase64(paymentLink)
 	if err != nil {
 		return "", fmt.Errorf("QR code generation failed: %w", err)
 	}
 
-	return base64.StdEncoding.EncodeToString(qrBytes), nil
+	return qrData, nil
 }
 
 func (p *UPIDirectProvider) ValidateUPIID(upiID string) bool {
@@ -150,12 +151,12 @@ func (p *CashPeProvider) GenerateQRCode(paymentLink string, size int) (string, e
 		size = 512
 	}
 
-	qrBytes, err := qrcode.Encode(paymentLink, qrcode.Medium, size)
+	qrData, err := utils.GenerateQRBase64(paymentLink)
 	if err != nil {
 		return "", fmt.Errorf("QR code generation failed: %w", err)
 	}
 
-	return base64.StdEncoding.EncodeToString(qrBytes), nil
+	return qrData, nil
 }
 
 func (p *CashPeProvider) ValidateUPIID(upiID string) bool {

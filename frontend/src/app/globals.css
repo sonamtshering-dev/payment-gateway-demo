@@ -5,12 +5,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  --foreground: #111827;
-  --background: #f8f9fc;
+  --foreground: #0f1d35;
+  --background: #020817;
   --card: #ffffff;
   --border: #e5e7eb;
   --muted: #6b7280;
-  --accent: #6366f1;
+  --accent: #1d4ed8;
 }
 
 body {

@@ -39,6 +39,8 @@ type MerchantPublic struct {
 	APIKey    string    `json:"api_key"`
 	IsActive  bool      `json:"is_active"`
 	IsAdmin   bool      `json:"is_admin"`
+	LogoURL      string `json:"logo_url,omitempty"`
+	BusinessName string `json:"business_name,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -79,6 +81,8 @@ type PaymentStatusResponse struct {
 	QRCodeBase64  string `json:"qr_code_base64,omitempty"`
 	UPIIntentLink string `json:"upi_intent_link,omitempty"`
 	CustomerRef   string `json:"customer_reference,omitempty"`
+	MerchantLogo  string `json:"merchant_logo,omitempty"`
+	BusinessName  string `json:"business_name,omitempty"`
 }
 
 type VerifyPaymentRequest struct {

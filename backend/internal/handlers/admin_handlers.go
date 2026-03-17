@@ -166,9 +166,7 @@ func (h *Handler) AdminGetSystemStats(c *gin.Context) {
 
 
 func (h *Handler) AdminListPayments(c *gin.Context) {
-	filter := models.TransactionFilter{Page: 1, Limit: 50}
-	c.ShouldBindQuery(&filter)
-	result, err := h.service.GetMerchantTransactions(c.Request.Context(), uuid.Nil, filter)
+	result, err := h.service.AdminListPayments(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
 		return

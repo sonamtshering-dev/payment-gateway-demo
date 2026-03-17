@@ -1,0 +1,2 @@
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS logo_url TEXT;
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS business_name TEXT;

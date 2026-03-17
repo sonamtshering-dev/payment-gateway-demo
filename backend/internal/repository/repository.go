@@ -36,12 +36,12 @@ func (r *Repository) CreateMerchant(ctx context.Context, m *models.Merchant) err
 }
 
 func (r *Repository) GetMerchantByEmail(ctx context.Context, email string) (*models.Merchant, error) {
-	query := `SELECT id, name, email, password_hash, api_key, api_secret, webhook_url, webhook_secret, is_active, is_admin, daily_limit, created_at, updated_at FROM merchants WHERE email = $1`
+	query := `SELECT id, name, email, password_hash, api_key, api_secret, webhook_url, webhook_secret, is_active, is_admin, daily_limit, created_at, updated_at, business_name FROM merchants WHERE email = $1`
 
 	m := &models.Merchant{}
 	err := r.db.QueryRow(ctx, query, email).Scan(
 		&m.ID, &m.Name, &m.Email, &m.PasswordHash, &m.APIKey, &m.APISecret,
-		&m.WebhookURL, &m.WebhookSecret, &m.IsActive, &m.IsAdmin, &m.DailyLimit, &m.CreatedAt, &m.UpdatedAt,
+		&m.WebhookURL, &m.WebhookSecret, &m.IsActive, &m.IsAdmin, &m.DailyLimit, &m.CreatedAt, &m.UpdatedAt, &m.BusinessName,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -50,26 +50,30 @@ func (r *Repository) GetMerchantByEmail(ctx context.Context, email string) (*mod
 }
 
 func (r *Repository) GetMerchantByID(ctx context.Context, id uuid.UUID) (*models.Merchant, error) {
-	query := `SELECT id, name, email, password_hash, api_key, api_secret, webhook_url, webhook_secret, is_active, is_admin, daily_limit, created_at, updated_at FROM merchants WHERE id = $1`
+	query := `SELECT id, name, email, password_hash, api_key, api_secret, webhook_url, webhook_secret, is_active, is_admin, daily_limit, created_at, updated_at, business_name, COALESCE(logo_url,'') FROM merchants WHERE id = $1`
 
 	m := &models.Merchant{}
+	var logoURL string
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&m.ID, &m.Name, &m.Email, &m.PasswordHash, &m.APIKey, &m.APISecret,
-		&m.WebhookURL, &m.WebhookSecret, &m.IsActive, &m.IsAdmin, &m.DailyLimit, &m.CreatedAt, &m.UpdatedAt,
+		&m.WebhookURL, &m.WebhookSecret, &m.IsActive, &m.IsAdmin, &m.DailyLimit, &m.CreatedAt, &m.UpdatedAt, &m.BusinessName, &logoURL,
 	)
-	if err == pgx.ErrNoRows {
-		return nil, nil
+	if err != nil {
+		fmt.Printf("GetMerchantByID error: %v\n", err)
+		if err == pgx.ErrNoRows { return nil, nil }
+		return nil, err
 	}
-	return m, err
+	m.LogoURL = &logoURL
+	return m, nil
 }
 
 func (r *Repository) GetMerchantByAPIKey(ctx context.Context, apiKey string) (*models.Merchant, error) {
-	query := `SELECT id, name, email, password_hash, api_key, api_secret, webhook_url, webhook_secret, is_active, is_admin, daily_limit, created_at, updated_at FROM merchants WHERE api_key = $1 AND is_active = true`
+	query := `SELECT id, name, email, password_hash, api_key, api_secret, webhook_url, webhook_secret, is_active, is_admin, daily_limit, created_at, updated_at, business_name FROM merchants WHERE api_key = $1 AND is_active = true`
 
 	m := &models.Merchant{}
 	err := r.db.QueryRow(ctx, query, apiKey).Scan(
 		&m.ID, &m.Name, &m.Email, &m.PasswordHash, &m.APIKey, &m.APISecret,
-		&m.WebhookURL, &m.WebhookSecret, &m.IsActive, &m.IsAdmin, &m.DailyLimit, &m.CreatedAt, &m.UpdatedAt,
+		&m.WebhookURL, &m.WebhookSecret, &m.IsActive, &m.IsAdmin, &m.DailyLimit, &m.CreatedAt, &m.UpdatedAt, &m.BusinessName,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -605,4 +609,91 @@ func (r *Repository) GetAdminMerchant(ctx context.Context) (*models.Merchant, er
 		return nil, err
 	}
 	return &m, nil
+}
+
+func (r *Repository) UpdateMerchantField(ctx context.Context, merchantID uuid.UUID, field string, value interface{}) error {
+	query := "UPDATE merchants SET " + field + "=$1, updated_at=NOW() WHERE id=$2"
+	_, err := r.db.Exec(ctx, query, value, merchantID)
+	return err
+}
+
+func (r *Repository) GetMerchantLogo(ctx context.Context, id uuid.UUID) (string, error) {
+	var logo *string
+	err := r.db.QueryRow(ctx, `SELECT logo_url FROM merchants WHERE id = $1`, id).Scan(&logo)
+	if err != nil {
+		return "", err
+	}
+	if logo == nil {
+		return "", nil
+	}
+	return *logo, nil
+}
+
+
+func (r *Repository) AdminListMerchants(ctx context.Context, filter models.AdminMerchantFilter) ([]models.Merchant, error) {
+	query := `SELECT id, name, email, password_hash, api_key, api_secret, webhook_url, webhook_secret, is_active, is_admin, daily_limit, created_at, updated_at, business_name, COALESCE(logo_url,'') FROM merchants ORDER BY created_at DESC LIMIT 100`
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var merchants []models.Merchant
+	for rows.Next() {
+		var m models.Merchant
+		var logoURL string
+		err := rows.Scan(&m.ID, &m.Name, &m.Email, &m.PasswordHash, &m.APIKey, &m.APISecret,
+			&m.WebhookURL, &m.WebhookSecret, &m.IsActive, &m.IsAdmin, &m.DailyLimit, &m.CreatedAt, &m.UpdatedAt, &m.BusinessName, &logoURL)
+		if err != nil {
+			continue
+		}
+		m.LogoURL = &logoURL
+		merchants = append(merchants, m)
+	}
+	return merchants, nil
+}
+
+func (r *Repository) GetAllTransactions(ctx context.Context, filter models.TransactionFilter) ([]models.TransactionLog, error) {
+	limit := 50
+	if filter.Limit > 0 { limit = filter.Limit }
+	query := `SELECT id, payment_id, status, COALESCE(raw_response,''), COALESCE(source,''), created_at FROM transaction_logs ORDER BY created_at DESC LIMIT $1`
+	rows, err := r.db.Query(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var txns []models.TransactionLog
+	for rows.Next() {
+		var t models.TransactionLog
+		err := rows.Scan(&t.ID, &t.PaymentID, &t.Status, &t.RawResponse, &t.Source, &t.CreatedAt)
+		if err != nil {
+			continue
+		}
+		txns = append(txns, t)
+	}
+	return txns, nil
+}
+
+func (r *Repository) AdminListPayments(ctx context.Context) (interface{}, error) {
+	query := `SELECT id, merchant_id, order_id, amount, currency, status, upi_id, created_at, expires_at FROM payments ORDER BY created_at DESC LIMIT 100`
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var payments []map[string]interface{}
+	for rows.Next() {
+		var id, merchantId, orderId, currency, status, upiVpa string
+		var amount int64
+		var createdAt, expiresAt interface{}
+		err := rows.Scan(&id, &merchantId, &orderId, &amount, &currency, &status, &upiVpa, &createdAt, &expiresAt)
+		if err != nil {
+			continue
+		}
+		payments = append(payments, map[string]interface{}{
+			"id": id, "merchant_id": merchantId, "order_id": orderId,
+			"amount": amount, "currency": currency, "status": status,
+			"upi_id": upiVpa, "created_at": createdAt, "expires_at": expiresAt,
+		})
+	}
+	return payments, nil
 }

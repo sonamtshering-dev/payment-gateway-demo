@@ -85,14 +85,14 @@ export default function SettingsPage() {
 
   return (
     <div style={{ maxWidth: 740 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: '0 0 24px' }}>Settings</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f1d35', margin: '0 0 24px' }}>Settings</h1>
 
       {message && <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#059669' }}>{message}</div>}
       {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#dc2626' }}>{error}</div>}
 
       {/* API Keys */}
       <div style={sectionStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 16px' }}>API credentials</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#0f1d35', margin: '0 0 16px' }}>API credentials</h2>
         {profile && (
           <>
             <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>API Key</label>
@@ -112,7 +112,7 @@ export default function SettingsPage() {
 
       {/* UPI IDs */}
       <div style={sectionStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 16px' }}>UPI IDs</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#0f1d35', margin: '0 0 16px' }}>UPI IDs</h2>
         {upis.length > 0 ? upis.map(upi => (
           <div key={upi.id} style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -144,7 +144,7 @@ export default function SettingsPage() {
 
       {/* Password */}
       <div style={sectionStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 16px' }}>Change password</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#0f1d35', margin: '0 0 16px' }}>Change password</h2>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)}
             placeholder="Current password" style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
