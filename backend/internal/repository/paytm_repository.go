@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"context"
 
 	"github.com/google/uuid"
@@ -112,4 +113,49 @@ func (r *Repository) GetPaymentByIDSimple(ctx context.Context, id uuid.UUID) (*m
 		return nil, err
 	}
 	return &p, nil
+}
+func (r *Repository) ActivateSubscriptionForPayment(ctx context.Context, adminMerchantID uuid.UUID, orderID string) error {
+	// Get customer_reference to find actual merchant: "Subscription: Pro plan for 019cf79a"
+	var customerRef string
+	r.db.QueryRow(ctx, `SELECT customer_reference FROM payments WHERE order_id = $1`, orderID).Scan(&customerRef)
+
+	// Find actual merchant from last 8 chars of customer_reference
+	merchantID := adminMerchantID
+	if len(customerRef) >= 8 {
+		prefix := customerRef[len(customerRef)-8:]
+		var actualID uuid.UUID
+		if err0 := r.db.QueryRow(ctx,
+			`SELECT id FROM merchants WHERE id::text LIKE $1 || '%' AND is_admin = FALSE LIMIT 1`,
+			prefix,
+		).Scan(&actualID); err0 == nil {
+			merchantID = actualID
+		}
+	}
+
+	// Find plan from order ID prefix
+	var planID uuid.UUID
+	err := r.db.QueryRow(ctx,
+		`SELECT id FROM plans WHERE id::text LIKE $1 || '%' AND is_active = TRUE ORDER BY price DESC LIMIT 1`,
+		orderID[4:12],
+	).Scan(&planID)
+	if err != nil {
+		return fmt.Errorf("plan not found for order %s: %w", orderID, err)
+	}
+
+	// Cancel existing active subscriptions for this merchant
+	_, _ = r.db.Exec(ctx,
+		`UPDATE merchant_subscriptions SET status='cancelled', updated_at=NOW() WHERE merchant_id=$1 AND status='active'`,
+		merchantID,
+	)
+
+	// Insert new active subscription
+	_, err = r.db.Exec(ctx, `
+		INSERT INTO merchant_subscriptions (id, merchant_id, plan_id, status, started_at, expires_at, created_at, updated_at)
+		VALUES (gen_random_uuid(), $1, $2, 'active', NOW(),
+			CASE WHEN (SELECT billing_cycle FROM plans WHERE id=$2) = 'per month' THEN NOW() + INTERVAL '1 month'
+			     WHEN (SELECT billing_cycle FROM plans WHERE id=$2) = 'per year' THEN NOW() + INTERVAL '1 year'
+			     ELSE NULL END,
+			NOW(), NOW())
+	`, merchantID, planID)
+	return err
 }

@@ -86,6 +86,15 @@ func (w *Worker) runPaytmVerification(ctx context.Context) {
 				Str("order_id", payment.OrderID).
 				Str("utr", utr).
 				Msg("Payment auto-confirmed via Paytm ✅")
+
+			// Auto-activate subscription if this is a SUB- payment
+			if len(payment.OrderID) > 4 && payment.OrderID[:4] == "SUB-" {
+				if aerr := w.repo.ActivateSubscriptionForPayment(ctx, payment.MerchantID, payment.OrderID); aerr != nil {
+					log.Error().Err(aerr).Str("order_id", payment.OrderID).Msg("Failed to activate subscription")
+				} else {
+					log.Info().Str("order_id", payment.OrderID).Msg("Subscription activated ✅")
+				}
+			}
 		}
 	}
 }

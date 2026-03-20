@@ -86,7 +86,8 @@ func (s *Service) CreateSubscriptionPayment(ctx context.Context, merchantID uuid
 	}
 
 	orderID := fmt.Sprintf("SUB-%s-%d", planID.String()[:8], time.Now().Unix())
-	upiLink := utils.GenerateUPILink(decryptedUPI, "NovaPay Subscription", plan.Price, orderID)
+	paytmTxnRef := utils.GenPaytmTxnRef(orderID)
+	upiLink := utils.GenerateUPILinkWithRef(decryptedUPI, "NovaPay Subscription", plan.Price, orderID, paytmTxnRef)
 	qrBase64, err := utils.GenerateQRBase64(upiLink)
 	if err != nil {
 		return nil, err
@@ -105,6 +106,7 @@ func (s *Service) CreateSubscriptionPayment(ctx context.Context, merchantID uuid
 		UPIID:             upi.UPIID,
 		UPIIntentLink:     upiLink,
 		QRCodeData:        qrBase64,
+		PaytmTxnRef:       paytmTxnRef,
 		ExpiresAt:         expires,
 		CreatedAt:         time.Now(),
 		UpdatedAt:         time.Now(),
