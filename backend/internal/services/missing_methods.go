@@ -26,7 +26,7 @@ func (s *Service) GetMerchantByID(ctx context.Context, merchantID uuid.UUID) (*m
 }
 
 func (s *Service) GetUPIs(ctx context.Context, merchantID uuid.UUID) ([]models.MerchantUPI, error) {
-	return nil, fmt.Errorf("not implemented")
+	return s.repo.GetMerchantUPIs(ctx, merchantID)
 }
 
 func (s *Service) UpdateWebhook(ctx context.Context, merchantID uuid.UUID, webhookURL string) error {
@@ -47,4 +47,8 @@ func (s *Service) GetPaymentByIDFull(ctx context.Context, paymentID uuid.UUID) (
 
 func (s *Service) AdminListPayments(ctx context.Context) (interface{}, error) {
 	return s.repo.AdminListPayments(ctx)
+}
+
+func (s *Service) SavePaytmMID(ctx context.Context, merchantID uuid.UUID, upiID, mid string) error {
+	return s.repo.SavePaytmMID(ctx, merchantID, upiID, mid)
 }

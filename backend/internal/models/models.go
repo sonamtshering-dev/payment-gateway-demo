@@ -72,6 +72,8 @@ type Payment struct {
 	UPIID             string        `json:"upi_id" db:"upi_id"`
 	UPIIntentLink     string        `json:"upi_intent_link" db:"upi_intent_link"`
 	UTR               *string       `json:"utr,omitempty" db:"utr"`
+	PaytmTxnRef       string        `json:"paytm_txn_ref" db:"paytm_txn_ref"`
+	PaytmVerified     bool          `json:"paytm_verified" db:"paytm_verified"`
 	QRCodeData        string        `json:"-" db:"qr_code_data"` // base64 PNG
 	ExpiresAt         time.Time     `json:"expires_at" db:"expires_at"`
 	PaidAt            *time.Time    `json:"paid_at,omitempty" db:"paid_at"`

@@ -182,7 +182,8 @@ func (s *Service) CreatePayment(ctx context.Context, req models.CreatePaymentReq
 		return nil, err
 	}
 
-	upiLink := utils.GenerateUPILink(decryptedUPI, merchant.Name, req.Amount, req.OrderID)
+	paytmTxnRef := utils.GenPaytmTxnRef(req.OrderID)
+	upiLink := utils.GenerateUPILinkWithRef(decryptedUPI, merchant.Name, req.Amount, req.OrderID, paytmTxnRef)
 
 	qrBase64, err := utils.GenerateQRBase64(upiLink)
 	if err != nil {
@@ -205,6 +206,7 @@ func (s *Service) CreatePayment(ctx context.Context, req models.CreatePaymentReq
 		UPIID:             upi.UPIID,
 		UPIIntentLink:     upiLink,
 		QRCodeData:        qrBase64,
+		PaytmTxnRef:       paytmTxnRef,
 		ExpiresAt:         expires,
 		ClientIP:          clientIP,
 		CreatedAt:         time.Now(),

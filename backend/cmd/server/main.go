@@ -192,6 +192,7 @@ func main() {
 					dashboard.DELETE("/logo", h.DeleteMerchantLogo)
 					dashboard.PUT("/business-name", h.UpdateBusinessName)
 					dashboard.GET("/referral", h.GetReferralStats)
+					dashboard.POST("/paytm-mid", h.SavePaytmMID)
 				dashboard.GET("/kyc", h.GetKYC)
 					dashboard.POST("/kyc", h.SubmitKYC)
 					dashboard.POST("/payments/create", h.CreatePayment)

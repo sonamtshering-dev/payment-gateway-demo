@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	mrand "math/rand"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -205,3 +206,23 @@ func GenerateUPILink(upiID, merchantName string, amount int64, orderID string) s
 		upiID, merchantName, amountStr, orderID,
 	)
 }
+// GenPaytmTxnRef generates a Paytm-compatible transaction reference
+func GenPaytmTxnRef(orderID string) string {
+	chars := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	prefix := make([]byte, 8)
+	for i := range prefix {
+		prefix[i] = chars[mrand.Intn(len(chars))]
+	}
+	return fmt.Sprintf("%s%d", string(prefix), time.Now().Unix())
+}
+
+// GenerateUPILinkWithRef generates UPI link with explicit transaction reference (tr param)
+// Paytm uses tr to match the payment in their system
+func GenerateUPILinkWithRef(upiID, merchantName string, amount int64, orderID, txnRef string) string {
+	amountStr := fmt.Sprintf("%.2f", float64(amount)/100.0)
+	return fmt.Sprintf(
+		"upi://pay?pa=%s&pn=%s&am=%s&cu=INR&tn=%s&tr=%s",
+		upiID, merchantName, amountStr, orderID, txnRef,
+	)
+}
+

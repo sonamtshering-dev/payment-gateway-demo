@@ -375,3 +375,21 @@ func (h *Handler) EmailSubscribe(c *gin.Context) {
 	h.service.AddEmailSubscriber(body.Email)
 	c.JSON(200, gin.H{"success": true, "message": "Subscribed!"})
 }
+
+// POST /api/v1/dashboard/paytm-mid
+func (h *Handler) SavePaytmMID(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
+	var req struct {
+		UPIID    string `json:"upi_id"    binding:"required"`
+		PaytmMID string `json:"paytm_mid" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"success": false, "error": "upi_id and paytm_mid are required"})
+		return
+	}
+	if err := h.service.SavePaytmMID(c.Request.Context(), merchantID, req.UPIID, req.PaytmMID); err != nil {
+		c.JSON(500, gin.H{"success": false, "error": "failed to save MID"})
+		return
+	}
+	c.JSON(200, gin.H{"success": true, "message": "Paytm MID saved. Auto-verification enabled."})
+}

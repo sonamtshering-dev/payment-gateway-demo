@@ -50,6 +50,8 @@ func (w *Worker) StartWithWaitGroup(ctx context.Context, wg *sync.WaitGroup) {
 	go func() { defer wg.Done(); w.webhookRetryWorker(ctx) }()
 	wg.Add(1)
 	go func() { defer wg.Done(); w.subscriptionExpiryWorker(ctx) }()
+	wg.Add(1)
+	go func() { defer wg.Done(); w.paytmVerificationWorker(ctx) }()
 }
 
 func (w *Worker) paymentExpiryWorker(ctx context.Context) {
