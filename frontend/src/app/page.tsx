@@ -20,10 +20,7 @@ const FEATURES = [
   { icon: '🪝', title: 'Webhook Events', desc: 'Get instant notifications on payment events via webhooks.' },
   { icon: '🚀', title: '0% Transaction Fee', desc: 'Keep 100% of what you earn. No per-transaction charges, ever.' },
 ];
-const PLANS = [
-  { name: 'Starter', price: '₹1', period: '/month', desc: 'Perfect for getting started', features: ['100 QR codes/month', '5 payment links', 'Basic analytics', 'Email support'], featured: false, cta: 'Get started free' },
-  { name: 'Pro', price: '₹999', period: '/month', desc: 'For growing businesses', features: ['Unlimited QR codes', 'Unlimited payment links', 'Advanced analytics', 'Webhook support', 'Priority support', 'API access'], featured: true, cta: 'Start with Pro' },
-];
+// Plans loaded dynamically from API
 const STATS = [
   { value: '0%', label: 'Transaction Fee' },
   { value: '< 2s', label: 'Payment Speed' },
@@ -34,10 +31,29 @@ export default function LandingPage() {
   const checked = useAuthRedirect();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [plans, setPlans] = useState<any[]>([]);
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', h);
     return () => window.removeEventListener('scroll', h);
+  }, []);
+  useEffect(() => {
+    fetch('/api/v1/public/plans')
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data) {
+          setPlans(d.data.map((p: any) => ({
+            name: p.name,
+            price: p.price === 0 ? 'Free' : '₹' + (p.price / 100),
+            period: p.billing_cycle === 'forever' ? '' : '/' + p.billing_cycle.replace('per ', ''),
+            desc: p.description || '',
+            features: Array.isArray(p.features) ? p.features : [],
+            featured: p.is_featured,
+            cta: p.cta_label || 'Get Started',
+          })));
+        }
+      })
+      .catch(() => {});
   }, []);
   if (!checked) return <div style={{ minHeight: '100vh', background: '#020817' }} />;
   return (
@@ -150,7 +166,7 @@ export default function LandingPage() {
             <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.4)' }}>No hidden fees. No surprises. Cancel anytime.</p>
           </div>
           <div className="pricing-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-            {PLANS.map(p => (
+            {plans.map(p => (
               <div key={p.name} style={{ background: p.featured ? 'linear-gradient(135deg,rgba(29,78,216,0.15),rgba(30,64,175,0.08))' : '#0f1d35', border: p.featured ? '2px solid rgba(29,78,216,0.4)' : '1px solid rgba(255,255,255,0.07)', borderRadius: 20, padding: '32px 28px', position: 'relative' as const }}>
                 {p.featured && <div style={{ position: 'absolute' as const, top: -12, left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(135deg,#1d4ed8,#1e40af)', color: '#fff', fontSize: 11, fontWeight: 800, padding: '4px 16px', borderRadius: 100, whiteSpace: 'nowrap' as const }}>MOST POPULAR</div>}
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: 8 }}>{p.name}</div>
@@ -160,7 +176,7 @@ export default function LandingPage() {
                   <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', marginLeft: 4 }}>{p.period}</span>
                 </div>
                 <Link href="/auth/register" style={{ display: 'block', textAlign: 'center' as const, background: p.featured ? 'linear-gradient(135deg,#1d4ed8,#1e40af)' : 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '13px 0', color: '#fff', fontSize: 14, fontWeight: 700, marginBottom: 24 }}>{p.cta}</Link>
-                {p.features.map(f => (
+                {p.features.map((f: string) => (
                   <div key={f} style={{ display: 'flex', gap: 8, fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 8 }}>
                     <span style={{ color: '#3b82f6', fontWeight: 700 }}>✓</span>{f}
                   </div>

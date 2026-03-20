@@ -244,19 +244,19 @@ func (r *Repository) GetCashierPhones(ctx context.Context, merchantID uuid.UUID)
 
 func (r *Repository) CreatePayment(ctx context.Context, p *models.Payment) error {
 	query := `
-		INSERT INTO payments (id, merchant_id, order_id, amount, currency, status, customer_reference, upi_id, upi_intent_link, qr_code_data, expires_at, client_ip, created_at, updated_at, paytm_txn_ref)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`
+		INSERT INTO payments (id, merchant_id, order_id, amount, currency, status, customer_reference, upi_id, upi_intent_link, qr_code_data, expires_at, client_ip, created_at, updated_at, paytm_txn_ref, redirect_url)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`
 
 	_, err := r.db.Exec(ctx, query,
 		p.ID, p.MerchantID, p.OrderID, p.Amount, p.Currency, p.Status,
 		p.CustomerReference, p.UPIID, p.UPIIntentLink, p.QRCodeData,
-		p.ExpiresAt, p.ClientIP, p.CreatedAt, p.UpdatedAt, p.PaytmTxnRef,
+		p.ExpiresAt, p.ClientIP, p.CreatedAt, p.UpdatedAt, p.PaytmTxnRef, p.RedirectURL,
 	)
 	return err
 }
 
 func (r *Repository) GetPaymentByID(ctx context.Context, id uuid.UUID) (*models.Payment, error) {
-	query := `SELECT id, merchant_id, order_id, amount, currency, status, customer_reference, upi_id, upi_intent_link, utr, qr_code_data, expires_at, paid_at, client_ip, created_at, updated_at FROM payments WHERE id = $1`
+	query := `SELECT id, merchant_id, order_id, amount, currency, status, customer_reference, upi_id, upi_intent_link, utr, qr_code_data, expires_at, paid_at, client_ip, created_at, updated_at, COALESCE(redirect_url,'') FROM payments WHERE id = $1`
 
 	p := &models.Payment{}
 	err := r.db.QueryRow(ctx, query, id).Scan(

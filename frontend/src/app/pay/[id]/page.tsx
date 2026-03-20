@@ -14,6 +14,7 @@ interface PaymentData {
   merchant_name?: string;
   merchant_logo?: string;
   merchant_business_name?: string;
+  redirect_url?: string;
 }
 
 const UPI_APPS = [
@@ -75,6 +76,9 @@ export default function PayPage() {
           const s = data.data.status;
           if (s === 'paid' || s === 'completed' || s === 'success') {
             setPageStatus('success'); setShowSuccess(true); clearInterval(poll);
+            if (data.data.redirect_url) {
+              setTimeout(() => { window.location.href = data.data.redirect_url + '?payment_id=' + paymentId + '&status=paid&order_id=' + (data.data.order_id || ''); }, 3000);
+            }
           } else if (s === 'expired') { setPageStatus('expired'); clearInterval(poll); }
           else if (s === 'failed') { setPageStatus('failed'); clearInterval(poll); }
         }
