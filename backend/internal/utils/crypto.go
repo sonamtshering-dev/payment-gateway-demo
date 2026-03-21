@@ -99,9 +99,9 @@ func Decrypt(encoded string, keyHex string) (string, error) {
 // ============================================================================
 
 // ComputeHMAC generates HMAC-SHA256 signature
-// Formula: HMAC_SHA256(secret + timestamp + body)
+// Formula: HMAC_SHA256(key=secret, message=timestamp+"."+body)
 func ComputeHMAC(secret, timestamp, body string) string {
-	message := secret + timestamp + body
+	message := timestamp + "." + body
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(message))
 	return hex.EncodeToString(mac.Sum(nil))
@@ -225,4 +225,3 @@ func GenerateUPILinkWithRef(upiID, merchantName string, amount int64, orderID, t
 		upiID, merchantName, amountStr, orderID, txnRef,
 	)
 }
-

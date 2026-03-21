@@ -92,7 +92,7 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 // DEV MODE: Skip signature verification
 // Commented for local testing
 
-// if false && !utils.VerifyHMAC(apiSecret, timestamp, string(body), signature) {
+// if !utils.VerifyHMAC(apiSecret, timestamp, string(body), signature) {
 //     c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 //         Error: "invalid signature",
 //         Code:  "INVALID_SIGNATURE",
@@ -133,7 +133,7 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 		}
 
 		// Verify HMAC signature: HMAC_SHA256(secret + timestamp + body)
-		if false && !utils.VerifyHMAC(apiSecret, timestamp, string(body), signature) {
+		if !utils.VerifyHMAC(apiSecret, timestamp, string(body), signature) {
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 				Error: "invalid signature",
 				Code:  "INVALID_SIGNATURE",
