@@ -62,6 +62,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        - NEXT_PUBLIC_API_URL=http://13.232.171.190
       dockerfile: Dockerfile
     expose:
       - "3000"

@@ -265,6 +265,7 @@ func (s *Service) GetPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*m
 		CreatedAt:     payment.CreatedAt,
 		QRCodeBase64:  payment.QRCodeData,
 		UPIIntentLink: payment.UPIIntentLink,
+		RedirectURL:   payment.RedirectURL,
 		CustomerRef:   payment.CustomerReference,
 		MerchantLogo:  merchantLogo,
 		BusinessName:  businessName,

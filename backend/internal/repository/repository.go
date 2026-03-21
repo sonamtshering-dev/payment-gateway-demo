@@ -262,7 +262,7 @@ func (r *Repository) GetPaymentByID(ctx context.Context, id uuid.UUID) (*models.
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&p.ID, &p.MerchantID, &p.OrderID, &p.Amount, &p.Currency, &p.Status,
 		&p.CustomerReference, &p.UPIID, &p.UPIIntentLink, &p.UTR, &p.QRCodeData,
-		&p.ExpiresAt, &p.PaidAt, &p.ClientIP, &p.CreatedAt, &p.UpdatedAt,
+		&p.ExpiresAt, &p.PaidAt, &p.ClientIP, &p.CreatedAt, &p.UpdatedAt, &p.RedirectURL,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
