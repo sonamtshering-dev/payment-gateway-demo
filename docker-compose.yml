@@ -63,12 +63,12 @@ services:
     build:
       context: ./frontend
       args:
-        - NEXT_PUBLIC_API_URL=http://13.232.171.190
+        - NEXT_PUBLIC_API_URL=https://nova-pay.in
       dockerfile: Dockerfile
     expose:
       - "3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost
+      - NEXT_PUBLIC_API_URL=https://nova-pay.in
     depends_on:
       - gateway
     restart: unless-stopped
