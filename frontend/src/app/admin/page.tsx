@@ -331,12 +331,12 @@ export default function AdminPage() {
         {/* ── KYC ── */}
         {tab==='KYC' && (
           <div style={S.card}>
-            <div style={{...S.tHead,gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr'}}>
-              <span>Business</span><span>PAN</span><span>Aadhaar</span><span>Status</span><span>Actions</span>
+            <div style={{...S.tHead,gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr 0.8fr'}}>
+              <span>Business</span><span>PAN</span><span>Aadhaar</span><span>Status</span><span>Actions</span><span>Document</span>
             </div>
             {filtered(kycList).length===0 && <div style={{padding:'48px',textAlign:'center' as const,color:'#4b5563'}}>No KYC submissions yet</div>}
             {filtered(kycList).map((k:any)=>(
-              <div key={k.id} style={{...S.tRow,display:'grid',gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr'}}
+              <div key={k.id} style={{...S.tRow,display:'grid',gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr 0.8fr'}}
                 onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.02)')}
                 onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
               >
@@ -350,6 +350,17 @@ export default function AdminPage() {
                     <button onClick={()=>setRejectModal(k)} style={S.btn('239,68,68')}>Reject</button>
                   </>}
                   {k.status!=='pending' && <span style={{color:'#4b5563',fontSize:12}}>Reviewed</span>}
+                </div>
+                <div>
+                  {k.document_url ? (
+                    k.document_url.startsWith('data:application/pdf') ? (
+                      <a href={k.document_url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:'#3b82f6'}}>View PDF</a>
+                    ) : (
+                      <a href={k.document_url} target="_blank" rel="noopener noreferrer">
+                        <img src={k.document_url} alt="KYC doc" style={{width:48,height:48,objectFit:'cover',borderRadius:6,border:'1px solid rgba(255,255,255,0.1)',cursor:'pointer'}} />
+                      </a>
+                    )
+                  ) : <span style={{fontSize:11,color:'#4b5563'}}>No doc</span>}
                 </div>
               </div>
             ))}

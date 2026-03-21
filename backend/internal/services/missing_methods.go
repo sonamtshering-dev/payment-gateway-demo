@@ -52,3 +52,7 @@ func (s *Service) AdminListPayments(ctx context.Context) (interface{}, error) {
 func (s *Service) SavePaytmMID(ctx context.Context, merchantID uuid.UUID, upiID, mid string) error {
 	return s.repo.SavePaytmMID(ctx, merchantID, upiID, mid)
 }
+
+func (s *Service) UpdateKYCDocument(ctx context.Context, merchantID uuid.UUID, docURL string) error {
+	return s.repo.UpdateKYCDocumentURL(ctx, merchantID, docURL)
+}

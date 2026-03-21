@@ -194,6 +194,7 @@ func main() {
 					dashboard.GET("/referral", h.GetReferralStats)
 					dashboard.POST("/paytm-mid", h.SavePaytmMID)
 				dashboard.GET("/kyc", h.GetKYC)
+					dashboard.POST("/kyc/document", h.UploadKYCDocument)
 					dashboard.POST("/kyc", h.SubmitKYC)
 					dashboard.POST("/payments/create", h.CreatePayment)
 					dashboard.GET("/payments/status/:payment_id", h.GetPaymentStatus)

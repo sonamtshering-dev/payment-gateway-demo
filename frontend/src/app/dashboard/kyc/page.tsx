@@ -63,7 +63,15 @@ export default function KYCPage() {
       const r = await fetch('/api/v1/dashboard/kyc', { method: 'POST', headers, body: JSON.stringify({ aadhaar_number: form.aadhaar_number, pan_number: form.pan_number, business_name: form.business_name, bank_account: 'N/A', bank_ifsc: 'N/A', bank_name: 'N/A' }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Submission failed');
-      setKyc(d.data); setSuccess('KYC submitted! We will review within 2-3 business days.');
+      setKyc(d.data);
+      // Upload documents if selected (use first available file)
+      const docFile = aadhaarFile || panFile || selfieFile;
+      if (docFile) {
+        const fd = new FormData();
+        fd.append('document', docFile);
+        await fetch('/api/v1/dashboard/kyc/document', { method: 'POST', headers: { 'Authorization': headers['Authorization'] }, body: fd });
+      }
+      setSuccess('KYC submitted! We will review within 2-3 business days.');
     } catch (e: any) { setError(e.message); }
     finally { setSubmitting(false); }
   };
