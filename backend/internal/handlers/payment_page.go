@@ -368,6 +368,7 @@ async function pollStatus() {
         document.getElementById('success-icon').style.display = 'block';
         setTimeout(() => {
           txt.textContent = 'Redirecting...';
+          if (data.data.redirect_url) { window.location.href = data.data.redirect_url + "?order_id=" + data.data.order_id + "&status=paid"; }
         }, 2000);
       } else if (s === 'failed') {
         clearInterval(pollInterval);

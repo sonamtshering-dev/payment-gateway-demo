@@ -207,6 +207,7 @@ func (s *Service) CreatePayment(ctx context.Context, req models.CreatePaymentReq
 		UPIIntentLink:     upiLink,
 		QRCodeData:        qrBase64,
 		PaytmTxnRef:       paytmTxnRef,
+		RedirectURL:       req.RedirectURL,
 		ExpiresAt:         expires,
 		ClientIP:          clientIP,
 		CreatedAt:         time.Now(),

@@ -54,6 +54,7 @@ type CreatePaymentRequest struct {
 	Amount            int64  `json:"amount" binding:"required,min=100"`
 	Currency          string `json:"currency" binding:"required,eq=INR"`
 	CustomerReference string `json:"customer_reference" binding:"max=128"`
+	RedirectURL       string `json:"redirect_url" binding:"omitempty,max=512"`
 }
 
 type CreatePaymentResponse struct {

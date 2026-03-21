@@ -30,7 +30,7 @@ func (s *Service) GetUPIs(ctx context.Context, merchantID uuid.UUID) ([]models.M
 }
 
 func (s *Service) UpdateWebhook(ctx context.Context, merchantID uuid.UUID, webhookURL string) error {
-	return fmt.Errorf("not implemented")
+	return s.repo.UpdateMerchantWebhook(ctx, merchantID, webhookURL)
 }
 
 func (s *Service) AdminListMerchants(ctx context.Context, filter models.AdminMerchantFilter) ([]models.Merchant, error) {
