@@ -28,7 +28,7 @@ func (r *Repository) GetMerchantKYC(ctx context.Context, merchantID uuid.UUID) (
 	err := r.db.QueryRow(ctx, `
 		SELECT id, merchant_id, aadhaar_number, pan_number, business_name,
 		       bank_account, bank_ifsc, bank_name, status, rejection_reason,
-		       submitted_at, reviewed_at
+		       submitted_at, reviewed_at, COALESCE(document_url,'')
 		FROM merchant_kyc WHERE merchant_id=$1
 	`, merchantID).Scan(&k.ID, &k.MerchantID, &k.AadhaarNumber, &k.PANNumber,
 		&k.BusinessName, &k.BankAccount, &k.BankIFSC, &k.BankName,

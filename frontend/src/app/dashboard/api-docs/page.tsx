@@ -167,7 +167,11 @@ function CodeBlock({ code, label, lang }: { code: string; label?: string; lang?:
             {lang && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace', textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>{lang}</span>}
           </div>
           <button
-            onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+            onClick={() => { 
+      try { navigator.clipboard.writeText(code); } 
+      catch { const el = document.createElement('textarea'); el.value = code; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); }
+      setCopied(true); setTimeout(() => setCopied(false), 2000); 
+    }}
             style={{ background: 'none', border: 'none', color: copied ? '#3b82f6' : '#64748b', fontSize: 11, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'color 0.2s' }}
           >
             {copied ? '✓ Copied' : 'Copy'}
@@ -297,7 +301,16 @@ export default function APIDocsPage() {
   }, []);
 
   const copy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
+    try {
+      navigator.clipboard.writeText(text);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }
     setCopied(key);
     setTimeout(() => setCopied(''), 2000);
   };
