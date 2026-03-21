@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nova-pay.in';
 
 // ── Code snippets ─────────────────────────────────────────────────────────────
 
