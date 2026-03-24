@@ -179,11 +179,13 @@ func (w *Worker) webhookRetryWorker(ctx context.Context) {
 			}
 			for _, d := range deliveries {
 				nextAttempt := d.Attempt + 1
-				if nextAttempt <= 5 {
-					backoff := time.Duration(1<<uint(nextAttempt)) * time.Minute
-					nextRetry := time.Now().Add(backoff)
-					w.repo.UpdateWebhookDelivery(ctx, d.ID, d.ResponseCode, d.ResponseBody, false, &nextRetry)
+				if nextAttempt > 5 {
+					log.Warn().Str("delivery_id", d.ID.String()).Msg("Webhook max retries reached, giving up")
+					continue
 				}
+				backoff := time.Duration(1<<uint(nextAttempt)) * time.Minute
+				nextRetry := time.Now().Add(backoff)
+				w.repo.UpdateWebhookDelivery(ctx, d.ID, d.ResponseCode, d.ResponseBody, false, &nextRetry)
 				w.redis.LPush(ctx, "webhook:queue", d.Payload)
 			}
 			if len(deliveries) > 0 {
