@@ -38,3 +38,4 @@ nginx/ssl/*.crt
 # Logs
 *.log
 *.zip
+backups/

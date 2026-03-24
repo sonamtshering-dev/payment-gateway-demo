@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	
 
 	"github.com/upay/gateway/internal/config"
+	"github.com/upay/gateway/internal/logger"
 	"github.com/upay/gateway/internal/models"
 	"github.com/upay/gateway/internal/repository"
 	"github.com/upay/gateway/internal/utils"
@@ -46,9 +45,19 @@ func (s *Service) Register(ctx context.Context, req models.RegisterRequest) (*mo
 		return nil, err
 	}
 
-	apiKey, _ := utils.GenerateAPIKey()
-	apiSecret, _ := utils.GenerateAPISecret()
-	webhookSecret, _ := utils.GenerateWebhookSecret()
+	// FIX: handle errors from key generation instead of silently ignoring
+	apiKey, err := utils.GenerateAPIKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate API key")
+	}
+	apiSecret, err := utils.GenerateAPISecret()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate API secret")
+	}
+	webhookSecret, err := utils.GenerateWebhookSecret()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate webhook secret")
+	}
 
 	encryptedSecret, err := utils.Encrypt(apiSecret, s.config.Security.EncryptionKey)
 	if err != nil {
@@ -79,6 +88,15 @@ func (s *Service) Register(ctx context.Context, req models.RegisterRequest) (*mo
 
 func (s *Service) Login(ctx context.Context, req models.LoginRequest) (*models.AuthResponse, error) {
 
+	// Brute force protection — lock after 5 failed attempts for 15 minutes
+	lockKey := fmt.Sprintf("login:lock:%s", req.Email)
+	attemptsKey := fmt.Sprintf("login:attempts:%s", req.Email)
+
+	locked, _ := s.redis.Exists(ctx, lockKey).Result()
+	if locked > 0 {
+		return nil, fmt.Errorf("account temporarily locked due to too many failed attempts. Try again in 15 minutes")
+	}
+
 	merchant, err := s.repo.GetMerchantByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, err
@@ -88,8 +106,19 @@ func (s *Service) Login(ctx context.Context, req models.LoginRequest) (*models.A
 	}
 
 	if !utils.CheckPassword(req.Password, merchant.PasswordHash) {
+		// Increment failed attempts
+		attempts, _ := s.redis.Incr(ctx, attemptsKey).Result()
+		s.redis.Expire(ctx, attemptsKey, 15*time.Minute)
+		if attempts >= 5 {
+			s.redis.Set(ctx, lockKey, "1", 15*time.Minute)
+			s.redis.Del(ctx, attemptsKey)
+			return nil, fmt.Errorf("account temporarily locked due to too many failed attempts. Try again in 15 minutes")
+		}
 		return nil, fmt.Errorf("invalid credentials")
 	}
+
+	// Successful login — clear failed attempts
+	s.redis.Del(ctx, attemptsKey, lockKey)
 
 	apiSecret, err := utils.Decrypt(merchant.APISecret, s.config.Security.EncryptionKey)
 	if err != nil {
@@ -112,7 +141,10 @@ func (s *Service) generateAuthResponse(ctx context.Context, merchant *models.Mer
 		return nil, err
 	}
 
-	refreshToken, _ := utils.GenerateRefreshToken()
+	refreshToken, err := utils.GenerateRefreshToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token")
+	}
 
 	rt := &models.RefreshToken{
 		ID:         utils.NewID(),
@@ -156,6 +188,16 @@ func (s *Service) CreatePayment(ctx context.Context, req models.CreatePaymentReq
 		return nil, fmt.Errorf("merchant not found")
 	}
 
+	// Per-merchant rate limit: 100/min normal, Cloudflare + HMAC protects against bots
+	rateLimitKey := fmt.Sprintf("merchant:ratelimit:%s", merchantID.String())
+	count, _ := s.redis.Incr(ctx, rateLimitKey).Result()
+	if count == 1 {
+		s.redis.Expire(ctx, rateLimitKey, time.Minute)
+	}
+	if count > 100 {
+		return nil, fmt.Errorf("RATE_LIMIT_EXCEEDED: too many payment requests, slow down")
+	}
+
 	// Check merchant gating (KYC + subscription + UPI)
 	if err := s.CheckMerchantGating(ctx, merchantID); err != nil {
 		return nil, err
@@ -190,9 +232,7 @@ func (s *Service) CreatePayment(ctx context.Context, req models.CreatePaymentReq
 		return nil, err
 	}
 
-
 	paymentID := utils.NewID()
-
 	expires := time.Now().Add(s.config.Security.PaymentSessionTTL)
 
 	payment := &models.Payment{
@@ -247,8 +287,12 @@ func (s *Service) GetPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*m
 	merchant, _ := s.repo.GetMerchantByID(ctx, payment.MerchantID)
 	var merchantLogo, businessName string
 	if merchant != nil {
-		if merchant.LogoURL != nil { merchantLogo = *merchant.LogoURL }
-		if merchant.BusinessName != nil { businessName = *merchant.BusinessName }
+		if merchant.LogoURL != nil {
+			merchantLogo = *merchant.LogoURL
+		}
+		if merchant.BusinessName != nil {
+			businessName = *merchant.BusinessName
+		}
 		if businessName == "" {
 			businessName = merchant.Name
 		}
@@ -289,6 +333,11 @@ func (s *Service) VerifyPayment(ctx context.Context, req models.VerifyPaymentReq
 		return err
 	}
 
+	// FIX: nil check before accessing payment fields
+	if payment == nil {
+		return fmt.Errorf("payment not found")
+	}
+
 	if payment.MerchantID != merchantID {
 		return fmt.Errorf("unauthorized")
 	}
@@ -319,7 +368,7 @@ func (s *Service) VerifyPayment(ctx context.Context, req models.VerifyPaymentReq
 func (s *Service) dispatchWebhook(ctx context.Context, payment *models.Payment, utr string) {
 
 	merchant, err := s.repo.GetMerchantByID(ctx, payment.MerchantID)
-	if err != nil || merchant.WebhookURL == "" {
+	if err != nil || merchant == nil || merchant.WebhookURL == "" {
 		return
 	}
 
@@ -333,15 +382,25 @@ func (s *Service) dispatchWebhook(ctx context.Context, payment *models.Payment, 
 		Timestamp: time.Now().Unix(),
 	}
 
-	payloadBytes, _ := json.Marshal(payload)
+	// FIX: marshal once, compute signature, then marshal final payload
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		logger.Error().Err(err).Str("payment_id", payment.ID.String()).Msg("Failed to marshal webhook payload")
+		return
+	}
 
 	payload.Signature = utils.ComputeWebhookSignature(merchant.WebhookSecret, payloadBytes)
 
-	payloadBytes, _ = json.Marshal(payload)
+	finalBytes, err := json.Marshal(payload)
+	if err != nil {
+		logger.Error().Err(err).Str("payment_id", payment.ID.String()).Msg("Failed to marshal final webhook payload")
+		return
+	}
 
-	s.redis.LPush(ctx, "webhook:queue", string(payloadBytes))
+	s.redis.LPush(ctx, "webhook:queue", string(finalBytes))
 
-	log.Println("Webhook queued")
+	// FIX: use zerolog instead of standard log
+	logger.Info().Str("payment_id", payment.ID.String()).Str("merchant_id", payment.MerchantID.String()).Msg("Webhook queued")
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -375,6 +434,7 @@ func (s *Service) AddUPI(ctx context.Context, merchantID uuid.UUID, req models.A
 func (s *Service) GetMerchantStats(ctx context.Context, merchantID uuid.UUID) (*models.DashboardStats, error) {
 	return s.repo.GetMerchantStats(ctx, merchantID)
 }
+
 func (s *Service) UpdateMerchantLogo(ctx context.Context, merchantID uuid.UUID, logoURL string) error {
 	return s.repo.UpdateMerchantField(ctx, merchantID, "logo_url", logoURL)
 }
@@ -390,3 +450,4 @@ func (s *Service) GetReferralStats(merchantId string) (map[string]interface{}, e
 func (s *Service) AddEmailSubscriber(email string) {
 	s.repo.AddEmailSubscriber(email, "landing")
 }
+

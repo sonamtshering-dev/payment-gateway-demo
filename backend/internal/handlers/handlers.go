@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -17,11 +19,15 @@ func New(service *services.Service) *Handler {
 	return &Handler{service: service}
 }
 
-// ============================================================================
-// AUTH HANDLERS
-// ============================================================================
-
-// POST /api/v1/auth/register
+// FIX: centralized error code detection instead of string comparison
+var errCodeStatus = map[string]int{
+	"RATE_LIMIT_EXCEEDED": http.StatusTooManyRequests,
+	"DUPLICATE_ORDER":     http.StatusConflict,
+	"KYC_REQUIRED":        http.StatusForbidden,
+	"SUBSCRIPTION_EXPIRED": http.StatusPaymentRequired,
+	"SUBSCRIPTION_REQUIRED": http.StatusPaymentRequired,
+	"UPI_REQUIRED":        http.StatusUnprocessableEntity,
+}
 
 func derefStr(s *string) string {
 	if s == nil {
@@ -29,6 +35,17 @@ func derefStr(s *string) string {
 	}
 	return *s
 }
+
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+
+func isValidEmail(email string) bool {
+	return emailRegex.MatchString(strings.TrimSpace(email))
+}
+
+// ============================================================================
+// AUTH HANDLERS
+// ============================================================================
+
 func (h *Handler) Register(c *gin.Context) {
 	var req models.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -38,7 +55,12 @@ func (h *Handler) Register(c *gin.Context) {
 
 	resp, err := h.service.Register(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusConflict, models.ErrorResponse{Error: err.Error()})
+		// FIX: only return 409 for duplicate email, 500 for everything else
+		if err.Error() == "email already registered" {
+			c.JSON(http.StatusConflict, models.ErrorResponse{Error: err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "registration failed"})
+		}
 		return
 	}
 
@@ -49,7 +71,6 @@ func (h *Handler) Register(c *gin.Context) {
 	})
 }
 
-// POST /api/v1/auth/login
 func (h *Handler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -69,7 +90,6 @@ func (h *Handler) Login(c *gin.Context) {
 	})
 }
 
-// POST /api/v1/auth/refresh
 func (h *Handler) RefreshToken(c *gin.Context) {
 	var req models.RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -93,7 +113,6 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 // PAYMENT HANDLERS (API-key authenticated)
 // ============================================================================
 
-// POST /api/v1/payments/create
 func (h *Handler) CreatePayment(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 	var req models.CreatePaymentRequest
@@ -108,9 +127,13 @@ func (h *Handler) CreatePayment(c *gin.Context) {
 	req.MerchantID = merchantID.String()
 	resp, err := h.service.CreatePayment(c.Request.Context(), req, c.ClientIP())
 	if err != nil {
+		// FIX: use error code map instead of string comparison
 		status := http.StatusBadRequest
-		if err.Error() == "daily transaction limit exceeded" {
-			status = http.StatusTooManyRequests
+		for code, s := range errCodeStatus {
+			if strings.Contains(err.Error(), code) {
+				status = s
+				break
+			}
 		}
 		c.JSON(status, models.ErrorResponse{Error: err.Error()})
 		return
@@ -122,7 +145,6 @@ func (h *Handler) CreatePayment(c *gin.Context) {
 	})
 }
 
-// GET /api/v1/payments/status/:payment_id
 func (h *Handler) GetPaymentStatus(c *gin.Context) {
 	paymentIDStr := c.Param("payment_id")
 	paymentID, err := uuid.Parse(paymentIDStr)
@@ -143,7 +165,6 @@ func (h *Handler) GetPaymentStatus(c *gin.Context) {
 	})
 }
 
-// POST /api/v1/payments/verify
 func (h *Handler) VerifyPayment(c *gin.Context) {
 	var req models.VerifyPaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -168,7 +189,6 @@ func (h *Handler) VerifyPayment(c *gin.Context) {
 // MERCHANT DASHBOARD HANDLERS (JWT authenticated)
 // ============================================================================
 
-// GET /api/v1/dashboard/stats
 func (h *Handler) GetDashboardStats(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 
@@ -184,7 +204,6 @@ func (h *Handler) GetDashboardStats(c *gin.Context) {
 	})
 }
 
-// GET /api/v1/dashboard/transactions
 func (h *Handler) GetTransactions(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 
@@ -206,7 +225,6 @@ func (h *Handler) GetTransactions(c *gin.Context) {
 	})
 }
 
-// GET /api/v1/dashboard/profile
 func (h *Handler) GetProfile(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 
@@ -236,7 +254,6 @@ func (h *Handler) GetProfile(c *gin.Context) {
 // UPI MANAGEMENT
 // ============================================================================
 
-// POST /api/v1/dashboard/upi
 func (h *Handler) AddUPI(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 
@@ -257,7 +274,6 @@ func (h *Handler) AddUPI(c *gin.Context) {
 	})
 }
 
-// GET /api/v1/dashboard/upi
 func (h *Handler) ListUPIs(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 
@@ -277,7 +293,6 @@ func (h *Handler) ListUPIs(c *gin.Context) {
 // WEBHOOK SETTINGS
 // ============================================================================
 
-// PUT /api/v1/dashboard/webhook
 func (h *Handler) UpdateWebhook(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 
@@ -302,7 +317,6 @@ func (h *Handler) UpdateWebhook(c *gin.Context) {
 // ADMIN HANDLERS
 // ============================================================================
 
-// GET /api/v1/admin/merchants
 func (h *Handler) AdminListMerchants(c *gin.Context) {
 	var filter models.AdminMerchantFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
@@ -322,7 +336,6 @@ func (h *Handler) AdminListMerchants(c *gin.Context) {
 	})
 }
 
-// GET /api/v1/admin/fraud-alerts
 func (h *Handler) AdminGetFraudAlerts(c *gin.Context) {
 	var filter models.AdminFraudFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
@@ -358,25 +371,29 @@ func (h *Handler) GetReferralStats(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 	stats, err := h.service.GetReferralStats(merchantID.String())
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	c.JSON(200, gin.H{"success": true, "data": stats})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": stats})
 }
 
 func (h *Handler) EmailSubscribe(c *gin.Context) {
 	var body struct {
 		Email string `json:"email"`
 	}
-	if err := c.ShouldBindJSON(&body); err != nil || body.Email == "" {
-		c.JSON(400, gin.H{"success": false, "error": "valid email required"})
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "valid email required"})
 		return
 	}
-	h.service.AddEmailSubscriber(body.Email)
-	c.JSON(200, gin.H{"success": true, "message": "Subscribed!"})
+	// FIX: validate email format
+	if !isValidEmail(body.Email) {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid email format"})
+		return
+	}
+	h.service.AddEmailSubscriber(strings.TrimSpace(body.Email))
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Subscribed!"})
 }
 
-// POST /api/v1/dashboard/paytm-mid
 func (h *Handler) SavePaytmMID(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 	var req struct {
@@ -384,12 +401,12 @@ func (h *Handler) SavePaytmMID(c *gin.Context) {
 		PaytmMID string `json:"paytm_mid" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": "upi_id and paytm_mid are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "upi_id and paytm_mid are required"})
 		return
 	}
 	if err := h.service.SavePaytmMID(c.Request.Context(), merchantID, req.UPIID, req.PaytmMID); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": "failed to save MID"})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to save MID"})
 		return
 	}
-	c.JSON(200, gin.H{"success": true, "message": "Paytm MID saved. Auto-verification enabled."})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Paytm MID saved. Auto-verification enabled."})
 }

@@ -612,6 +612,14 @@ func (r *Repository) GetAdminMerchant(ctx context.Context) (*models.Merchant, er
 }
 
 func (r *Repository) UpdateMerchantField(ctx context.Context, merchantID uuid.UUID, field string, value interface{}) error {
+	allowed := map[string]bool{
+		"logo_url":      true,
+		"business_name": true,
+		"webhook_url":   true,
+	}
+	if !allowed[field] {
+		return fmt.Errorf("invalid field: %s", field)
+	}
 	query := "UPDATE merchants SET " + field + "=$1, updated_at=NOW() WHERE id=$2"
 	_, err := r.db.Exec(ctx, query, value, merchantID)
 	return err

@@ -120,7 +120,7 @@ func main() {
 	r.Use(middleware.RequestID())
 	r.Use(middleware.StructuredLogger())
 	r.Use(middleware.SecurityHeaders())
-	r.Use(middleware.CORS([]string{"http://localhost:3000", "https://dashboard.novapay.in", "http://3.110.30.75"}))
+	r.Use(middleware.CORS([]string{"http://localhost:3000", "https://dashboard.novapay.in", "https://nova-pay.in"}))
 	r.Use(middleware.RateLimiter(rdb, cfg.Security.RateLimitPerMinute, time.Minute))
 	r.Use(middleware.RequestBodyLimit(1 << 20)) // 1MB max body
 	r.Use(middleware.MetricsCollector())
@@ -131,7 +131,7 @@ func main() {
 
 	// Health + Metrics (internal)
 	r.GET("/health", h.HealthCheck)
-	r.GET("/metrics", middleware.MetricsEndpoint())
+	r.GET("/metrics", middleware.JWTAuth(cfg), middleware.AdminOnly(), middleware.MetricsEndpoint())
 
 	// Public — no auth required (landing page pricing)
 	r.GET("/api/v1/public/plans", h.GetPublicPlans)

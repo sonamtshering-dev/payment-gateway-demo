@@ -30,7 +30,21 @@ func (s *Service) GetUPIs(ctx context.Context, merchantID uuid.UUID) ([]models.M
 }
 
 func (s *Service) UpdateWebhook(ctx context.Context, merchantID uuid.UUID, webhookURL string) error {
+	if webhookURL != "" {
+		if len(webhookURL) < 8 || webhookURL[:8] != "https://" {
+			return fmt.Errorf("invalid webhook URL: must use HTTPS")
+		}
+		for _, blocked := range []string{"localhost", "127.", "10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31."} {
+			if len(webhookURL) > 8 && contains(webhookURL[8:], blocked) {
+				return fmt.Errorf("invalid webhook URL: internal addresses not allowed")
+			}
+		}
+	}
 	return s.repo.UpdateMerchantWebhook(ctx, merchantID, webhookURL)
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s[:len(substr)] == substr)
 }
 
 func (s *Service) AdminListMerchants(ctx context.Context, filter models.AdminMerchantFilter) ([]models.Merchant, error) {

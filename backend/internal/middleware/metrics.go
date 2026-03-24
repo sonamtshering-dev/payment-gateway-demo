@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"sync"
 	"strconv"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 // Metrics holds application-level counters and histograms.
 // Thread-safe via atomic operations. Export to Prometheus, Datadog, etc.
 type Metrics struct {
+	mu                   sync.Mutex
 	httpRequestsTotal    map[string]int64
 	httpRequestDuration  map[string][]float64
 	paymentCreated       int64
@@ -46,14 +48,14 @@ func MetricsCollector() gin.HandlerFunc {
 		}
 
 		key := method + " " + path + " " + status
+		AppMetrics.mu.Lock()
 		AppMetrics.httpRequestsTotal[key]++
-
-		// Keep only last 1000 durations per endpoint for P50/P95/P99 calc
 		durations := AppMetrics.httpRequestDuration[path]
 		if len(durations) > 1000 {
 			durations = durations[len(durations)-1000:]
 		}
 		AppMetrics.httpRequestDuration[path] = append(durations, duration)
+		AppMetrics.mu.Unlock()
 	}
 }
 
@@ -61,6 +63,8 @@ func MetricsCollector() gin.HandlerFunc {
 // Replace with promhttp.Handler() when using the Prometheus client library.
 func MetricsEndpoint() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		AppMetrics.mu.Lock()
+		defer AppMetrics.mu.Unlock()
 		c.JSON(200, gin.H{
 			"http_requests_total":  AppMetrics.httpRequestsTotal,
 			"payments_created":     AppMetrics.paymentCreated,
@@ -74,9 +78,9 @@ func MetricsEndpoint() gin.HandlerFunc {
 }
 
 // Counter helpers (call from service layer)
-func IncrPaymentCreated()    { AppMetrics.paymentCreated++ }
-func IncrPaymentVerified()   { AppMetrics.paymentVerified++ }
-func IncrPaymentExpired()    { AppMetrics.paymentExpired++ }
-func IncrWebhookSent()       { AppMetrics.webhookSent++ }
-func IncrWebhookFailed()     { AppMetrics.webhookFailed++ }
-func IncrFraudAlertCreated() { AppMetrics.fraudAlertsCreated++ }
+func IncrPaymentCreated()    { AppMetrics.mu.Lock(); AppMetrics.paymentCreated++; AppMetrics.mu.Unlock() }
+func IncrPaymentVerified()   { AppMetrics.mu.Lock(); AppMetrics.paymentVerified++; AppMetrics.mu.Unlock() }
+func IncrPaymentExpired()    { AppMetrics.mu.Lock(); AppMetrics.paymentExpired++; AppMetrics.mu.Unlock() }
+func IncrWebhookSent()       { AppMetrics.mu.Lock(); AppMetrics.webhookSent++; AppMetrics.mu.Unlock() }
+func IncrWebhookFailed()     { AppMetrics.mu.Lock(); AppMetrics.webhookFailed++; AppMetrics.mu.Unlock() }
+func IncrFraudAlertCreated() { AppMetrics.mu.Lock(); AppMetrics.fraudAlertsCreated++; AppMetrics.mu.Unlock() }
