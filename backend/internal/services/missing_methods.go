@@ -13,7 +13,21 @@ func (s *Service) DeleteUPI(ctx context.Context, upiID uuid.UUID, merchantID uui
 }
 
 func (s *Service) GetMerchantTransactions(ctx context.Context, merchantID uuid.UUID, filter models.TransactionFilter) ([]models.TransactionLog, error) {
-	return s.repo.GetAllTransactions(ctx, filter)
+	payments, _, err := s.repo.GetPaymentsByMerchant(ctx, merchantID, filter)
+	if err != nil {
+		return nil, err
+	}
+	var logs []models.TransactionLog
+	for _, p := range payments {
+		logs = append(logs, models.TransactionLog{
+			ID:        p.ID,
+			PaymentID: p.ID,
+			Status:    string(p.Status),
+			Source:    "payment",
+			CreatedAt: p.CreatedAt,
+		})
+	}
+	return logs, nil
 }
 
 
@@ -69,4 +83,8 @@ func (s *Service) SavePaytmMID(ctx context.Context, merchantID uuid.UUID, upiID,
 
 func (s *Service) UpdateKYCDocument(ctx context.Context, merchantID uuid.UUID, docURL string) error {
 	return s.repo.UpdateKYCDocumentURL(ctx, merchantID, docURL)
+}
+
+func (s *Service) GetMerchantPayments(ctx context.Context, merchantID uuid.UUID, filter models.TransactionFilter) ([]models.Payment, int64, error) {
+	return s.repo.GetPaymentsByMerchant(ctx, merchantID, filter)
 }

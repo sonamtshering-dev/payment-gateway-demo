@@ -213,7 +213,10 @@ func (h *Handler) GetTransactions(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetMerchantTransactions(c.Request.Context(), merchantID, filter)
+	if filter.Page == 0 { filter.Page = 1 }
+	if filter.Limit == 0 { filter.Limit = 10 }
+
+	payments, total, err := h.service.GetMerchantPayments(c.Request.Context(), merchantID, filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to fetch transactions"})
 		return
@@ -221,7 +224,12 @@ func (h *Handler) GetTransactions(c *gin.Context) {
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
-		Data:    resp,
+		Data: map[string]interface{}{
+			"data":  payments,
+			"total": total,
+			"page":  filter.Page,
+			"limit": filter.Limit,
+		},
 	})
 }
 
