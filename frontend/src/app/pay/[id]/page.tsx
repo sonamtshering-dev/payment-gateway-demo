@@ -14,7 +14,7 @@ interface PaymentData {
   merchant_name?: string;
   merchant_logo?: string;
   merchant_business_name?: string;
-  redirect_url?: string;
+  utr?: string;
 }
 
 const UPI_APPS = [
@@ -37,6 +37,7 @@ const UPI_APPS = [
 
 const fmtAmount = (p: number) => (p / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 });
 const fmtTime = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+const fmtDateTime = () => new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 export default function PayPage() {
   const params = useParams();
@@ -46,6 +47,8 @@ export default function PayPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [qrLoaded, setQrLoaded] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [utrCopied, setUtrCopied] = useState(false);
+  const [paidAt, setPaidAt] = useState('');
 
   const fetchPayment = useCallback(async () => {
     try {
@@ -54,12 +57,7 @@ export default function PayPage() {
       if (data.success && data.data) {
         setPayment(data.data);
         const s = data.data.status;
-        if (s === 'paid' || s === 'completed' || s === 'success') {
-          setPageStatus('success');
-          if (data.data.redirect_url) {
-            setTimeout(() => { window.location.href = data.data.redirect_url + '?payment_id=' + data.data.payment_id + '&status=paid&order_id=' + (data.data.order_id || ''); }, 3000);
-          }
-        }
+        if (s === 'paid' || s === 'completed' || s === 'success') setPageStatus('success');
         else if (s === 'expired') setPageStatus('expired');
         else if (s === 'failed') setPageStatus('failed');
         else setPageStatus('pending');
@@ -80,10 +78,11 @@ export default function PayPage() {
         if (data.success) {
           const s = data.data.status;
           if (s === 'paid' || s === 'completed' || s === 'success') {
-            setPageStatus('success'); setShowSuccess(true); clearInterval(poll);
-            if (data.data.redirect_url) {
-              setTimeout(() => { window.location.href = data.data.redirect_url + '?payment_id=' + paymentId + '&status=paid&order_id=' + (data.data.order_id || ''); }, 3000);
-            }
+            setPayment(data.data);
+            setPageStatus('success');
+            setShowSuccess(true);
+            setPaidAt(fmtDateTime());
+            clearInterval(poll);
           } else if (s === 'expired') { setPageStatus('expired'); clearInterval(poll); }
           else if (s === 'failed') { setPageStatus('failed'); clearInterval(poll); }
         }
@@ -110,6 +109,13 @@ export default function PayPage() {
     if (!payment?.upi_intent_link) return;
     const url = app.scheme ? payment.upi_intent_link.replace('upi://', app.scheme) : payment.upi_intent_link;
     window.location.href = url;
+  };
+
+  const copyUTR = () => {
+    if (!payment?.utr) return;
+    navigator.clipboard?.writeText(payment.utr);
+    setUtrCopied(true);
+    setTimeout(() => setUtrCopied(false), 2000);
   };
 
   const isUrgent = timeLeft > 0 && timeLeft < 60;
@@ -161,7 +167,6 @@ export default function PayPage() {
         .upi-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; cursor: pointer; transition: all 0.2s; -webkit-tap-highlight-color: transparent; }
         .upi-btn:hover { background: rgba(255,255,255,0.06); border-color: rgba(29,78,216,0.3); transform: translateY(-2px); }
         .upi-btn:active { transform: scale(0.95); }
-        .upi-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
         .upi-icon-wrap { width: 40px; height: 40px; border-radius: 10px; overflow: hidden; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
         .upi-icon-wrap svg { width: 40px; height: 40px; display: block; }
         .upi-lbl { font-size: 10px; color: rgba(255,255,255,0.45); font-weight: 500; }
@@ -174,25 +179,89 @@ export default function PayPage() {
         .footer-txt { font-size: 11px; color: rgba(255,255,255,0.2); }
         .footer-brand { display: flex; align-items: center; gap: 5px; font-size: 11px; color: rgba(255,255,255,0.3); font-weight: 500; }
         .nbadge { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg,#1d4ed8,#1e40af); display: flex; align-items: center; justify-content: center; font-family: 'Syne',sans-serif; font-weight: 800; font-size: 9px; color: #fff; }
-        .overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(2,8,23,0.92); backdrop-filter: blur(16px); animation: fadeIn 0.3s; }
+        .spin { animation: spinA 0.8s linear infinite; }
+        @keyframes spinA { to{transform:rotate(360deg)} }
+        .success-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(2,8,23,0.92); backdrop-filter: blur(20px); animation: fadeIn 0.3s; }
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        .success-box { background: #0a1628; border: 1px solid rgba(255,255,255,0.08); border-radius: 28px; padding: 36px 28px 28px; text-align: center; width: 90%; max-width: 320px; animation: popUp 0.5s cubic-bezier(0.16,1,0.3,1); position: relative; overflow: hidden; }
+        @keyframes popUp { from{opacity:0;transform:scale(0.8) translateY(20px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        .check-wrap { position: relative; width: 88px; height: 88px; margin: 0 auto 20px; }
+        .ripple-ring { position: absolute; inset: -8px; border-radius: 50%; border: 2px solid #22c55e; animation: ripple 1.8s ease-out infinite; }
+        .ripple-ring-2 { animation-delay: 0.6s; }
+        @keyframes ripple { 0%{transform:scale(0.8);opacity:0.5} 100%{transform:scale(2.4);opacity:0} }
+        .check-circle { width: 88px; height: 88px; border-radius: 50%; background: #16a34a; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; }
+        .check-path { stroke: #fff; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; fill: none; stroke-dasharray: 100; stroke-dashoffset: 100; animation: checkDraw 0.6s ease forwards 0.3s; }
+        @keyframes checkDraw { from{stroke-dashoffset:100} to{stroke-dashoffset:0} }
+        .s-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: #f0f9ff; margin-bottom: 4px; animation: slideUp 0.4s ease forwards 0.2s; opacity: 0; }
+        .s-sub { font-size: 13px; color: rgba(255,255,255,0.35); margin-bottom: 22px; animation: slideUp 0.4s ease forwards 0.3s; opacity: 0; }
+        @keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        .s-amount { background: rgba(34,197,94,0.07); border: 1px solid rgba(34,197,94,0.18); border-radius: 16px; padding: 16px 20px; margin-bottom: 14px; animation: slideUp 0.4s ease forwards 0.35s; opacity: 0; }
+        .s-amount-label { font-size: 11px; color: rgba(255,255,255,0.3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
+        .s-amount-value { font-family: 'Syne', sans-serif; font-size: 34px; font-weight: 800; color: #22c55e; letter-spacing: -1px; }
+        .s-details { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 14px; padding: 14px 16px; margin-bottom: 18px; animation: slideUp 0.4s ease forwards 0.4s; opacity: 0; }
+        .s-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; }
+        .s-row + .s-row { border-top: 1px solid rgba(255,255,255,0.04); }
+        .s-row-label { font-size: 12px; color: rgba(255,255,255,0.35); }
+        .s-row-val { font-size: 12px; color: rgba(255,255,255,0.65); }
+        .utr-btn { display: inline-flex; align-items: center; gap: 5px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 8px; padding: 3px 10px; font-size: 12px; color: #60a5fa; font-family: monospace; cursor: pointer; transition: all 0.15s; }
+        .utr-btn.copied { color: #22c55e; border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
+        .s-btn { width: 100%; padding: 14px; border-radius: 14px; background: #16a34a; border: none; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; font-family: 'DM Sans', sans-serif; animation: slideUp 0.4s ease forwards 0.45s; opacity: 0; transition: opacity 0.15s; }
+        .s-btn:hover { opacity: 0.9; }
+        .s-powered { font-size: 11px; color: rgba(255,255,255,0.18); margin-top: 14px; animation: slideUp 0.4s ease forwards 0.5s; opacity: 0; }
+        .overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(2,8,23,0.92); backdrop-filter: blur(16px); animation: fadeIn 0.3s; }
         .overlay-box { background: #0f1d35; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 40px 32px; text-align: center; max-width: 300px; width: 90%; animation: popUp 0.4s cubic-bezier(0.16,1,0.3,1); }
-        @keyframes popUp { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
-        .ov-circle { width: 72px; height: 72px; border-radius: 50%; background: rgba(16,185,129,0.12); border: 2px solid rgba(16,185,129,0.4); display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 16px; }
-        .ov-circle.fail { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); }
+        .ov-circle { width: 72px; height: 72px; border-radius: 50%; background: rgba(239,68,68,0.1); border: 2px solid rgba(239,68,68,0.3); display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 16px; }
         .ov-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: #dbeafe; margin-bottom: 6px; }
         .ov-sub { font-size: 13px; color: rgba(255,255,255,0.4); line-height: 1.6; }
         .ov-btn { margin-top: 20px; padding: 11px 24px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #dbeafe; font-size: 14px; cursor: pointer; }
-        .spin { animation: spinA 0.8s linear infinite; }
-        @keyframes spinA { to{transform:rotate(360deg)} }
       `}</style>
 
       {showSuccess && (
-        <div className="overlay">
-          <div className="overlay-box">
-            <div className="ov-circle">✓</div>
-            <div className="ov-title">Payment Done!</div>
-            <div className="ov-sub">{payment && `₹${fmtAmount(payment.amount)}`} paid successfully</div>
+        <div className="success-overlay">
+          <div className="success-box">
+            <div className="check-wrap">
+              <div className="ripple-ring" />
+              <div className="ripple-ring ripple-ring-2" />
+              <div className="check-circle">
+                <svg width="42" height="42" viewBox="0 0 42 42">
+                  <path className="check-path" d="M10 21 L18 30 L32 13" />
+                </svg>
+              </div>
+            </div>
+            <div className="s-title">Payment Successful!</div>
+            <div className="s-sub">Transaction confirmed</div>
+            <div className="s-amount">
+              <div className="s-amount-label">Amount Paid</div>
+              <div className="s-amount-value">₹{payment ? fmtAmount(payment.amount) : '—'}</div>
+            </div>
+            <div className="s-details">
+              {payment?.order_id && (
+                <div className="s-row">
+                  <span className="s-row-label">Order ID</span>
+                  <span className="s-row-val" style={{ fontFamily: 'monospace', fontSize: 11 }}>{payment.order_id}</span>
+                </div>
+              )}
+              <div className="s-row">
+                <span className="s-row-label">Paid to</span>
+                <span className="s-row-val">{merchantDisplay}</span>
+              </div>
+              {paidAt && (
+                <div className="s-row">
+                  <span className="s-row-label">Date & time</span>
+                  <span className="s-row-val">{paidAt}</span>
+                </div>
+              )}
+              {payment?.utr && (
+                <div className="s-row">
+                  <span className="s-row-label">UTR</span>
+                  <button className={`utr-btn ${utrCopied ? 'copied' : ''}`} onClick={copyUTR}>
+                    {utrCopied ? '✓ Copied!' : `📋 ${payment.utr}`}
+                  </button>
+                </div>
+              )}
+            </div>
+            <button className="s-btn" onClick={() => setShowSuccess(false)}>Done</button>
+            <div className="s-powered">🔒 Secured by NovaPay</div>
           </div>
         </div>
       )}
@@ -200,7 +269,7 @@ export default function PayPage() {
       {pageStatus === 'expired' && !showSuccess && (
         <div className="overlay">
           <div className="overlay-box">
-            <div className="ov-circle fail">⏱</div>
+            <div className="ov-circle">⏱</div>
             <div className="ov-title">Link Expired</div>
             <div className="ov-sub">This payment link has expired.<br />Please request a new one.</div>
             <button className="ov-btn" onClick={() => window.history.back()}>Go Back</button>
@@ -211,7 +280,7 @@ export default function PayPage() {
       {pageStatus === 'failed' && !showSuccess && (
         <div className="overlay">
           <div className="overlay-box">
-            <div className="ov-circle fail">✕</div>
+            <div className="ov-circle">✕</div>
             <div className="ov-title">Payment Failed</div>
             <div className="ov-sub">Something went wrong.<br />Please try again.</div>
             <button className="ov-btn" onClick={() => window.history.back()}>Go Back</button>
@@ -221,7 +290,6 @@ export default function PayPage() {
 
       <div className="card">
         <div className="prog" />
-
         <div className="hdr">
           <div className="merchant">
             <div className="merchant-logo">
