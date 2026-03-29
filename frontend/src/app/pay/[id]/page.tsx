@@ -23,11 +23,11 @@ const UPI_APPS = [
     scheme: 'gpay://upi/pay?',
     svg: `<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="12" fill="#fff"/><path d="M40.5 22H24v7h10.2c-1 4.6-4.9 7.8-10.2 7.8-6.2 0-11.3-5-11.3-11.3s5-11.2 11.3-11.2c2.8 0 5.3 1 7.3 2.7l5-5A18 18 0 0024 7C14.6 7 7 14.6 7 24s7.6 17 17 17c9.8 0 16.3-6.9 16.3-16.6 0-1.1-.1-2.2-.3-3.3h.5z" fill="#4285F4"/><path d="M8.6 16l5.8 4.3a11.2 11.2 0 0110.6-7.5c2.8 0 5.3 1 7.3 2.7l5-5A18 18 0 0024 7c-6.7 0-12.5 3.8-15.4 9.4v-.4z" fill="#EA4335"/><path d="M24 41c4.8 0 9-1.7 12.2-4.6l-5.7-4.8c-1.7 1.2-4 1.9-6.5 1.9a11.2 11.2 0 01-10.6-7.5L7.4 30c3 6 9.2 11 16.6 11z" fill="#34A853"/><path d="M40.5 22H24v7h10.2c-.5 2.4-1.9 4.4-3.9 5.7l5.7 4.8c3.3-3 5.3-7.6 5.3-12.8 0-1.1-.1-2.2-.3-3.3l.5.6z" fill="#FBBC05"/></svg>`,
   },
-  {
-    name: 'Paytm',
-    scheme: 'paytmmp://pay?',
-    svg: `<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="12" fill="#00BAF2"/><path d="M8 16h6.5v10.5c0 3.2 1.6 4.8 4.8 4.8 1.5 0 2.7-.4 3.5-1.2.8-.8 1.2-2 1.2-3.6V16H30v11c0 2.8-.8 5-2.5 6.5-1.7 1.5-4 2.3-7 2.3-3 0-5.3-.8-7-2.3C11.8 32 11 29.8 11 27V16H8zm22 0h10v4.5h-6.5v2H40v4H33.5v2H40V33H30V16z" fill="white"/></svg>`,
-  },
+ {
+  name: 'Paytm',
+  scheme: 'paytmmp://pay?',
+  svg: `<img src="/channels4_profile.jpg" style="width:42px;height:42px;border-radius:11px;object-fit:cover" alt="Paytm"/>`,
+},
   {
     name: 'Any UPI',
     scheme: '',
