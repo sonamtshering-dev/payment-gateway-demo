@@ -70,13 +70,13 @@ func (w *Worker) runPaytmVerification(ctx context.Context) {
 			merchant, err := w.repo.GetMerchantByID(ctx, payment.MerchantID)
 			if err == nil && merchant != nil && merchant.WebhookURL != "" {
 				payload := map[string]interface{}{
-					"event":      "payment.success",
 					"payment_id": payment.ID.String(),
 					"order_id":   payment.OrderID,
 					"amount":     payment.Amount,
+					"currency":   "INR",
 					"status":     "paid",
 					"utr":        utr,
-					"paid_at":    time.Now().UTC().Format(time.RFC3339),
+					"timestamp":  time.Now().Unix(),
 				}
 				payloadBytes, _ := json.Marshal(payload)
 				w.redis.LPush(ctx, "webhook:queue", string(payloadBytes))
