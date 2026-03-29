@@ -120,7 +120,7 @@ func main() {
 	r.Use(middleware.RequestID())
 	r.Use(middleware.StructuredLogger())
 	r.Use(middleware.SecurityHeaders())
-	r.Use(middleware.CORS([]string{"http://localhost:3000", "https://dashboard.novapay.in"}))
+r.Use(middleware.CORS([]string{"http://localhost:3000", "https://nova-pay.in", "https://www.nova-pay.in"}))
 	r.Use(middleware.RateLimiter(rdb, cfg.Security.RateLimitPerMinute, time.Minute))
 	r.Use(middleware.RequestBodyLimit(1 << 20)) // 1MB max body
 	r.Use(middleware.MetricsCollector())
