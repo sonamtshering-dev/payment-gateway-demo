@@ -18,7 +18,7 @@ export default function AnalyticsPage() {
 
 const API_KEY = 'upay_your_key';
 const API_SECRET = 'sk_your_secret';
-const BASE_URL = 'https://api.upay.dev';
+const BASE_URL = 'https://nova-pay.in';
 
 const body = JSON.stringify({
   merchant_id: 'your-merchant-uuid',

@@ -78,6 +78,7 @@ type Payment struct {
 	ExpiresAt         time.Time     `json:"expires_at" db:"expires_at"`
 	PaidAt            *time.Time    `json:"paid_at,omitempty" db:"paid_at"`
 	ClientIP          string        `json:"-" db:"client_ip"`
+	RedirectURL       string        `json:"redirect_url" db:"redirect_url"`
 	CreatedAt         time.Time     `json:"created_at" db:"created_at"`
 	UpdatedAt         time.Time     `json:"updated_at" db:"updated_at"`
 }

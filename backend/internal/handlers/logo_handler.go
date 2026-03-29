@@ -37,6 +37,23 @@ func (h *Handler) UploadMerchantLogo(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to read file"})
 		return
 	}
+	// Validate magic bytes to prevent disguised executables
+	magic := map[string][]byte{
+		"image/png":  {0x89, 0x50, 0x4E, 0x47},
+		"image/jpeg": {0xFF, 0xD8, 0xFF},
+		"image/webp": {0x52, 0x49, 0x46, 0x46},
+	}
+	expected, ok := magic[mime]
+	if !ok || len(data) < len(expected) {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid file format"})
+		return
+	}
+	for i, b := range expected {
+		if data[i] != b {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "file content does not match extension"})
+			return
+		}
+	}
 	logoDataURL := fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString(data))
 	if err := h.service.UpdateMerchantLogo(c.Request.Context(), merchantID, logoDataURL); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})

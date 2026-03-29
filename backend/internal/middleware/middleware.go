@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/upay/gateway/internal/config"
+	"github.com/upay/gateway/internal/logger"
 	"github.com/upay/gateway/internal/models"
 	"github.com/upay/gateway/internal/repository"
 	"github.com/upay/gateway/internal/utils"
@@ -75,9 +78,9 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader("X-API-KEY")
 		signature := c.GetHeader("X-SIGNATURE")
-		timestamp := c.GetHeader("X-TIMESTAMP")
+		timestampStr := c.GetHeader("X-TIMESTAMP")
 
-		if apiKey == "" || signature == "" || timestamp == "" {
+		if apiKey == "" || signature == "" || timestampStr == "" {
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 				Error: "missing required headers: X-API-KEY, X-SIGNATURE, X-TIMESTAMP",
 				Code:  "MISSING_HEADERS",
@@ -86,22 +89,27 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 			return
 		}
 
-	// DEV MODE – skip signature verification for local testing
-// WARNING: Do NOT use this in production
+		// FIX: Validate timestamp to enforce replay window
+		timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+				Error: "invalid timestamp format",
+				Code:  "INVALID_TIMESTAMP",
+			})
+			c.Abort()
+			return
+		}
 
-// DEV MODE: Skip signature verification
-// Commented for local testing
-
-// if !utils.VerifyHMAC(apiSecret, timestamp, string(body), signature) {
-//     c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-//         Error: "invalid signature",
-//         Code:  "INVALID_SIGNATURE",
-//     })
-//     c.Abort()
-//     return
-// }
-
-
+		age := time.Since(time.Unix(timestamp, 0))
+		tolerance := cfg.Security.TimestampTolerance
+		if age > tolerance || age < -tolerance {
+			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+				Error: "request timestamp expired or too far in the future",
+				Code:  "TIMESTAMP_EXPIRED",
+			})
+			c.Abort()
+			return
+		}
 
 		// Look up merchant by API key
 		merchant, err := repo.GetMerchantByAPIKey(c.Request.Context(), apiKey)
@@ -132,8 +140,8 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 			return
 		}
 
-		// Verify HMAC signature: HMAC_SHA256(secret + timestamp + body)
-		if !utils.VerifyHMAC(apiSecret, timestamp, string(body), signature) {
+		// Verify HMAC signature: HMAC_SHA256(secret, timestamp + "." + body)
+		if !utils.VerifyHMAC(apiSecret, timestampStr, string(body), signature) {
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 				Error: "invalid signature",
 				Code:  "INVALID_SIGNATURE",
@@ -154,8 +162,8 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 			return
 		}
 
-		// Store signature to prevent replay (TTL = timestamp tolerance window)
-		cfg_redis(c).Set(c.Request.Context(), replayKey, "1", cfg.Security.TimestampTolerance)
+		// Store signature to prevent replay
+		cfg_redis(c).Set(c.Request.Context(), replayKey, "1", tolerance)
 
 		c.Set("merchant", merchant)
 		c.Set("merchant_id", merchant.ID)
@@ -163,14 +171,21 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 	}
 }
 
-// Helper to get Redis from context (set during server init)
-var redisClient *redis.Client
+// Helper to get Redis client (set during server init)
+var (
+	redisClient   *redis.Client
+	redisClientMu sync.RWMutex
+)
 
 func SetRedisClient(r *redis.Client) {
+	redisClientMu.Lock()
+	defer redisClientMu.Unlock()
 	redisClient = r
 }
 
 func cfg_redis(c *gin.Context) *redis.Client {
+	redisClientMu.RLock()
+	defer redisClientMu.RUnlock()
 	return redisClient
 }
 
@@ -186,6 +201,7 @@ func RateLimiter(rdb *redis.Client, limit int, window time.Duration) gin.Handler
 		current, err := rdb.Incr(c.Request.Context(), key).Result()
 		if err != nil {
 			// If Redis is down, allow request but log
+			logger.Warn().Str("ip", ip).Msg("Rate limiter Redis error — allowing request")
 			c.Next()
 			return
 		}
@@ -327,14 +343,14 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 }
 
 // ============================================================================
-// REQUEST ID
+// REQUEST ID — uses UUID instead of UnixNano (was predictable)
 // ============================================================================
 
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID := c.GetHeader("X-Request-ID")
 		if requestID == "" {
-			requestID = fmt.Sprintf("%d", time.Now().UnixNano())
+			requestID = uuid.New().String()
 		}
 		c.Set("request_id", requestID)
 		c.Header("X-Request-ID", requestID)
@@ -343,7 +359,7 @@ func RequestID() gin.HandlerFunc {
 }
 
 // ============================================================================
-// REQUEST LOGGER
+// REQUEST LOGGER (kept for reference — use StructuredLogger in production)
 // ============================================================================
 
 func RequestLogger() gin.HandlerFunc {
@@ -352,13 +368,12 @@ func RequestLogger() gin.HandlerFunc {
 		c.Next()
 		latency := time.Since(start)
 
-		fmt.Printf("[%s] %s %s %d %v %s\n",
-			time.Now().Format(time.RFC3339),
-			c.Request.Method,
-			c.Request.URL.Path,
-			c.Writer.Status(),
-			latency,
-			c.ClientIP(),
-		)
+		logger.Info().
+			Str("method", c.Request.Method).
+			Str("path", c.Request.URL.Path).
+			Int("status", c.Writer.Status()).
+			Dur("latency", latency).
+			Str("ip", c.ClientIP()).
+			Msg("request")
 	}
 }

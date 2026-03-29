@@ -276,7 +276,7 @@ export default function AdminPage() {
 
         {/* ── MERCHANTS ── */}
         {tab==='Merchants' && (
-          <div style={{...S.card, overflowX:"auto"}}><div style={{...S.tHead,gridTemplateColumns:'1.5fr 1.5fr 1fr 1fr 1fr'}}>
+          <div style={S.card}><div style={{overflowX:"auto"}}><div style={{...S.tHead,gridTemplateColumns:'1.5fr 1.5fr 1fr 1fr 1fr'}}>
               <span>Merchant</span><span>Email</span><span>Status</span><span>Joined</span><span>Actions</span>
             </div>
             {filtered(merchantList).length===0 && <div style={{padding:'48px',textAlign:'center' as const,color:'#4b5563'}}>No merchants found</div>}
@@ -330,7 +330,7 @@ export default function AdminPage() {
 
         {/* ── KYC ── */}
         {tab==='KYC' && (
-          <div style={{...S.card, overflowX:"auto"}}><div style={{...S.tHead,gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr 0.8fr'}}>
+          <div style={S.card}><div style={{overflowX:"auto"}}><div style={{...S.tHead,gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr 0.8fr'}}>
               <span>Business</span><span>PAN</span><span>Aadhaar</span><span>Status</span><span>Actions</span><span>Document</span>
             </div>
             {filtered(kycList).length===0 && <div style={{padding:'48px',textAlign:'center' as const,color:'#4b5563'}}>No KYC submissions yet</div>}
@@ -368,7 +368,7 @@ export default function AdminPage() {
 
         {/* ── FRAUD ALERTS ── */}
         {tab==='Fraud Alerts' && (
-          <div style={{...S.card, overflowX:"auto"}}><div style={{...S.tHead,gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr'}}>
+          <div style={S.card}><div style={{overflowX:"auto"}}><div style={{...S.tHead,gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr'}}>
               <span>Description</span><span>Merchant</span><span>Severity</span><span>Status</span><span>Action</span>
             </div>
             {filtered(fraudList).length===0 && <div style={{padding:'48px',textAlign:'center' as const,color:'#4b5563'}}>No fraud alerts</div>}
@@ -389,7 +389,7 @@ export default function AdminPage() {
 
         {/* ── SUBSCRIPTIONS ── */}
         {tab==='Subscriptions' && (
-          <div style={{...S.card, overflowX:"auto"}}><div style={{...S.tHead,gridTemplateColumns:'1.5fr 1.5fr 1fr 1fr'}}>
+          <div style={S.card}><div style={{overflowX:"auto"}}><div style={{...S.tHead,gridTemplateColumns:'1.5fr 1.5fr 1fr 1fr'}}>
               <span>Merchant</span><span>Email</span><span>Status</span><span>Actions</span>
             </div>
             {filtered(merchantList).length===0 && <div style={{padding:'48px',textAlign:'center' as const,color:'#4b5563'}}>No merchants</div>}

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"context"
 	"time"
 
@@ -11,7 +12,7 @@ func (r *Repository) AdminListKYC(ctx context.Context) ([]*MerchantKYC, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, merchant_id, aadhaar_number, pan_number, business_name,
 		       bank_account, bank_ifsc, bank_name, status, rejection_reason,
-		       submitted_at, reviewed_at
+		       submitted_at, reviewed_at, COALESCE(document_url,'')
 		FROM merchant_kyc ORDER BY submitted_at DESC
 	`)
 	if err != nil {
@@ -23,8 +24,8 @@ func (r *Repository) AdminListKYC(ctx context.Context) ([]*MerchantKYC, error) {
 		var k MerchantKYC
 		if err := rows.Scan(&k.ID, &k.MerchantID, &k.AadhaarNumber, &k.PANNumber,
 			&k.BusinessName, &k.BankAccount, &k.BankIFSC, &k.BankName,
-			&k.Status, &k.RejectionReason, &k.SubmittedAt, &k.ReviewedAt); err != nil {
-			continue
+			&k.Status, &k.RejectionReason, &k.SubmittedAt, &k.ReviewedAt, &k.DocumentURL); err != nil {
+			return nil, fmt.Errorf("scan error: %w", err)
 		}
 		kycs = append(kycs, &k)
 	}

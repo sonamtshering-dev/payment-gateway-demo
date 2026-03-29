@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	mrand "math/rand"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -210,8 +209,10 @@ func GenerateUPILink(upiID, merchantName string, amount int64, orderID string) s
 func GenPaytmTxnRef(orderID string) string {
 	chars := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 	prefix := make([]byte, 8)
+	randomBytes := make([]byte, 8)
+	rand.Read(randomBytes)
 	for i := range prefix {
-		prefix[i] = chars[mrand.Intn(len(chars))]
+		prefix[i] = chars[int(randomBytes[i])%len(chars)]
 	}
 	return fmt.Sprintf("%s%d", string(prefix), time.Now().Unix())
 }

@@ -54,12 +54,14 @@ type CreatePaymentRequest struct {
 	Amount            int64  `json:"amount" binding:"required,min=100"`
 	Currency          string `json:"currency" binding:"required,eq=INR"`
 	CustomerReference string `json:"customer_reference" binding:"max=128"`
+	RedirectURL       string `json:"redirect_url" binding:"omitempty,max=512"`
 }
 
 type CreatePaymentResponse struct {
 	PaymentID     uuid.UUID `json:"payment_id"`
 	UPIIntentLink string    `json:"upi_intent_link"`
 	QRCodeBase64  string    `json:"qr_code_base64"`
+	RedirectURL   string    `json:"redirect_url,omitempty"`
 	Amount        int64     `json:"amount"`
 	Currency      string    `json:"currency"`
 	ExpiresAt     time.Time `json:"expires_at"`
@@ -79,6 +81,7 @@ type PaymentStatusResponse struct {
 	CreatedAt     time.Time     `json:"created_at"`
 
 	QRCodeBase64  string `json:"qr_code_base64,omitempty"`
+	RedirectURL   string `json:"redirect_url,omitempty"`
 	UPIIntentLink string `json:"upi_intent_link,omitempty"`
 	CustomerRef   string `json:"customer_reference,omitempty"`
 	MerchantLogo  string `json:"merchant_logo,omitempty"`

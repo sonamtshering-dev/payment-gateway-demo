@@ -39,7 +39,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     deploy:
-      replicas: 2
+      replicas: 1
       resources:
         limits:
           cpus: "1.0"
@@ -62,11 +62,13 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        - NEXT_PUBLIC_API_URL=https://nova-pay.in
       dockerfile: Dockerfile
     expose:
       - "3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost
+      - NEXT_PUBLIC_API_URL=https://nova-pay.in
     depends_on:
       - gateway
     restart: unless-stopped
