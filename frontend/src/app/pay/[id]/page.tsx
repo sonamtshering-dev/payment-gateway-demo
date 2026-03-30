@@ -15,7 +15,7 @@ interface PaymentData {
   merchant_logo?: string;
   merchant_business_name?: string;
   utr?: string;
-  redirect_url?: string; // ✅ ADDED
+  redirect_url?: string;
 }
 
 const UPI_APPS = [
@@ -24,11 +24,11 @@ const UPI_APPS = [
     scheme: 'gpay://upi/pay?',
     svg: `<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="12" fill="#fff"/><path d="M40.5 22H24v7h10.2c-1 4.6-4.9 7.8-10.2 7.8-6.2 0-11.3-5-11.3-11.3s5-11.2 11.3-11.2c2.8 0 5.3 1 7.3 2.7l5-5A18 18 0 0024 7C14.6 7 7 14.6 7 24s7.6 17 17 17c9.8 0 16.3-6.9 16.3-16.6 0-1.1-.1-2.2-.3-3.3h.5z" fill="#4285F4"/><path d="M8.6 16l5.8 4.3a11.2 11.2 0 0110.6-7.5c2.8 0 5.3 1 7.3 2.7l5-5A18 18 0 0024 7c-6.7 0-12.5 3.8-15.4 9.4v-.4z" fill="#EA4335"/><path d="M24 41c4.8 0 9-1.7 12.2-4.6l-5.7-4.8c-1.7 1.2-4 1.9-6.5 1.9a11.2 11.2 0 01-10.6-7.5L7.4 30c3 6 9.2 11 16.6 11z" fill="#34A853"/><path d="M40.5 22H24v7h10.2c-.5 2.4-1.9 4.4-3.9 5.7l5.7 4.8c3.3-3 5.3-7.6 5.3-12.8 0-1.1-.1-2.2-.3-3.3l.5.6z" fill="#FBBC05"/></svg>`,
   },
- {
-  name: 'Paytm',
-  scheme: 'paytmmp://pay?',
-  svg: `<img src="/channels4_profile.jpg" style="width:42px;height:42px;border-radius:11px;object-fit:cover" alt="Paytm"/>`,
-},
+  {
+    name: 'Paytm',
+    scheme: 'paytmmp://pay?',
+    svg: `<img src="/channels4_profile.jpg" style="width:42px;height:42px;border-radius:11px;object-fit:cover" alt="Paytm"/>`,
+  },
   {
     name: 'Any UPI',
     scheme: '',
@@ -119,12 +119,14 @@ export default function PayPage() {
     setTimeout(() => setUtrCopied(false), 2000);
   };
 
-  // ✅ ADDED: redirect helper
+  // If redirect_url → send user back to merchant site with status
+  // If no redirect_url → close overlay and show "Payment Complete" screen
   const handleDone = () => {
     if (payment?.redirect_url) {
       window.location.href = `${payment.redirect_url}?order_id=${payment.order_id || ''}&status=paid`;
     } else {
       setShowSuccess(false);
+      setPageStatus('success');
     }
   };
 
@@ -138,11 +140,9 @@ export default function PayPage() {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { background: #F0F2F8; min-height: 100vh; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
         body { display: flex; align-items: center; justify-content: center; padding: 20px; }
-
         .card { background: #fff; border-radius: 24px; width: 100%; max-width: 390px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.04), 0 20px 48px rgba(0,0,0,0.1); }
         .prog { height: 3px; background: linear-gradient(90deg, #6C47FF, #9b7dff, #6C47FF); background-size: 200% 100%; animation: prog 2s linear infinite; }
         @keyframes prog { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-
         .hdr { padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #F0F0F5; }
         .merchant { display: flex; align-items: center; gap: 10px; }
         .merchant-logo { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg,#6C47FF,#4F35CC); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 17px; color: #fff; overflow: hidden; flex-shrink: 0; }
@@ -152,14 +152,12 @@ export default function PayPage() {
         .secure-badge { display: flex; align-items: center; gap: 4px; background: #F0FDF6; border: 1px solid #BBF7D0; border-radius: 100px; padding: 4px 10px; font-size: 11px; font-weight: 600; color: #16A34A; }
         .secure-dot { width: 5px; height: 5px; border-radius: 50%; background: #22C55E; animation: blink 1.5s ease-in-out infinite; }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
         .body { padding: 20px; }
         .amt-wrap { text-align: center; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #F5F5FA; }
         .amt-label { font-size: 11px; color: #9B9BB0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
         .amt { font-family: 'Syne', sans-serif; font-size: 40px; font-weight: 800; color: #0A0A0F; letter-spacing: -1.5px; line-height: 1; }
         .amt sup { font-size: 22px; vertical-align: super; font-weight: 700; }
         .order-pill { font-size: 11px; color: #C0C0CF; margin-top: 8px; font-family: monospace; background: #F8F8FC; display: inline-block; padding: 3px 10px; border-radius: 100px; }
-
         .qr-wrap { display: flex; justify-content: center; margin-bottom: 14px; }
         .qr-outer { position: relative; }
         .qr-frame { width: 196px; height: 196px; background: #fff; border-radius: 18px; border: 2px solid #F0F0F5; display: flex; align-items: center; justify-content: center; position: relative; box-shadow: 0 4px 20px rgba(108,71,255,0.08); }
@@ -173,15 +171,12 @@ export default function PayPage() {
         .c-tr { top:-2px; right:-2px; border-top:3px solid #6C47FF; border-right:3px solid #6C47FF; border-radius:0 5px 0 0; }
         .c-bl { bottom:-2px; left:-2px; border-bottom:3px solid #6C47FF; border-left:3px solid #6C47FF; border-radius:0 0 0 5px; }
         .c-br { bottom:-2px; right:-2px; border-bottom:3px solid #6C47FF; border-right:3px solid #6C47FF; border-radius:0 0 5px 0; }
-
         .scan-hint { text-align: center; font-size: 12px; color: #9B9BB0; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; }
         .save-btn { padding: 4px 12px; border-radius: 100px; background: #F4F1FF; border: none; color: #6C47FF; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
         .save-btn:hover { background: #EAE4FF; }
-
         .divider { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
         .dline { flex: 1; height: 1px; background: #F0F0F5; }
         .dtxt { font-size: 11px; color: #C0C0CF; font-weight: 500; }
-
         .upi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
         .upi-btn { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 4px; border-radius: 14px; border: 1.5px solid #F0F0F5; background: #fff; cursor: pointer; transition: all 0.18s; font-family: 'DM Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
         .upi-btn:hover { border-color: #6C47FF; background: #F8F6FF; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(108,71,255,0.1); }
@@ -189,21 +184,21 @@ export default function PayPage() {
         .upi-icon { width: 42px; height: 42px; border-radius: 11px; overflow: hidden; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
         .upi-icon svg { width: 42px; height: 42px; display: block; }
         .upi-lbl { font-size: 10px; color: #9B9BB0; font-weight: 500; }
-
         .timer { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; background: #FAFAFA; border-radius: 12px; border: 1px solid #F0F0F5; }
         .timer.urgent { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.04); }
         .timer-left { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9B9BB0; font-weight: 500; }
         .timer-icon { width: 26px; height: 26px; border-radius: 8px; background: #F0F0F5; display: flex; align-items: center; justify-content: center; font-size: 13px; }
         .timer-val { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: #0A0A0F; letter-spacing: -0.5px; }
         .timer-val.urgent { color: #ef4444; }
-
         .footer { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 12px 20px; border-top: 1px solid #F5F5FA; }
         .ftxt { font-size: 11px; color: #C0C0CF; font-weight: 500; display: flex; align-items: center; gap: 4px; }
-
         .spin { animation: spinA 0.8s linear infinite; }
         @keyframes spinA { to{transform:rotate(360deg)} }
-
-        /* Success overlay */
+        .paid-state { text-align: center; padding: 48px 20px; }
+        .paid-icon { width: 72px; height: 72px; border-radius: 50%; background: #F0FDF6; border: 2px solid #BBF7D0; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 32px; }
+        .paid-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: #16a34a; margin-bottom: 6px; }
+        .paid-sub { font-size: 13px; color: #9B9BB0; line-height: 1.6; }
+        .paid-order { font-size: 11px; color: #C0C0CF; margin-top: 12px; font-family: monospace; background: #F8F8FC; display: inline-block; padding: 3px 10px; border-radius: 100px; }
         .success-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-end; justify-content: center; background: rgba(10,10,15,0.5); backdrop-filter: blur(8px); animation: fadeIn 0.3s; }
         @media (min-width: 480px) { .success-overlay { align-items: center; } }
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
@@ -234,8 +229,6 @@ export default function PayPage() {
         .s-btn { width: 100%; padding: 14px; border-radius: 14px; background: #16a34a; border: none; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; font-family: 'DM Sans', sans-serif; animation: slideUp 0.4s ease forwards 0.45s; opacity: 0; }
         .s-btn:hover { background: #15803d; }
         .s-powered { font-size: 11px; color: #C0C0CF; margin-top: 14px; animation: slideUp 0.4s ease forwards 0.5s; opacity: 0; }
-
-        /* Expired/Failed */
         .overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(10,10,15,0.7); backdrop-filter: blur(16px); animation: fadeIn 0.3s; }
         .overlay-box { background: #fff; border-radius: 24px; padding: 40px 32px; text-align: center; max-width: 300px; width: 90%; animation: popUp 0.4s cubic-bezier(0.16,1,0.3,1); box-shadow: 0 24px 64px rgba(0,0,0,0.2); }
         .ov-circle { width: 72px; height: 72px; border-radius: 50%; background: #FEF2F2; border: 2px solid #FECACA; display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 16px; }
@@ -245,7 +238,6 @@ export default function PayPage() {
         .ov-btn:hover { background: #EBEBF5; }
       `}</style>
 
-      {/* Success */}
       {showSuccess && (
         <div className="success-overlay">
           <div className="success-box">
@@ -290,14 +282,14 @@ export default function PayPage() {
                 </div>
               )}
             </div>
-            {/* ✅ CHANGED: Done button now redirects to merchant's return URL */}
-            <button className="s-btn" onClick={handleDone}>Done</button>
+            <button className="s-btn" onClick={handleDone}>
+              {payment?.redirect_url ? 'Back to Merchant' : 'Done'}
+            </button>
             <div className="s-powered">🔒 Secured by NovaPay</div>
           </div>
         </div>
       )}
 
-      {/* Expired */}
       {pageStatus === 'expired' && !showSuccess && (
         <div className="overlay">
           <div className="overlay-box">
@@ -309,7 +301,6 @@ export default function PayPage() {
         </div>
       )}
 
-      {/* Failed */}
       {pageStatus === 'failed' && !showSuccess && (
         <div className="overlay">
           <div className="overlay-box">
@@ -346,6 +337,13 @@ export default function PayPage() {
             <div style={{ textAlign: 'center', padding: '48px 0', color: '#9B9BB0' }}>
               <div style={{ width: 28, height: 28, border: '2px solid #F0F0F5', borderTopColor: '#6C47FF', borderRadius: '50%', margin: '0 auto 12px' }} className="spin" />
               Loading payment…
+            </div>
+          ) : pageStatus === 'success' && !showSuccess ? (
+            <div className="paid-state">
+              <div className="paid-icon">✓</div>
+              <div className="paid-title">Payment Complete</div>
+              <div className="paid-sub">This transaction has been confirmed.<br />You may close this page.</div>
+              {payment?.order_id && <div className="paid-order">{payment.order_id}</div>}
             </div>
           ) : (
             <>
