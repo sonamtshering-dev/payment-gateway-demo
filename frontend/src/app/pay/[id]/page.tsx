@@ -15,6 +15,7 @@ interface PaymentData {
   merchant_logo?: string;
   merchant_business_name?: string;
   utr?: string;
+  redirect_url?: string; // ✅ ADDED
 }
 
 const UPI_APPS = [
@@ -116,6 +117,15 @@ export default function PayPage() {
     navigator.clipboard?.writeText(payment.utr);
     setUtrCopied(true);
     setTimeout(() => setUtrCopied(false), 2000);
+  };
+
+  // ✅ ADDED: redirect helper
+  const handleDone = () => {
+    if (payment?.redirect_url) {
+      window.location.href = `${payment.redirect_url}?order_id=${payment.order_id || ''}&status=paid`;
+    } else {
+      setShowSuccess(false);
+    }
   };
 
   const isUrgent = timeLeft > 0 && timeLeft < 60;
@@ -280,7 +290,8 @@ export default function PayPage() {
                 </div>
               )}
             </div>
-            <button className="s-btn" onClick={() => setShowSuccess(false)}>Done</button>
+            {/* ✅ CHANGED: Done button now redirects to merchant's return URL */}
+            <button className="s-btn" onClick={handleDone}>Done</button>
             <div className="s-powered">🔒 Secured by NovaPay</div>
           </div>
         </div>
