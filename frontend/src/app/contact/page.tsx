@@ -24,7 +24,7 @@ export default function ContactPage() {
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:16,marginBottom:40}}>
           <div style={card}>
             <div style={lbl}>Email Support</div>
-            <a href="mailto:sonamtsheringsh@gmail.com" style={{fontSize:14,color:'#60a5fa',wordBreak:'break-all'}}>sonamtsheringsh@gmail.com</a>
+            <a href="mailto:novapaysupport@gmail.com" style={{fontSize:14,color:'#60a5fa',wordBreak:'break-all'}}>novapaysupport@gmail.com</a>
             <p style={{fontSize:13,color:'rgba(255,255,255,0.3)',marginTop:8,marginBottom:0}}>Response within 24 hours</p>
           </div>
           <div style={card}>
@@ -34,7 +34,7 @@ export default function ContactPage() {
           </div>
           <div style={card}>
             <div style={lbl}>Address</div>
-            <div style={{fontSize:14,color:'rgba(255,255,255,0.55)',lineHeight:1.7}}>NovaPay<br/>Koramangala<br/>Bengaluru, KA 560095</div>
+            <div style={{fontSize:14,color:'rgba(255,255,255,0.55)',lineHeight:1.7}}>NovaPay<br/>india<br/>india based</div>
           </div>
         </div>
         <hr style={{borderColor:'rgba(255,255,255,0.06)',margin:'40px 0'}}/>
