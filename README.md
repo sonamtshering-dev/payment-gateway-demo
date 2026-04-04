@@ -1,163 +1,143 @@
-# UPay Gateway
+# NovaPay — UPI Payment Gateway
 
-A secure, production-ready UPI payment gateway that allows merchants to accept payments directly to their own UPI IDs using dynamic QR codes.
+A production-grade UPI payment gateway built for Indian merchants. Accept payments via QR codes, payment links, and direct UPI integrations with zero transaction fees.
 
-## Architecture
+🌐 **Live:** [nova-pay.in](https://nova-pay.in)
 
-```
-Cloudflare → Nginx (reverse proxy + rate limiting)
-                ↓
-         Go API Server (Gin) ×N replicas
-           ↓           ↓
-     PostgreSQL      Redis
-                       ↓
-              Background Workers
-              (expiry, webhooks, fraud)
-```
+---
+
+## Features
+
+### For Merchants
+- **Payment Links** — Generate shareable UPI payment links instantly
+- **QR Codes** — Styled QR codes for in-store and online payments
+- **Multi-Provider Support** — Connect GPay, Paytm, PhonePe and any UPI app
+- **Real-time Dashboard** — Live stats, transaction history, and analytics
+- **Webhook Notifications** — Get notified instantly on payment events
+- **API Access** — Integrate payments into your own application
+- **Referral Program** — Earn discounts by referring other merchants
+
+### For Admins
+- **Merchant Management** — View, disable, and manage all merchants
+- **KYC Verification** — Review and approve merchant identity documents
+- **Subscription Management** — Manage plans and extend subscriptions
+- **Fraud Detection** — Monitor and resolve suspicious activity
+- **Payment Oversight** — View all transactions across all merchants
+- **Plans Management** — Create and edit pricing plans
+
+### Security
+- AES-256 encryption for sensitive data
+- HMAC-SHA256 request signing
+- JWT authentication with refresh tokens
+- Rate limiting and replay attack protection
+- bcrypt password hashing
+- Parameterized SQL queries (no injection risk)
+
+---
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| Backend API | Go 1.22 (Gin framework) |
-| Frontend | React/Next.js Dashboard |
+| Layer | Technology |
+|-------|-----------|
+| Backend | Go 1.24 + Gin |
+| Frontend | Next.js 14 + TypeScript |
 | Database | PostgreSQL 16 |
-| Cache/Queue | Redis 7 |
-| Proxy | Nginx |
-| Container | Docker + Docker Compose |
-| Auth | JWT (access + refresh tokens) |
-| Encryption | AES-256-GCM (secrets at rest) |
-| Signing | HMAC-SHA256 (API + webhooks) |
+| Cache | Redis 7 |
+| Reverse Proxy | Nginx |
+| Deployment | Docker Compose on AWS EC2 |
+| CDN/SSL | Cloudflare |
+| Email | Gmail SMTP |
 
-## Project Structure
+---
 
-```
-upay/
-├── backend/
-│   ├── cmd/server/main.go          # Entry point, router setup
-│   ├── internal/
-│   │   ├── config/                  # Environment configuration
-│   │   ├── middleware/              # Auth, rate limit, CORS, security
-│   │   ├── models/                  # DB models + DTOs
-│   │   ├── handlers/                # HTTP controllers
-│   │   ├── services/                # Business logic
-│   │   ├── repository/              # Database queries
-│   │   ├── utils/                   # Crypto, JWT, helpers
-│   │   └── workers/                 # Background processors
-│   ├── migrations/                  # SQL schema
-│   ├── docs/                        # API documentation
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── app/Dashboard.jsx        # Main dashboard
-│   │   ├── lib/api.ts               # API client
-│   │   └── types/                   # TypeScript types
-│   └── Dockerfile
-├── nginx/nginx.conf                 # Reverse proxy config
-├── docker-compose.yml
-├── scripts/setup.sh
-└── .env.example
-```
+## Getting Started
 
-## Quick Start
+### Prerequisites
+- Docker and Docker Compose
+- A domain with Cloudflare (for SSL)
+- Gmail account with App Password (for emails)
 
+### Setup
+
+1. **Clone the repository**
 ```bash
-# Clone and setup
-git clone https://github.com/yourusername/upay-gateway.git
-cd upay-gateway
-
-# Auto-generate secrets and start all services
-chmod +x scripts/setup.sh
-./scripts/setup.sh
-
-# Services available at:
-# Dashboard: http://localhost:3000
-# API:       http://localhost/api/v1
-# Health:    http://localhost/health
+git clone https://github.com/sonamtshering-dev/payment-gateway-demo.git
+cd payment-gateway-demo
 ```
 
-## API Endpoints
+2. **Configure environment**
+```bash
+cp .env.example .env
+# Fill in your values in .env
+```
+
+3. **Start the services**
+```bash
+docker compose up -d
+```
+
+4. **Access the app**
+- Frontend: `http://localhost`
+- API: `http://localhost/api/v1`
+
+---
+
+## API Overview
 
 ### Authentication
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/auth/register` | Register merchant |
-| POST | `/api/v1/auth/login` | Login |
-| POST | `/api/v1/auth/refresh` | Refresh tokens |
-
-### Payment API (HMAC-signed)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/payments/create` | Create payment session |
-| GET | `/api/v1/payments/status/:id` | Check payment status |
-| POST | `/api/v1/payments/verify` | Verify payment with UTR |
-
-### Dashboard (JWT-authenticated)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/dashboard/stats` | Analytics overview |
-| GET | `/api/v1/dashboard/transactions` | Transaction list |
-| POST | `/api/v1/dashboard/upi` | Add UPI ID |
-| GET | `/api/v1/dashboard/upi` | List UPI IDs |
-| PUT | `/api/v1/dashboard/webhook` | Update webhook URL |
-
-### Admin (JWT + admin role)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/admin/merchants` | List all merchants |
-| GET | `/api/v1/admin/fraud-alerts` | View fraud alerts |
-
-## Security Features
-
-- **AES-256-GCM encryption** for all secrets at rest (API secrets, UPI IDs)
-- **HMAC-SHA256 signature** verification on every payment API request
-- **Timestamp validation** (5-minute window) prevents replay attacks
-- **Replay detection** via Redis-backed signature cache
-- **Rate limiting** at both Nginx and application layers
-- **JWT with refresh token rotation** (old tokens auto-revoked)
-- **Bcrypt password hashing** (cost factor 12)
-- **Security headers** (HSTS, CSP, X-Frame-Options, etc.)
-- **Input validation** on all endpoints
-- **SQL injection prevention** via parameterized queries
-
-## Fraud Protection
-
-- **UTR duplicate detection** — flags reuse of transaction references
-- **Amount mismatch detection** — alerts on verification amount discrepancies
-- **Rate limiting per IP** — blocks excessive requests
-- **Daily transaction limits** — per-merchant configurable caps
-- **Payment session expiry** — auto-expires stale sessions (15min default)
-- **Webhook replay protection** — signed payloads with timestamp checks
-
-## Scalability Design
-
-- **Stateless API servers** — horizontal scaling via Docker replicas
-- **Connection pooling** — pgxpool (25 max connections)
-- **Redis caching** — payment sessions, rate limits, signature replay
-- **Background workers** — async webhook delivery, payment expiry
-- **Database indexing** — composite indexes for dashboard queries
-- **Nginx load balancing** — least_conn upstream distribution
-
-## Running Tests
-
-```bash
-cd backend
-go test ./internal/utils/ -v
-go test ./... -cover
+```
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+POST /api/v1/auth/refresh
 ```
 
-## Environment Variables
+### Payments (HMAC authenticated)
+```
+POST /api/v1/payments/create
+GET  /api/v1/payments/status/:id
+```
 
-See `.env.example` for full list. Key variables:
+### Dashboard (JWT authenticated)
+```
+GET  /api/v1/dashboard/stats
+GET  /api/v1/dashboard/transactions
+GET  /api/v1/dashboard/providers
+POST /api/v1/dashboard/payments
+```
 
-| Variable | Description |
-|----------|-------------|
-| `ENCRYPTION_KEY` | AES-256 key (32 bytes hex) |
-| `JWT_ACCESS_SECRET` | JWT signing secret |
-| `DB_PASSWORD` | PostgreSQL password |
-| `RATE_LIMIT_PER_MINUTE` | API rate limit |
-| `PAYMENT_SESSION_TTL_MINUTES` | QR code expiry |
+All payment API requests must include:
+- `X-API-KEY` — your merchant API key
+- `X-SIGNATURE` — HMAC-SHA256 signature of the request body
+- `X-TIMESTAMP` — Unix timestamp (within 5 minutes)
+
+---
+
+## Email Notifications
+
+Merchants receive automatic emails for:
+- ✅ Account registration (welcome + referral code)
+- ✅ Payment received
+- ✅ KYC approved or rejected
+- ✅ Subscription activated
+- ⏰ Subscription expiry reminders (14, 7, 3 days before)
+
+---
+
+## Deployment
+
+```bash
+# Pull latest and rebuild
+git pull
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+---
 
 ## License
 
-MIT
+Private project. All rights reserved.
+
+---
+
+Built with ❤️ by [Sonam Tshering](https://github.com/sonamtshering-dev)
