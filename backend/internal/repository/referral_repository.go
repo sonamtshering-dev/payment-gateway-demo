@@ -36,6 +36,9 @@ func (r *Repository) GetReferralStats(merchantId string) (map[string]interface{}
 	stats := map[string]interface{}{}
 	var code string
 	r.db.QueryRow(ctx, `SELECT COALESCE(referral_code,'') FROM merchants WHERE id = $1`, merchantId).Scan(&code)
+	if code == "" {
+		code, _ = r.GenerateReferralCode(merchantId)
+	}
 	stats["referral_code"] = code
 	var total, rewarded int
 	r.db.QueryRow(ctx, `SELECT COUNT(*), COUNT(CASE WHEN reward_applied THEN 1 END) FROM referrals WHERE referrer_id = $1`, merchantId).Scan(&total, &rewarded)
