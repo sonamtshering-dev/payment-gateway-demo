@@ -46,10 +46,20 @@ const UserIcon = () => (
 );
 
 const Logo = ({ size = 30 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-    <rect width="32" height="32" rx="8" fill="#2563eb"/>
-    <path d="M8 24V8l6 10 6-10v16" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-    <circle cx="24" cy="16" r="3" fill="#93c5fd"/>
+  <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+    <defs>
+      <linearGradient id="ng" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stopColor="#60a5fa"/>
+        <stop offset="100%" stopColor="#2563eb"/>
+      </linearGradient>
+      <linearGradient id="ng2" x1="1" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#93c5fd"/>
+        <stop offset="100%" stopColor="#1d4ed8"/>
+      </linearGradient>
+    </defs>
+    <ellipse cx="18" cy="26" rx="11" ry="3" fill="none" stroke="url(#ng2)" strokeWidth="1.5" opacity="0.6"/>
+    <path d="M8 28V8l7 13L22 8v20" stroke="url(#ng)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M8 28V8l7 13L22 8v20" stroke="url(#ng2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.4"/>
   </svg>
 );
 
@@ -214,16 +224,7 @@ export default function LandingPage() {
                 </div>
               </div>
             ))}
-            <div style={{ padding: '14px 18px', background: 'rgba(37,99,235,0.06)', borderTop: '1px solid rgba(37,99,235,0.12)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 3 }}>Today's total</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: '#f1f5f9', letterSpacing: -0.5 }}>₹48,291</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 3 }}>Transactions</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: '#f1f5f9', letterSpacing: -0.5 }}>127</div>
-              </div>
-            </div>
+
             <div style={{ padding: '10px 18px', background: 'rgba(34,197,94,0.04)', borderTop: '1px solid rgba(34,197,94,0.08)', display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{ width: 6, height: 6, background: '#22c55e', borderRadius: '50%', flexShrink: 0 }}/>
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)' }}>Only showing payments from registered NovaPay merchants</span>
