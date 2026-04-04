@@ -201,9 +201,9 @@ func main() {
 
 		// ---- ADMIN (JWT + admin role) ----
 		admin := v1.Group("/admin")
-		admin.Use(middleware.JWTAuth(cfg))
-		admin.Use(middleware.AdminOnly())
 		admin.Use(middleware.AdminIPWhitelist(cfg.Security.AdminAllowedIPs))
+admin.Use(middleware.JWTAuth(cfg))
+admin.Use(middleware.AdminOnly())
 		{
 			admin.GET("/merchants", h.AdminListMerchants)
 			admin.PUT("/merchants/:id/toggle", h.AdminToggleMerchant)

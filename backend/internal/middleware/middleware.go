@@ -74,6 +74,7 @@ func AdminOnly() gin.HandlerFunc {
 func AdminIPWhitelist(allowedIPs []string) gin.HandlerFunc {
 	allowed := make(map[string]bool)
 	for _, ip := range allowedIPs {
+		if ip == "" { continue }
 		allowed[strings.TrimSpace(ip)] = true
 	}
 	return func(c *gin.Context) {
