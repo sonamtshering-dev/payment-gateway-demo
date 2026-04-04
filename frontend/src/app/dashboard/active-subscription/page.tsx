@@ -76,10 +76,10 @@ export default function ActiveSubscriptionPage() {
       if (statsRes.success && statsRes.data) {
         const d = statsRes.data;
         setUsage({
-          qr_used: d.total_payments || 0,
+          qr_used: d.total_transactions || 0,
           links_used: d.active_links || 0,
-          api_used_today: d.api_calls_today || 0,
-          payments_total: d.total_payments || 0,
+          api_used_today: d.today_transactions || 0,
+          payments_total: d.total_transactions || 0,
           revenue_total: d.total_revenue || 0,
         });
       }

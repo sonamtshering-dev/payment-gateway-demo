@@ -316,7 +316,7 @@ export default function AdminPage() {
                     onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.02)')}
                     onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
                   >
-                    <span style={{fontFamily:'monospace',fontSize:12,color:'#8b9ab5'}}>{p.order_id||p.id?.slice(0,8)}</span>
+                    <span style={{fontFamily:'monospace',fontSize:11,color:'#8b9ab5',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as 'nowrap'}}>{(p.order_id||p.id||'').slice(0,20)}</span>
                     <span style={{color:'#64748b',fontSize:12}}>{p.merchant_id?.slice(0,8)||'-'}</span>
                     <span style={{fontFamily:'Syne,sans-serif',fontWeight:700}}>₹{((p.amount||0)/100).toLocaleString('en-IN')}</span>
                     <span><span style={S.badge(p.status==='paid'?'0,229,176':p.status==='pending'?'245,158,11':'239,68,68')}>{(p.status||'').toUpperCase()}</span></span>

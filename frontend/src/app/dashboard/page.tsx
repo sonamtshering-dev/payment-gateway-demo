@@ -47,7 +47,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div style={{ color: '#dbeafe', fontFamily: 'DM Sans, sans-serif', maxWidth: 1100 }}>
+    <div style={{ color: '#dbeafe', fontFamily: 'DM Sans, sans-serif', maxWidth: 1100, overflowX: 'hidden' as const }}>
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap' as const, gap: 12 }}>

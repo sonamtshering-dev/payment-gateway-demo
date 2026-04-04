@@ -29,10 +29,10 @@ export default function LoginPage() {
           <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,#1d4ed8,#1e40af)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 15, fontFamily: 'Syne, sans-serif' }}>N</div>
           <span style={{ fontFamily: 'Syne, sans-serif', fontSize: 18, fontWeight: 800, color: '#dbeafe' }}>NovaPay</span>
         </Link>
-        <div style={{ display: 'flex', gap: 32 }}>
+        <div style={{ display: 'flex', gap: 16 }}>
           {['Home','Features','Pricing','Contact'].map(l => <Link key={l} href="/" style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', textDecoration: 'none' }}>{l}</Link>)}
         </div>
-        <Link href="/auth/register" style={{ background: 'linear-gradient(135deg,#1d4ed8,#1e40af)', borderRadius: 10, padding: '9px 22px', color: '#fff', fontSize: 14, fontWeight: 700, textDecoration: 'none', fontFamily: 'Syne, sans-serif' }}>Sign up</Link>
+        <Link href="/auth/register" style={{ background: 'linear-gradient(135deg,#1d4ed8,#1e40af)', borderRadius: 10, padding: '8px 16px', color: '#fff', fontSize: 13, fontWeight: 700, textDecoration: 'none', fontFamily: 'Syne, sans-serif', whiteSpace: 'nowrap' }}>Sign up</Link>
       </nav>
 
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 64 }}>
