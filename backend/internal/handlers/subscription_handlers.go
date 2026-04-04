@@ -33,6 +33,13 @@ func (h *Handler) CreateSubscription(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
+	// Send subscription email
+	go func() {
+		merchant, err := h.service.GetMerchantByID(c.Request.Context(), merchantID)
+		if err == nil && merchant != nil {
+			h.email.SendSubscriptionActivated(merchant.Email, "Pro")
+		}
+	}()
 	c.JSON(http.StatusCreated, models.APIResponse{Success: true, Data: sub, Message: "Subscribed successfully"})
 }
 

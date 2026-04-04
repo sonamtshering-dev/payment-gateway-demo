@@ -20,10 +20,11 @@ type Service struct {
 	repo   *repository.Repository
 	redis  *redis.Client
 	config *config.Config
+	email  *EmailService
 }
 
 func New(repo *repository.Repository, redis *redis.Client, cfg *config.Config) *Service {
-	return &Service{repo: repo, redis: redis, config: cfg}
+	return &Service{repo: repo, redis: redis, config: cfg, email: NewEmailService()}
 }
 
 ////////////////////////////////////////////////////////////////////

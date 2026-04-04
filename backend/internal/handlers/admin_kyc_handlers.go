@@ -35,6 +35,17 @@ func (h *Handler) AdminReviewKYC(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
+	// Send KYC email
+	go func() {
+		merchant, err := h.service.GetMerchantByID(c.Request.Context(), merchantID)
+		if err == nil && merchant != nil {
+			if req.Status == "approved" {
+				h.email.SendKYCApproved(merchant.Email, merchant.Name)
+			} else if req.Status == "rejected" {
+				h.email.SendKYCRejected(merchant.Email, merchant.Name, req.RejectionReason)
+			}
+		}
+	}()
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "KYC updated"})
 }
 

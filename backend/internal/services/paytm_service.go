@@ -104,6 +104,13 @@ func (s *Service) VerifyPaytmPayment(ctx context.Context, paymentID uuid.UUID) (
 			return false, fmt.Errorf("mark paid failed: %w", err)
 		}
 
+		// Send payment confirmation email
+		go func() {
+			merchant, err := s.repo.GetMerchantByID(ctx, payment.MerchantID)
+			if err == nil && merchant != nil {
+				s.email.SendPaymentConfirmation(merchant.Email, payment.OrderID, int64(payment.Amount))
+			}
+		}()
 		// Queue webhook
 		s.queuePaymentWebhook(ctx, paymentID)
 
