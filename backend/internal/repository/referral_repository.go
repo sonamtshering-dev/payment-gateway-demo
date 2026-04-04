@@ -66,3 +66,25 @@ func (r *Repository) AddEmailSubscriber(email, source string) error {
 		`INSERT INTO email_subscribers (email, source) VALUES ($1, $2) ON CONFLICT (email) DO NOTHING`, email, source)
 	return err
 }
+
+func (r *Repository) GetSubscriptionsExpiringInDays(ctx context.Context, days int) ([]MerchantSubscription, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT id, merchant_id, plan_id, status, started_at, expires_at
+		FROM merchant_subscriptions
+		WHERE status = 'active'
+		AND expires_at::date = (CURRENT_DATE + $1 * INTERVAL '1 day')::date
+	`, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var subs []MerchantSubscription
+	for rows.Next() {
+		var s MerchantSubscription
+		if err := rows.Scan(&s.ID, &s.MerchantID, &s.PlanID, &s.Status, &s.StartedAt, &s.ExpiresAt); err != nil {
+			continue
+		}
+		subs = append(subs, s)
+	}
+	return subs, nil
+}

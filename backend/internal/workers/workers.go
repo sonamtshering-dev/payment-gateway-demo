@@ -15,6 +15,7 @@ import (
 	"github.com/upay/gateway/internal/config"
 	"github.com/upay/gateway/internal/models"
 	"github.com/upay/gateway/internal/repository"
+	"github.com/upay/gateway/internal/services"
 	"github.com/upay/gateway/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -24,6 +25,7 @@ type Worker struct {
 	redis  *redis.Client
 	config *config.Config
 	client *http.Client
+	email  *services.EmailService
 }
 
 func New(repo *repository.Repository, rdb *redis.Client, cfg *config.Config) *Worker {
@@ -32,6 +34,7 @@ func New(repo *repository.Repository, rdb *redis.Client, cfg *config.Config) *Wo
 		redis: rdb,
 		config: cfg,
 		client: &http.Client{Timeout: cfg.Security.WebhookTimeout},
+		email: services.NewEmailService(),
 	}
 }
 
@@ -52,6 +55,8 @@ func (w *Worker) StartWithWaitGroup(ctx context.Context, wg *sync.WaitGroup) {
 	go func() { defer wg.Done(); w.subscriptionExpiryWorker(ctx) }()
 	wg.Add(1)
 	go func() { defer wg.Done(); w.paytmVerificationWorker(ctx) }()
+	wg.Add(1)
+	go func() { defer wg.Done(); w.subscriptionReminderWorker(ctx) }()
 }
 
 func (w *Worker) paymentExpiryWorker(ctx context.Context) {
@@ -211,6 +216,38 @@ func (w *Worker) subscriptionExpiryWorker(ctx context.Context) {
 			}
 			if expired > 0 {
 				log.Info().Int64("count", expired).Msg("Expired subscriptions")
+			}
+		}
+	}
+}
+
+func (w *Worker) subscriptionReminderWorker(ctx context.Context) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("Subscription reminder worker stopped")
+			return
+		case <-ticker.C:
+			for _, days := range []int{3, 7, 14} {
+				subs, err := w.repo.GetSubscriptionsExpiringInDays(ctx, days)
+				if err != nil {
+					log.Error().Err(err).Msg("Error fetching expiring subscriptions")
+					continue
+				}
+				for _, sub := range subs {
+					merchant, err := w.repo.GetMerchantByID(ctx, sub.MerchantID)
+					if err != nil || merchant == nil {
+						continue
+					}
+					planName := "Pro"
+					if sub.PlanID != (uuid.UUID{}) {
+						planName = "Subscribed Plan"
+					}
+					go w.email.SendExpiryReminder(merchant.Email, planName, days)
+					log.Info().Str("merchant", merchant.Email).Int("days", days).Msg("Sent expiry reminder")
+				}
 			}
 		}
 	}
