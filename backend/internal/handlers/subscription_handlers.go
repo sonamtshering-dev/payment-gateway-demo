@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -35,7 +36,7 @@ func (h *Handler) CreateSubscription(c *gin.Context) {
 	}
 	// Send subscription email
 	go func() {
-		merchant, err := h.service.GetMerchantByID(c.Request.Context(), merchantID)
+		merchant, err := h.service.GetMerchantByID(context.Background(), merchantID)
 		if err == nil && merchant != nil {
 			h.email.SendSubscriptionActivated(merchant.Email, "Pro")
 		}

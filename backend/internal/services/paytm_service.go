@@ -106,7 +106,7 @@ func (s *Service) VerifyPaytmPayment(ctx context.Context, paymentID uuid.UUID) (
 
 		// Send payment confirmation email
 		go func() {
-			merchant, err := s.repo.GetMerchantByID(ctx, payment.MerchantID)
+			merchant, err := s.repo.GetMerchantByID(context.Background(), payment.MerchantID)
 			if err == nil && merchant != nil {
 				s.email.SendPaymentConfirmation(merchant.Email, payment.OrderID, int64(payment.Amount))
 			}

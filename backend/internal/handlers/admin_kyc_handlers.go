@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -37,7 +38,7 @@ func (h *Handler) AdminReviewKYC(c *gin.Context) {
 	}
 	// Send KYC email
 	go func() {
-		merchant, err := h.service.GetMerchantByID(c.Request.Context(), merchantID)
+		merchant, err := h.service.GetMerchantByID(context.Background(), merchantID)
 		if err == nil && merchant != nil {
 			if req.Status == "approved" {
 				h.email.SendKYCApproved(merchant.Email, merchant.Name)
