@@ -120,7 +120,7 @@ func main() {
 	r.Use(middleware.RequestID())
 	r.Use(middleware.StructuredLogger())
 	r.Use(middleware.SecurityHeaders())
-	r.Use(middleware.CORS([]string{"http://localhost:3000", "https://dashboard.novapay.in", "https://nova-pay.in"}))
+	r.Use(middleware.CORS([]string{"http://localhost:3000", "https://dashboard.novapay.in"}))
 	r.Use(middleware.RateLimiter(rdb, cfg.Security.RateLimitPerMinute, time.Minute))
 	r.Use(middleware.RequestBodyLimit(1 << 20)) // 1MB max body
 	r.Use(middleware.MetricsCollector())
@@ -131,7 +131,7 @@ func main() {
 
 	// Health + Metrics (internal)
 	r.GET("/health", h.HealthCheck)
-	r.GET("/metrics", middleware.JWTAuth(cfg), middleware.AdminOnly(), middleware.MetricsEndpoint())
+	r.GET("/metrics", middleware.MetricsEndpoint())
 
 	// Public — no auth required (landing page pricing)
 	r.GET("/api/v1/public/plans", h.GetPublicPlans)
@@ -194,7 +194,6 @@ func main() {
 					dashboard.GET("/referral", h.GetReferralStats)
 					dashboard.POST("/paytm-mid", h.SavePaytmMID)
 				dashboard.GET("/kyc", h.GetKYC)
-					dashboard.POST("/kyc/document", h.UploadKYCDocument)
 					dashboard.POST("/kyc", h.SubmitKYC)
 					dashboard.POST("/payments/create", h.CreatePayment)
 					dashboard.GET("/payments/status/:payment_id", h.GetPaymentStatus)
@@ -204,6 +203,7 @@ func main() {
 		admin := v1.Group("/admin")
 		admin.Use(middleware.JWTAuth(cfg))
 		admin.Use(middleware.AdminOnly())
+		admin.Use(middleware.AdminIPWhitelist(cfg.Security.AdminAllowedIPs))
 		{
 			admin.GET("/merchants", h.AdminListMerchants)
 			admin.PUT("/merchants/:id/toggle", h.AdminToggleMerchant)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -54,6 +55,7 @@ type SecurityConfig struct {
 	MaxTransactionsDay  int
 	WebhookTimeout      time.Duration
 	WebhookMaxRetries   int
+	AdminAllowedIPs     []string
 }
 
 func Load() (*Config, error) {
@@ -104,6 +106,7 @@ func Load() (*Config, error) {
 			MaxTransactionsDay: maxTxnDay,
 			WebhookTimeout:     time.Duration(webhookTimeout) * time.Second,
 			WebhookMaxRetries:  webhookRetries,
+			AdminAllowedIPs:    strings.Split(getEnv("ADMIN_ALLOWED_IPS", ""), ","),
 		},
 	}
 

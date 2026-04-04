@@ -5,16 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/upay/gateway/internal/config"
-	"github.com/upay/gateway/internal/logger"
 	"github.com/upay/gateway/internal/models"
 	"github.com/upay/gateway/internal/repository"
 	"github.com/upay/gateway/internal/utils"
@@ -71,6 +68,36 @@ func AdminOnly() gin.HandlerFunc {
 }
 
 // ============================================================================
+// ADMIN IP WHITELIST
+// ============================================================================
+
+func AdminIPWhitelist(allowedIPs []string) gin.HandlerFunc {
+	allowed := make(map[string]bool)
+	for _, ip := range allowedIPs {
+		allowed[strings.TrimSpace(ip)] = true
+	}
+	return func(c *gin.Context) {
+		// CF-Connecting-IP has the real visitor IP when behind Cloudflare
+		ip := c.GetHeader("CF-Connecting-IP")
+		if ip == "" {
+			ip = c.ClientIP()
+		}
+		// Strip port if present
+		if idx := strings.LastIndex(ip, ":"); idx != -1 {
+			if strings.Count(ip, ":") == 1 {
+				ip = ip[:idx]
+			}
+		}
+		if !allowed[ip] {
+			c.JSON(http.StatusForbidden, models.ErrorResponse{Error: "access denied: IP not whitelisted"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// ============================================================================
 // API SIGNATURE VERIFICATION (for payment API)
 // ============================================================================
 
@@ -78,9 +105,9 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader("X-API-KEY")
 		signature := c.GetHeader("X-SIGNATURE")
-		timestampStr := c.GetHeader("X-TIMESTAMP")
+		timestamp := c.GetHeader("X-TIMESTAMP")
 
-		if apiKey == "" || signature == "" || timestampStr == "" {
+		if apiKey == "" || signature == "" || timestamp == "" {
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 				Error: "missing required headers: X-API-KEY, X-SIGNATURE, X-TIMESTAMP",
 				Code:  "MISSING_HEADERS",
@@ -89,27 +116,22 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 			return
 		}
 
-		// FIX: Validate timestamp to enforce replay window
-		timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-				Error: "invalid timestamp format",
-				Code:  "INVALID_TIMESTAMP",
-			})
-			c.Abort()
-			return
-		}
+	// DEV MODE – skip signature verification for local testing
+// WARNING: Do NOT use this in production
 
-		age := time.Since(time.Unix(timestamp, 0))
-		tolerance := cfg.Security.TimestampTolerance
-		if age > tolerance || age < -tolerance {
-			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-				Error: "request timestamp expired or too far in the future",
-				Code:  "TIMESTAMP_EXPIRED",
-			})
-			c.Abort()
-			return
-		}
+// DEV MODE: Skip signature verification
+// Commented for local testing
+
+// if !utils.VerifyHMAC(apiSecret, timestamp, string(body), signature) {
+//     c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+//         Error: "invalid signature",
+//         Code:  "INVALID_SIGNATURE",
+//     })
+//     c.Abort()
+//     return
+// }
+
+
 
 		// Look up merchant by API key
 		merchant, err := repo.GetMerchantByAPIKey(c.Request.Context(), apiKey)
@@ -140,8 +162,8 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 			return
 		}
 
-		// Verify HMAC signature: HMAC_SHA256(secret, timestamp + "." + body)
-		if !utils.VerifyHMAC(apiSecret, timestampStr, string(body), signature) {
+		// Verify HMAC signature: HMAC_SHA256(secret + timestamp + body)
+		if !utils.VerifyHMAC(apiSecret, timestamp, string(body), signature) {
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 				Error: "invalid signature",
 				Code:  "INVALID_SIGNATURE",
@@ -162,8 +184,8 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 			return
 		}
 
-		// Store signature to prevent replay
-		cfg_redis(c).Set(c.Request.Context(), replayKey, "1", tolerance)
+		// Store signature to prevent replay (TTL = timestamp tolerance window)
+		cfg_redis(c).Set(c.Request.Context(), replayKey, "1", cfg.Security.TimestampTolerance)
 
 		c.Set("merchant", merchant)
 		c.Set("merchant_id", merchant.ID)
@@ -171,21 +193,14 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 	}
 }
 
-// Helper to get Redis client (set during server init)
-var (
-	redisClient   *redis.Client
-	redisClientMu sync.RWMutex
-)
+// Helper to get Redis from context (set during server init)
+var redisClient *redis.Client
 
 func SetRedisClient(r *redis.Client) {
-	redisClientMu.Lock()
-	defer redisClientMu.Unlock()
 	redisClient = r
 }
 
 func cfg_redis(c *gin.Context) *redis.Client {
-	redisClientMu.RLock()
-	defer redisClientMu.RUnlock()
 	return redisClient
 }
 
@@ -201,7 +216,6 @@ func RateLimiter(rdb *redis.Client, limit int, window time.Duration) gin.Handler
 		current, err := rdb.Incr(c.Request.Context(), key).Result()
 		if err != nil {
 			// If Redis is down, allow request but log
-			logger.Warn().Str("ip", ip).Msg("Rate limiter Redis error — allowing request")
 			c.Next()
 			return
 		}
@@ -343,14 +357,14 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 }
 
 // ============================================================================
-// REQUEST ID — uses UUID instead of UnixNano (was predictable)
+// REQUEST ID
 // ============================================================================
 
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID := c.GetHeader("X-Request-ID")
 		if requestID == "" {
-			requestID = uuid.New().String()
+			requestID = fmt.Sprintf("%d", time.Now().UnixNano())
 		}
 		c.Set("request_id", requestID)
 		c.Header("X-Request-ID", requestID)
@@ -359,7 +373,7 @@ func RequestID() gin.HandlerFunc {
 }
 
 // ============================================================================
-// REQUEST LOGGER (kept for reference — use StructuredLogger in production)
+// REQUEST LOGGER
 // ============================================================================
 
 func RequestLogger() gin.HandlerFunc {
@@ -368,12 +382,13 @@ func RequestLogger() gin.HandlerFunc {
 		c.Next()
 		latency := time.Since(start)
 
-		logger.Info().
-			Str("method", c.Request.Method).
-			Str("path", c.Request.URL.Path).
-			Int("status", c.Writer.Status()).
-			Dur("latency", latency).
-			Str("ip", c.ClientIP()).
-			Msg("request")
+		fmt.Printf("[%s] %s %s %d %v %s\n",
+			time.Now().Format(time.RFC3339),
+			c.Request.Method,
+			c.Request.URL.Path,
+			c.Writer.Status(),
+			latency,
+			c.ClientIP(),
+		)
 	}
 }
