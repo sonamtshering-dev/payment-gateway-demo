@@ -32,7 +32,7 @@ func (e *EmailService) Send(to, subject, html string) error {
 }
 
 func (e *EmailService) SendWelcome(name, email, referralCode string) error {
-	return e.Send(email, "Welcome to NovaPay!", fmt.Sprintf("<h1>Welcome %s!</h1><p>Referral code: %s</p><a href=\'%s/dashboard\'>Dashboard</a>", name, referralCode, os.Getenv("APP_URL")))
+	return e.Send(email, "Welcome to NovaPay!", fmt.Sprintf("<h1>Welcome %s!</h1><p>Referral code: %s</p><a href='%s/dashboard'>Dashboard</a>", name, referralCode, os.Getenv("APP_URL")))
 }
 
 func (e *EmailService) SendPaymentConfirmation(email, orderId string, amount int64) error {

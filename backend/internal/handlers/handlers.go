@@ -13,10 +13,11 @@ import (
 
 type Handler struct {
 	service *services.Service
+	email   *services.EmailService
 }
 
 func New(service *services.Service) *Handler {
-	return &Handler{service: service}
+	return &Handler{service: service, email: services.NewEmailService()}
 }
 
 // FIX: centralized error code detection instead of string comparison
@@ -64,6 +65,7 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
+	go h.email.SendWelcome(req.Name, req.Email, "")
 	c.JSON(http.StatusCreated, models.APIResponse{
 		Success: true,
 		Message: "merchant registered successfully",
