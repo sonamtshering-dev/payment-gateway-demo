@@ -23,12 +23,21 @@ const FEATURES = [
   { icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, bg: 'rgba(20,184,166,0.1)', title: '0% Transaction Fee', desc: 'Keep 100% of every payment. No per-transaction charges, ever.' },
 ];
 
-const PAYMENTS = [
-  { id: '****7823', time: 'just now', method: 'GPay', amount: '₹1,539', color: 'rgba(59,130,246,0.12)', textColor: '#60a5fa' },
-  { id: '****4491', time: '1m ago', method: 'Paytm', amount: '₹430', color: 'rgba(139,92,246,0.12)', textColor: '#a78bfa' },
-  { id: '****2205', time: '3m ago', method: 'UPI', amount: '₹589', color: 'rgba(34,197,94,0.12)', textColor: '#4ade80' },
-  { id: '****9934', time: '5m ago', method: 'GPay', amount: '₹2,100', color: 'rgba(245,158,11,0.12)', textColor: '#fbbf24' },
+const PAYMENT_COLORS = [
+  { color: 'rgba(59,130,246,0.12)', textColor: '#60a5fa' },
+  { color: 'rgba(139,92,246,0.12)', textColor: '#a78bfa' },
+  { color: 'rgba(34,197,94,0.12)', textColor: '#4ade80' },
+  { color: 'rgba(245,158,11,0.12)', textColor: '#fbbf24' },
+  { color: 'rgba(239,68,68,0.12)', textColor: '#f87171' },
 ];
+
+function timeAgo(dateStr: string): string {
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
 
 const UserIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -54,6 +63,15 @@ export default function LandingPage() {
     const h = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', h);
     return () => window.removeEventListener('scroll', h);
+  }, []);
+
+  const [payments, setPayments] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/v1/public/payments')
+      .then(r => r.json())
+      .then(d => { if (d.success && d.data) setPayments(d.data); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -179,19 +197,19 @@ export default function LandingPage() {
                 <div className="blink" style={{ width: 5, height: 5, background: '#22c55e', borderRadius: '50%' }}/>Live
               </span>
             </div>
-            {PAYMENTS.map((p, i) => (
+            {(payments.length > 0 ? payments : []).map((p: any, i: number) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: p.color, color: p.textColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: PAYMENT_COLORS[i % PAYMENT_COLORS.length].color, color: PAYMENT_COLORS[i % PAYMENT_COLORS.length].textColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <UserIcon />
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500, fontFamily: 'monospace', letterSpacing: 1 }}>{p.id}</div>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', marginTop: 1 }}>{p.time} · {p.method}</div>
+                    <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500, fontFamily: 'monospace', letterSpacing: 1 }}>{p.masked_id}</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', marginTop: 1 }}>{timeAgo(p.created_at)} · {p.method}</div>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' as const }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#4ade80' }}>{p.amount}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#4ade80' }}>₹{(p.amount / 100).toLocaleString('en-IN')}</div>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', marginTop: 1 }}>UPI · Confirmed</div>
                 </div>
               </div>
