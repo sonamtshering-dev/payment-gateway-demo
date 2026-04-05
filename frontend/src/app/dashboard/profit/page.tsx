@@ -1,14 +1,15 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/lib/auth-context';
+import { useEffect as _ue } from 'react';
 
-const api = (path: string, token: string, opts?: RequestInit) =>
-  fetch(`/api/v1${path}`, { ...opts, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(opts?.headers || {}) } }).then(r => r.json());
+const getToken = () => localStorage.getItem('upay_access_token') || '';
+const api = (path: string, opts?: RequestInit) =>
+  fetch(`/api/v1${path}`, { ...opts, headers: { 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...(opts?.headers || {}) } }).then(r => r.json());
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function ProfitPage() {
-  const { token } = useAuth();
+
   const [summary, setSummary] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [statements, setStatements] = useState<any[]>([]);
@@ -25,12 +26,12 @@ export default function ProfitPage() {
   const [supForm, setSupForm] = useState({ supplier_name: 'smile', base_value: '', default_multiplier: '2', default_number: '1.37', is_active: true });
 
   const load = async () => {
-    if (!token) return;
+    
     const [s, t, st, sup] = await Promise.all([
-      api(`/dashboard/profit/summary?period=${period}`, token),
-      api('/dashboard/profit/transactions?limit=20', token),
-      api('/dashboard/profit/statements', token),
-      api('/dashboard/profit/suppliers', token),
+      api(`/dashboard/profit/summary?period=${period}`),
+      api('/dashboard/profit/transactions?limit=20'),
+      api('/dashboard/profit/statements'),
+      api('/dashboard/profit/suppliers'),
     ]);
     if (s.success) setSummary(s.data);
     if (t.success) setTransactions(t.data || []);
@@ -53,7 +54,7 @@ export default function ProfitPage() {
     } else {
       body.stock_price = parseFloat(form.stock_price);
     }
-    const r = await api('/dashboard/profit/transactions', token!, { method: 'POST', body: JSON.stringify(body) });
+    const r = await api('/dashboard/profit/transactions', { method: 'POST', body: JSON.stringify(body) });
     setLoading(false);
     if (r.success) { setMsg('Transaction added!'); setForm({ product_name: '', supplier_name: 'smile', stock_price: '', selling_price: '', quantity: '1', smile_number: '', smile_multiplier: '', notes: '' }); load(); }
     else setMsg('Error: ' + r.error);
@@ -61,7 +62,7 @@ export default function ProfitPage() {
 
   const saveSupplier = async () => {
     setLoading(true); setMsg('');
-    const r = await api('/dashboard/profit/suppliers', token!, { method: 'POST', body: JSON.stringify({ ...supForm, base_value: parseFloat(supForm.base_value), default_multiplier: parseFloat(supForm.default_multiplier), default_number: parseFloat(supForm.default_number) }) });
+    const r = await api('/dashboard/profit/suppliers', { method: 'POST', body: JSON.stringify({ ...supForm, base_value: parseFloat(supForm.base_value), default_multiplier: parseFloat(supForm.default_multiplier), default_number: parseFloat(supForm.default_number) }) });
     setLoading(false);
     if (r.success) { setMsg('Supplier config saved!'); load(); }
     else setMsg('Error: ' + r.error);
@@ -70,7 +71,7 @@ export default function ProfitPage() {
   const generateStatement = async () => {
     setLoading(true); setMsg('');
     const month = new Date().toISOString().slice(0, 7);
-    const r = await api(`/dashboard/profit/statements/generate?month=${month}`, token!, { method: 'POST' });
+    const r = await api(`/dashboard/profit/statements/generate?month=${month}`, { method: 'POST' });
     setLoading(false);
     if (r.success) { setMsg('Statement generated and emailed!'); load(); }
     else setMsg('Error: ' + r.error);
