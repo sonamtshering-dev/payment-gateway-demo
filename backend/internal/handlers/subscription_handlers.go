@@ -38,7 +38,12 @@ func (h *Handler) CreateSubscription(c *gin.Context) {
 	go func() {
 		merchant, err := h.service.GetMerchantByID(context.Background(), merchantID)
 		if err == nil && merchant != nil {
-			h.email.SendSubscriptionActivated(merchant.Email, "Pro")
+			planName := "Pro"
+			plan, perr := h.service.GetPlanByID(context.Background(), planID)
+			if perr == nil && plan != nil {
+				planName = plan.Name
+			}
+			h.email.SendSubscriptionActivated(merchant.Email, planName)
 		}
 	}()
 	c.JSON(http.StatusCreated, models.APIResponse{Success: true, Data: sub, Message: "Subscribed successfully"})

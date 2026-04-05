@@ -452,3 +452,29 @@ func (s *Service) AddEmailSubscriber(email string) {
 	s.repo.AddEmailSubscriber(email, "landing")
 }
 
+
+func (s *Service) GetRecentPublicPayments(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := s.repo.GetRecentPaidPayments(ctx, 5)
+	if err != nil {
+		return nil, err
+	}
+	var result []map[string]interface{}
+	for _, p := range rows {
+		// Mask the order ID for privacy
+		masked := "****"
+		if len(p.OrderID) >= 4 {
+			masked = "****" + p.OrderID[len(p.OrderID)-4:]
+		}
+		result = append(result, map[string]interface{}{
+			"masked_id": masked,
+			"amount":    p.Amount,
+			"method":    "UPI",
+			"created_at": p.CreatedAt,
+		})
+	}
+	return result, nil
+}
+
+func (s *Service) GetPlanByID(ctx context.Context, id uuid.UUID) (*models.Plan, error) {
+	return s.repo.GetPlanByID(ctx, id)
+}
