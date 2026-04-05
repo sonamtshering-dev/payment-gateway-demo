@@ -20,6 +20,7 @@ const NAV = [
   { label: 'Referrals',         href: '/dashboard/referral',            icon: Users           },
   { label: 'Subscription',      href: '/dashboard/subscription',       icon: PackagePlus     },
   { label: 'API & Webhooks',    href: '/dashboard/api-docs',           icon: FileCode2       },
+  { label: 'Profit Tracker',     href: '/dashboard/profit',             icon: TrendingUp      },
   { label: 'KYC',               href: '/dashboard/kyc',                icon: ShieldCheck     },
   { label: 'Logo',              href: '/dashboard/branding',           icon: Palette         },
 ];
@@ -92,6 +93,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/dashboard/referral':             'Referrals',
   '/dashboard/subscription':         'Subscription',
   '/dashboard/api-docs':           'API & Webhooks',
+  '/dashboard/profit':             'Profit Tracker',
   '/dashboard/kyc':                'KYC Verification',
   '/dashboard/branding':           'Logo',
 
