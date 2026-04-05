@@ -6,8 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import {
   LayoutDashboard, ArrowLeftRight, AlertTriangle, Settings, Users,
   Link2, Plug, Package, PackagePlus, FileCode2, ShieldCheck, Shield,
-  Home, LogOut, ChevronLeft, ChevronRight, Bell, Menu, X, BarChart2, Palette, CreditCard,
-} from 'lucide-react';
+  Home, LogOut, ChevronLeft, ChevronRight, Bell, Menu, X, BarChart2, Palette, CreditCard,, TrendingUp} from 'lucide-react';
 
 const NAV = [
   { label: 'Overview',          href: '/dashboard',                    icon: LayoutDashboard },
