@@ -85,3 +85,11 @@ func (h *Handler) AdminDeletePlan(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "plan deleted"})
 }
+func (h *Handler) GetPublicPayments(c *gin.Context) {
+	payments, err := h.service.GetRecentPublicPayments(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": []interface{}{}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": payments})
+}

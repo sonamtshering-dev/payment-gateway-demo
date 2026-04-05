@@ -705,3 +705,24 @@ func (r *Repository) AdminListPayments(ctx context.Context) (interface{}, error)
 	}
 	return payments, nil
 }
+
+func (r *Repository) GetRecentPaidPayments(ctx context.Context, limit int) ([]models.Payment, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT id, merchant_id, order_id, amount, currency, status, created_at
+		FROM payments WHERE status = 'paid'
+		ORDER BY created_at DESC LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var payments []models.Payment
+	for rows.Next() {
+		var p models.Payment
+		if err := rows.Scan(&p.ID, &p.MerchantID, &p.OrderID, &p.Amount, &p.Currency, &p.Status, &p.CreatedAt); err != nil {
+			continue
+		}
+		payments = append(payments, p)
+	}
+	return payments, nil
+}

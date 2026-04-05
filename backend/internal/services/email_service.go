@@ -187,3 +187,20 @@ func (e *EmailService) SendExpiryReminder(email, planName string, daysLeft int) 
 		"Subscription expiry reminder.",
 	))
 }
+func (e *EmailService) SendMonthlyStatement(email, name, month string, totalSales, totalCost, totalProfit float64, totalTransactions int) error {
+	appURL := os.Getenv("APP_URL")
+	if appURL == "" {
+		appURL = "https://nova-pay.in"
+	}
+	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">Monthly Statement</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">Hi %s, here is your NovaPay statement for %s.</p>`, name, month)
+	rows := emailRow("Total Sales", fmt.Sprintf("₹%.2f", totalSales), "#0f172a") +
+		emailRow("Total Cost", fmt.Sprintf("₹%.2f", totalCost), "#dc2626") +
+		emailRow("Total Profit", fmt.Sprintf("₹%.2f", totalProfit), "#16a34a") +
+		emailRow("Transactions", fmt.Sprintf("%d", totalTransactions), "#1d4ed8")
+	return e.Send(email, fmt.Sprintf("NovaPay Statement — %s", month), emailLayout(
+		"Monthly Statement", "#f0fdf4", "#15803d",
+		title, emailCard(rows),
+		"View Dashboard →", appURL+"/dashboard/profit",
+		"Monthly statement for your NovaPay account.",
+	))
+}
