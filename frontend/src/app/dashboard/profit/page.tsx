@@ -43,7 +43,7 @@ export default function ProfitPage() {
     }
   };
 
-  useEffect(() => { load(); }, [token, period]);
+  useEffect(() => { load(); }, [period]);
 
   const addTransaction = async () => {
     setLoading(true); setMsg('');
