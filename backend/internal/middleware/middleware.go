@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -72,29 +73,52 @@ func AdminOnly() gin.HandlerFunc {
 // ============================================================================
 
 func AdminIPWhitelist(allowedIPs []string) gin.HandlerFunc {
+	var exactIPs []string
+	var networks []*net.IPNet
+	for _, entry := range allowedIPs {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if strings.Contains(entry, "/") {
+			_, network, err := net.ParseCIDR(entry)
+			if err == nil {
+				networks = append(networks, network)
+			}
+		} else {
+			exactIPs = append(exactIPs, entry)
+		}
+	}
 	allowed := make(map[string]bool)
-	for _, ip := range allowedIPs {
-		if ip == "" { continue }
-		allowed[strings.TrimSpace(ip)] = true
+	for _, ip := range exactIPs {
+		allowed[ip] = true
 	}
 	return func(c *gin.Context) {
-		// CF-Connecting-IP has the real visitor IP when behind Cloudflare
 		ip := c.GetHeader("CF-Connecting-IP")
 		if ip == "" {
 			ip = c.ClientIP()
 		}
-		// Strip port if present
-		if idx := strings.LastIndex(ip, ":"); idx != -1 {
-			if strings.Count(ip, ":") == 1 {
-				ip = ip[:idx]
-			}
+		// Strip port for IPv4
+		if strings.Count(ip, ":") == 1 {
+			ip = strings.Split(ip, ":")[0]
 		}
-		if !allowed[ip] {
-			c.JSON(http.StatusForbidden, models.ErrorResponse{Error: "access denied: IP not whitelisted"})
-			c.Abort()
+		// Check exact match
+		if allowed[ip] {
+			c.Next()
 			return
 		}
-		c.Next()
+		// Check CIDR ranges
+		parsed := net.ParseIP(ip)
+		if parsed != nil {
+			for _, network := range networks {
+				if network.Contains(parsed) {
+					c.Next()
+					return
+				}
+			}
+		}
+		c.JSON(http.StatusForbidden, models.ErrorResponse{Error: "access denied: IP not whitelisted"})
+		c.Abort()
 	}
 }
 
