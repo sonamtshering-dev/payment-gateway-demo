@@ -173,3 +173,53 @@ func (h *Handler) AdminListPayments(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: result})
 }
+
+// PUT /api/v1/admin/subscriptions/:merchant_id/status
+func (h *Handler) AdminUpdateSubscriptionStatus(c *gin.Context) {
+	merchantIDStr := c.Param("merchant_id")
+	merchantID, err := uuid.Parse(merchantIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid merchant ID"})
+		return
+	}
+	var req struct {
+		Status string `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	if err := h.service.AdminUpdateSubscriptionStatus(c.Request.Context(), merchantID, req.Status); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "subscription status updated"})
+}
+
+// PUT /api/v1/admin/subscriptions/:merchant_id/plan
+func (h *Handler) AdminChangeMerchantPlan(c *gin.Context) {
+	merchantIDStr := c.Param("merchant_id")
+	merchantID, err := uuid.Parse(merchantIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid merchant ID"})
+		return
+	}
+	var req struct {
+		PlanID       string `json:"plan_id" binding:"required"`
+		DurationDays int    `json:"duration_days"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	planID, err := uuid.Parse(req.PlanID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid plan ID"})
+		return
+	}
+	if err := h.service.AdminChangeMerchantPlan(c.Request.Context(), merchantID, planID, req.DurationDays); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "merchant plan updated"})
+}

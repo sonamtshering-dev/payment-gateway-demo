@@ -87,7 +87,6 @@ func (s *Service) CreateSubscriptionPayment(ctx context.Context, merchantID uuid
 
 	orderID := fmt.Sprintf("SUB-%s-%d", planID.String()[:8], time.Now().Unix())
 	paytmTxnRef := utils.GenPaytmTxnRef(orderID)
-	redirectURL := "http://13.232.171.190/dashboard/active-subscription"
 	upiLink := utils.GenerateUPILinkWithRef(decryptedUPI, "NovaPay Subscription", plan.Price, orderID, paytmTxnRef)
 	qrBase64, err := utils.GenerateQRBase64(upiLink)
 	if err != nil {
@@ -108,7 +107,6 @@ func (s *Service) CreateSubscriptionPayment(ctx context.Context, merchantID uuid
 		UPIIntentLink:     upiLink,
 		QRCodeData:        qrBase64,
 		PaytmTxnRef:       paytmTxnRef,
-		RedirectURL:       redirectURL,
 		ExpiresAt:         expires,
 		CreatedAt:         time.Now(),
 		UpdatedAt:         time.Now(),
@@ -126,4 +124,30 @@ func (s *Service) CreateSubscriptionPayment(ctx context.Context, merchantID uuid
 		ExpiresAt:     expires,
 		Status:        "pending",
 	}, nil
+}
+
+func (s *Service) AdminUpdateSubscriptionStatus(ctx context.Context, merchantID uuid.UUID, status string) error {
+	if status != "active" && status != "expired" && status != "cancelled" {
+		return fmt.Errorf("invalid status: must be active, expired, or cancelled")
+	}
+	return s.repo.UpdateSubscriptionStatus(ctx, merchantID, status)
+}
+
+func (s *Service) AdminChangeMerchantPlan(ctx context.Context, merchantID uuid.UUID, planID uuid.UUID, durationDays int) error {
+	plan, err := s.repo.GetPlanByID(ctx, planID)
+	if err != nil || plan == nil {
+		return fmt.Errorf("plan not found")
+	}
+	var expiresAt *time.Time
+	if durationDays > 0 {
+		exp := time.Now().AddDate(0, 0, durationDays)
+		expiresAt = &exp
+	} else if plan.BillingCycle == "per month" {
+		exp := time.Now().AddDate(0, 1, 0)
+		expiresAt = &exp
+	} else if plan.BillingCycle == "per year" {
+		exp := time.Now().AddDate(1, 0, 0)
+		expiresAt = &exp
+	}
+	return s.repo.ChangeMerchantPlan(ctx, merchantID, planID, expiresAt)
 }

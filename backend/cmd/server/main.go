@@ -194,14 +194,6 @@ func main() {
 					dashboard.GET("/referral", h.GetReferralStats)
 					dashboard.POST("/paytm-mid", h.SavePaytmMID)
 				dashboard.GET("/kyc", h.GetKYC)
-			// ---- PROFIT TRACKER ----
-			dashboard.GET("/profit/summary", h.GetProfitSummary)
-			dashboard.GET("/profit/transactions", h.GetProfitTransactions)
-			dashboard.POST("/profit/transactions", h.CreateProfitTransaction)
-			dashboard.GET("/profit/statements", h.GetMonthlyStatements)
-			dashboard.POST("/profit/statements/generate", h.GenerateMonthlyStatement)
-			dashboard.GET("/profit/suppliers", h.GetSupplierConfigs)
-			dashboard.POST("/profit/suppliers", h.UpsertSupplierConfig)
 					dashboard.POST("/kyc", h.SubmitKYC)
 					dashboard.POST("/payments/create", h.CreatePayment)
 					dashboard.GET("/payments/status/:payment_id", h.GetPaymentStatus)
@@ -209,9 +201,9 @@ func main() {
 
 		// ---- ADMIN (JWT + admin role) ----
 		admin := v1.Group("/admin")
+		admin.Use(middleware.JWTAuth(cfg))
+		admin.Use(middleware.AdminOnly())
 		admin.Use(middleware.AdminIPWhitelist(cfg.Security.AdminAllowedIPs))
-admin.Use(middleware.JWTAuth(cfg))
-admin.Use(middleware.AdminOnly())
 		{
 			admin.GET("/merchants", h.AdminListMerchants)
 			admin.PUT("/merchants/:id/toggle", h.AdminToggleMerchant)
@@ -222,6 +214,8 @@ admin.Use(middleware.AdminOnly())
 					admin.GET("/kyc", h.AdminListKYC)
 					admin.PUT("/kyc/:merchant_id", h.AdminReviewKYC)
 					admin.POST("/subscriptions/:merchant_id/extend", h.AdminExtendSubscription)
+					admin.PUT("/subscriptions/:merchant_id/status", h.AdminUpdateSubscriptionStatus)
+					admin.PUT("/subscriptions/:merchant_id/plan", h.AdminChangeMerchantPlan)
 			admin.GET("/stats", h.AdminGetSystemStats)
 
 			// Plans — admin controlled (shown on landing page)

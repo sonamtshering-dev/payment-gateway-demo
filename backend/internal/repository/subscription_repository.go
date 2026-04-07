@@ -74,3 +74,21 @@ func (r *Repository) GetMerchantUsage(ctx context.Context, merchantID uuid.UUID)
 	err = r.db.QueryRow(ctx, `SELECT COUNT(*) FROM payments WHERE merchant_id=$1 AND created_at >= NOW() - INTERVAL '24 hours'`, merchantID).Scan(&apiToday)
 	return
 }
+
+func (r *Repository) UpdateSubscriptionStatus(ctx context.Context, merchantID uuid.UUID, status string) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE merchant_subscriptions SET status=$1, updated_at=NOW()
+		WHERE merchant_id=$2 AND status IN ('active','expired','cancelled')
+		AND id = (SELECT id FROM merchant_subscriptions WHERE merchant_id=$2 ORDER BY created_at DESC LIMIT 1)
+	`, status, merchantID)
+	return err
+}
+
+func (r *Repository) ChangeMerchantPlan(ctx context.Context, merchantID uuid.UUID, planID uuid.UUID, expiresAt *time.Time) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE merchant_subscriptions SET plan_id=$1, expires_at=$2, status='active', updated_at=NOW()
+		WHERE merchant_id=$3
+		AND id = (SELECT id FROM merchant_subscriptions WHERE merchant_id=$3 ORDER BY created_at DESC LIMIT 1)
+	`, planID, expiresAt, merchantID)
+	return err
+}
