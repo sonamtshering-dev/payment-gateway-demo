@@ -422,7 +422,7 @@ export default function AdminPage() {
                 <span>Merchant</span><span>Email</span><span>Status</span><span>Plan</span><span>Actions</span>
               </div>
               {filtered(merchantList).length===0 && <div style={{padding:'48px',textAlign:'center' as const,color:'#4b5563',minWidth:560}}>No merchants</div>}
-              {filtered(merchantList).map((m:any)=>(\
+              {filtered(merchantList).map((m:any)=>(
                 <div key={m.id} style={{...S.tRow,display:'grid',gridTemplateColumns:'1.5fr 1.5fr 0.8fr 1fr 1.5fr'}}
                   onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.02)')}
                   onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
