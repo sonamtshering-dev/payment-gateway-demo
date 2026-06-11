@@ -264,19 +264,27 @@ function LangToggle({ value, onChange }: { value: string; onChange: (v: string) 
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+interface IPEntry { id: string; ip_cidr: string; label: string; created_at: string; }
+
 export default function APIDocsPage() {
-  const [profile, setProfile]     = useState<any>(null);
-  const [webhook, setWebhook]     = useState('');
-  const [loading, setLoading]     = useState(true);
-  const [rotating, setRotating]   = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [copied, setCopied]       = useState('');
-  const [showKey, setShowKey]     = useState(false);
-  const [success, setSuccess]     = useState('');
-  const [error, setError]         = useState('');
-  const [activeTab, setActiveTab] = useState<'credentials' | 'guide' | 'webhook'>('credentials');
-  const [sigLang, setSigLang]     = useState('js');
-  const [verifyLang, setVerifyLang] = useState('js');
+  const [profile, setProfile]         = useState<any>(null);
+  const [webhook, setWebhook]         = useState('');
+  const [loading, setLoading]         = useState(true);
+  const [rotating, setRotating]       = useState(false);
+  const [saving, setSaving]           = useState(false);
+  const [copied, setCopied]           = useState('');
+  const [showKey, setShowKey]         = useState(false);
+  const [showSecret, setShowSecret]   = useState(false);
+  const [webhookSecret, setWebhookSecret] = useState('');
+  const [ipList, setIPList]           = useState<IPEntry[]>([]);
+  const [newIP, setNewIP]             = useState('');
+  const [newIPLabel, setNewIPLabel]   = useState('');
+  const [addingIP, setAddingIP]       = useState(false);
+  const [success, setSuccess]         = useState('');
+  const [error, setError]             = useState('');
+  const [activeTab, setActiveTab]     = useState<'credentials' | 'guide' | 'webhook'>('credentials');
+  const [sigLang, setSigLang]         = useState('js');
+  const [verifyLang, setVerifyLang]   = useState('js');
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('upay_access_token') : '';
   const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -290,14 +298,19 @@ export default function APIDocsPage() {
     try { return JSON.parse(atob(token?.split('.')[1] || '')).merchant_id || ''; } catch { return ''; }
   };
 
+  const fetchIPList = () =>
+    fetch('/api/v1/dashboard/ip-whitelist', { headers }).then(r => r.json())
+      .then(d => { if (d.success) setIPList(d.data || []); });
+
   useEffect(() => {
     fetch('/api/v1/dashboard/profile', { headers }).then(r => r.json())
-      .then(d => { if (d.success) { setProfile(d.data); setWebhook(d.data.webhook_url || ''); } })
+      .then(d => { if (d.success) setProfile(d.data); })
       .finally(() => setLoading(false));
-    fetch('/api/v1/dashboard/stats', { headers }).then(r => r.json())
-      .then(d => { if (d.success && d.data?.api_key) setProfile((p: any) => ({ ...p, api_key: d.data.api_key })); });
     fetch('/api/v1/dashboard/webhook', { headers }).then(r => r.json())
       .then(d => { if (d.success) setWebhook(d.data?.webhook_url || ''); });
+    fetch('/api/v1/dashboard/webhook-secret', { headers }).then(r => r.json())
+      .then(d => { if (d.success) setWebhookSecret(d.data?.webhook_secret || ''); });
+    fetchIPList();
   }, []);
 
   const copy = (text: string, key: string) => {
@@ -326,6 +339,33 @@ export default function APIDocsPage() {
       flash('API keys rotated successfully!');
     } catch (e: any) { flash(e.message, true); }
     finally { setRotating(false); }
+  };
+
+  const handleAddIP = async () => {
+    if (!newIP.trim()) return;
+    setAddingIP(true);
+    try {
+      const r = await fetch('/api/v1/dashboard/ip-whitelist', {
+        method: 'POST', headers,
+        body: JSON.stringify({ ip_cidr: newIP.trim(), label: newIPLabel.trim() }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed');
+      setNewIP(''); setNewIPLabel('');
+      fetchIPList();
+      flash('IP added to whitelist');
+    } catch (e: any) { flash(e.message, true); }
+    finally { setAddingIP(false); }
+  };
+
+  const handleDeleteIP = async (id: string) => {
+    try {
+      const r = await fetch(`/api/v1/dashboard/ip-whitelist/${id}`, { method: 'DELETE', headers });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed');
+      fetchIPList();
+      flash('IP removed');
+    } catch (e: any) { flash(e.message, true); }
   };
 
   const handleSaveWebhook = async () => {
@@ -404,6 +444,26 @@ export default function APIDocsPage() {
                 </div>
               </SectionCard>
 
+              <SectionCard>
+                <CardTitle>Webhook Secret</CardTitle>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 14 }}>
+                  Used to verify the <code style={{ fontFamily: 'monospace', color: '#93c5fd' }}>X-NovaPay-Signature</code> header on incoming webhooks.
+                  Never expose this in client-side code.
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input style={{ ...inp, flex: 1, color: '#8b9ab5' }} readOnly
+                    value={showSecret ? webhookSecret : '••••••••••••••••••••••••••••••••'} />
+                  <button onClick={() => setShowSecret(s => !s)}
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '0 14px', color: '#64748b', cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' as const, fontFamily: 'DM Sans, sans-serif' }}>
+                    {showSecret ? 'Hide' : 'Show'}
+                  </button>
+                  <button onClick={() => copy(webhookSecret, 'whsec')}
+                    style={{ background: 'rgba(29,78,216,0.1)', border: '1px solid rgba(29,78,216,0.2)', borderRadius: 10, padding: '0 14px', color: '#93c5fd', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' as const, fontFamily: 'DM Sans, sans-serif' }}>
+                    {copied === 'whsec' ? '✓ Copied' : 'Copy'}
+                  </button>
+                </div>
+              </SectionCard>
+
               <InfoBox type="warn" title="API Secret">
                 Your API Secret is shown only once at registration. It signs requests — never send it in the body or expose it client-side. If lost, rotate your keys above to get a new pair.
               </InfoBox>
@@ -439,6 +499,52 @@ export default function APIDocsPage() {
                     {saving ? 'Saving…' : 'Save'}
                   </button>
                 </div>
+              </SectionCard>
+
+              <SectionCard>
+                <CardTitle>IP Whitelist</CardTitle>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 4 }}>
+                  Restrict payment API calls to specific server IPs. <strong style={{ color: '#fde68a' }}>Required if Cloudflare is blocking your requests.</strong>
+                </div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', marginBottom: 16 }}>
+                  Leave empty to allow all IPs. Supports exact IPs (<code style={{ color: '#93c5fd', fontFamily: 'monospace' }}>203.0.113.5</code>) and CIDR ranges (<code style={{ color: '#93c5fd', fontFamily: 'monospace' }}>10.0.0.0/24</code>).
+                </div>
+
+                {ipList.length > 0 && (
+                  <div style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
+                    {ipList.map((entry, i) => (
+                      <div key={entry.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: i < ipList.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+                        <code style={{ flex: 1, fontSize: 13, color: '#93c5fd', fontFamily: 'monospace' }}>{entry.ip_cidr}</code>
+                        {entry.label && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>{entry.label}</span>}
+                        <button onClick={() => handleDeleteIP(entry.id)}
+                          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', borderRadius: 6, padding: '4px 10px', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'DM Sans, sans-serif' }}>
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={newIP} onChange={e => setNewIP(e.target.value)}
+                    placeholder="203.0.113.5 or 10.0.0.0/24"
+                    style={{ ...inp, flex: 2 }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddIP(); }}
+                  />
+                  <input value={newIPLabel} onChange={e => setNewIPLabel(e.target.value)}
+                    placeholder="Label (optional)"
+                    style={{ ...inp, flex: 1 }}
+                  />
+                  <button onClick={handleAddIP} disabled={addingIP || !newIP.trim()}
+                    style={{ background: addingIP || !newIP.trim() ? 'rgba(255,255,255,0.03)' : 'linear-gradient(135deg,#1d4ed8,#1e40af)', border: 'none', borderRadius: 10, padding: '0 18px', color: addingIP || !newIP.trim() ? '#4b5563' : '#fff', cursor: addingIP || !newIP.trim() ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Syne, sans-serif', whiteSpace: 'nowrap' as const }}>
+                    {addingIP ? 'Adding…' : 'Add IP'}
+                  </button>
+                </div>
+                {ipList.length > 0 && (
+                  <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 10 }}>
+                    ⚠ Only the IPs listed above can call your payment API. Make sure your server IP is included.
+                  </div>
+                )}
               </SectionCard>
             </div>
           )}
@@ -650,6 +756,9 @@ export default function APIDocsPage() {
               <SectionCard>
                 <CardTitle>Verify Webhook Signature</CardTitle>
                 <CardSubtitle>Every webhook includes an X-NovaPay-Signature header. Always verify before processing.</CardSubtitle>
+                <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 10, padding: '12px 16px', marginBottom: 14, fontSize: 12, color: '#a7f3d0' }}>
+                  Your Webhook Secret is in the <strong>API Credentials</strong> tab — copy it and store as an environment variable.
+                </div>
                 <div style={{ background: '#030d1f', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontFamily: 'monospace', fontSize: 12, color: '#93c5fd' }}>
                   X-NovaPay-Signature: a3f9c2d8...&nbsp;&nbsp;<span style={{ color: '#475569' }}>(HMAC-SHA256 of raw body using your Webhook Secret)</span>
                 </div>

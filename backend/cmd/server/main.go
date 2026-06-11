@@ -151,6 +151,7 @@ func main() {
 		// ---- PAYMENT API (API-key + signature authenticated) ----
 		payments := v1.Group("/payments")
 		payments.Use(middleware.APISignatureVerification(repo, cfg))
+		payments.Use(middleware.MerchantIPWhitelistCheck(repo))
 		payments.Use(middleware.IdempotencyKey(rdb, 24*time.Hour))
 		{
 			payments.POST("/create", h.CreatePayment)
@@ -172,7 +173,14 @@ func main() {
 			dashboard.DELETE("/upi/:upi_id", h.DeleteUPI)
 
 			// Webhook settings
+			dashboard.GET("/webhook", h.GetWebhook)
 			dashboard.PUT("/webhook", h.UpdateWebhook)
+			dashboard.GET("/webhook-secret", h.GetWebhookSecret)
+
+			// IP whitelist management
+			dashboard.GET("/ip-whitelist", h.GetIPWhitelist)
+			dashboard.POST("/ip-whitelist", h.AddIPWhitelist)
+			dashboard.DELETE("/ip-whitelist/:id", h.DeleteIPWhitelist)
 
 			// Security
 			dashboard.POST("/rotate-keys", h.RotateAPIKeys)

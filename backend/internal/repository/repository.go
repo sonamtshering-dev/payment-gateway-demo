@@ -706,6 +706,73 @@ func (r *Repository) AdminListPayments(ctx context.Context) (interface{}, error)
 	return payments, nil
 }
 
+// ============================================================================
+// MERCHANT IP WHITELIST
+// ============================================================================
+
+// GetMerchantIPWhitelistRaw returns just the CIDR strings — used by middleware for fast lookup.
+func (r *Repository) GetMerchantIPWhitelistRaw(ctx context.Context, merchantIDStr string) ([]string, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT ip_cidr FROM merchant_ip_whitelist WHERE merchant_id = $1`,
+		merchantIDStr,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var cidrs []string
+	for rows.Next() {
+		var cidr string
+		if err := rows.Scan(&cidr); err != nil {
+			continue
+		}
+		cidrs = append(cidrs, cidr)
+	}
+	return cidrs, nil
+}
+
+func (r *Repository) GetMerchantIPWhitelist(ctx context.Context, merchantID uuid.UUID) ([]models.MerchantIPWhitelistEntry, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT id, merchant_id, ip_cidr, COALESCE(label,''), created_at FROM merchant_ip_whitelist WHERE merchant_id = $1 ORDER BY created_at ASC`,
+		merchantID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var entries []models.MerchantIPWhitelistEntry
+	for rows.Next() {
+		var e models.MerchantIPWhitelistEntry
+		if err := rows.Scan(&e.ID, &e.MerchantID, &e.IPCIDR, &e.Label, &e.CreatedAt); err != nil {
+			continue
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
+func (r *Repository) AddMerchantIPWhitelistEntry(ctx context.Context, merchantID uuid.UUID, ipCIDR, label string) (*models.MerchantIPWhitelistEntry, error) {
+	entry := &models.MerchantIPWhitelistEntry{
+		ID:         uuid.New(),
+		MerchantID: merchantID,
+		IPCIDR:     ipCIDR,
+		Label:      label,
+	}
+	err := r.db.QueryRow(ctx,
+		`INSERT INTO merchant_ip_whitelist (id, merchant_id, ip_cidr, label) VALUES ($1, $2, $3, $4) RETURNING created_at`,
+		entry.ID, entry.MerchantID, entry.IPCIDR, entry.Label,
+	).Scan(&entry.CreatedAt)
+	return entry, err
+}
+
+func (r *Repository) DeleteMerchantIPWhitelistEntry(ctx context.Context, merchantID uuid.UUID, entryID uuid.UUID) error {
+	_, err := r.db.Exec(ctx,
+		`DELETE FROM merchant_ip_whitelist WHERE id = $1 AND merchant_id = $2`,
+		entryID, merchantID,
+	)
+	return err
+}
+
 func (r *Repository) GetRecentPaidPayments(ctx context.Context, limit int) ([]models.Payment, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, merchant_id, order_id, amount, currency, status, created_at

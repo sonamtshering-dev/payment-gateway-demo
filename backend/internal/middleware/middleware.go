@@ -123,6 +123,60 @@ func AdminIPWhitelist(allowedIPs []string) gin.HandlerFunc {
 }
 
 // ============================================================================
+// MERCHANT IP WHITELIST (per-merchant, for payment API routes)
+// ============================================================================
+
+func MerchantIPWhitelistCheck(repo *repository.Repository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		merchantVal, ok := c.Get("merchant_id")
+		if !ok {
+			c.Next()
+			return
+		}
+
+		// merchant_id is set as uuid.UUID by APISignatureVerification
+		mid := fmt.Sprintf("%v", merchantVal)
+
+		entries, err := repo.GetMerchantIPWhitelistRaw(c.Request.Context(), mid)
+		if err != nil || len(entries) == 0 {
+			// No whitelist configured — allow all IPs (backward compatible)
+			c.Next()
+			return
+		}
+
+		// Determine caller IP (respect Cloudflare header)
+		ip := c.GetHeader("CF-Connecting-IP")
+		if ip == "" {
+			ip = c.ClientIP()
+		}
+		if strings.Count(ip, ":") == 1 {
+			ip = strings.Split(ip, ":")[0]
+		}
+
+		for _, cidr := range entries {
+			if strings.Contains(cidr, "/") {
+				_, network, parseErr := net.ParseCIDR(cidr)
+				if parseErr == nil {
+					if parsed := net.ParseIP(ip); parsed != nil && network.Contains(parsed) {
+						c.Next()
+						return
+					}
+				}
+			} else if cidr == ip {
+				c.Next()
+				return
+			}
+		}
+
+		c.JSON(http.StatusForbidden, models.ErrorResponse{
+			Error: "IP not in whitelist — add your server IP under API Credentials",
+			Code:  "IP_NOT_WHITELISTED",
+		})
+		c.Abort()
+	}
+}
+
+// ============================================================================
 // API SIGNATURE VERIFICATION (for payment API)
 // ============================================================================
 

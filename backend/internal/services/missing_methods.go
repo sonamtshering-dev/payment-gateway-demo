@@ -112,3 +112,23 @@ func (s *Service) UpdateKYCDocument(ctx context.Context, merchantID uuid.UUID, d
 func (s *Service) GetMerchantPayments(ctx context.Context, merchantID uuid.UUID, filter models.TransactionFilter) ([]models.Payment, int64, error) {
 	return s.repo.GetPaymentsByMerchant(ctx, merchantID, filter)
 }
+
+func (s *Service) GetWebhookSecret(ctx context.Context, merchantID uuid.UUID) (string, error) {
+	merchant, err := s.repo.GetMerchantByID(ctx, merchantID)
+	if err != nil || merchant == nil {
+		return "", fmt.Errorf("merchant not found")
+	}
+	return merchant.WebhookSecret, nil
+}
+
+func (s *Service) GetIPWhitelist(ctx context.Context, merchantID uuid.UUID) ([]models.MerchantIPWhitelistEntry, error) {
+	return s.repo.GetMerchantIPWhitelist(ctx, merchantID)
+}
+
+func (s *Service) AddIPWhitelistEntry(ctx context.Context, merchantID uuid.UUID, req models.AddIPWhitelistRequest) (*models.MerchantIPWhitelistEntry, error) {
+	return s.repo.AddMerchantIPWhitelistEntry(ctx, merchantID, req.IPCIDR, req.Label)
+}
+
+func (s *Service) DeleteIPWhitelistEntry(ctx context.Context, merchantID uuid.UUID, entryID uuid.UUID) error {
+	return s.repo.DeleteMerchantIPWhitelistEntry(ctx, merchantID, entryID)
+}

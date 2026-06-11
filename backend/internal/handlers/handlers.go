@@ -303,6 +303,19 @@ func (h *Handler) ListUPIs(c *gin.Context) {
 // WEBHOOK SETTINGS
 // ============================================================================
 
+func (h *Handler) GetWebhook(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
+	merchant, err := h.service.GetMerchantByID(c.Request.Context(), merchantID)
+	if err != nil || merchant == nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "merchant not found"})
+		return
+	}
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Data:    map[string]string{"webhook_url": merchant.WebhookURL},
+	})
+}
+
 func (h *Handler) UpdateWebhook(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 
@@ -321,6 +334,69 @@ func (h *Handler) UpdateWebhook(c *gin.Context) {
 		Success: true,
 		Message: "webhook URL updated",
 	})
+}
+
+func (h *Handler) GetWebhookSecret(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
+	secret, err := h.service.GetWebhookSecret(c.Request.Context(), merchantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to fetch webhook secret"})
+		return
+	}
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Data:    map[string]string{"webhook_secret": secret},
+	})
+}
+
+// ============================================================================
+// IP WHITELIST HANDLERS
+// ============================================================================
+
+func (h *Handler) GetIPWhitelist(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
+	entries, err := h.service.GetIPWhitelist(c.Request.Context(), merchantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to fetch IP whitelist"})
+		return
+	}
+	if entries == nil {
+		entries = []models.MerchantIPWhitelistEntry{}
+	}
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: entries})
+}
+
+func (h *Handler) AddIPWhitelist(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
+	var req models.AddIPWhitelistRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	entry, err := h.service.AddIPWhitelistEntry(c.Request.Context(), merchantID, req)
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
+			c.JSON(http.StatusConflict, models.ErrorResponse{Error: "IP already in whitelist"})
+		} else {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusCreated, models.APIResponse{Success: true, Data: entry})
+}
+
+func (h *Handler) DeleteIPWhitelist(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
+	entryID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid entry ID"})
+		return
+	}
+	if err := h.service.DeleteIPWhitelistEntry(c.Request.Context(), merchantID, entryID); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to delete entry"})
+		return
+	}
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "IP removed from whitelist"})
 }
 
 // ============================================================================

@@ -156,3 +156,15 @@ type RefreshToken struct {
 	Revoked    bool      `json:"revoked" db:"revoked"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
 }
+
+// ============================================================================
+// MERCHANT IP WHITELIST
+// ============================================================================
+
+type MerchantIPWhitelistEntry struct {
+	ID         uuid.UUID `json:"id" db:"id"`
+	MerchantID uuid.UUID `json:"merchant_id" db:"merchant_id"`
+	IPCIDR     string    `json:"ip_cidr" db:"ip_cidr"`
+	Label      string    `json:"label" db:"label"`
+	CreatedAt  time.Time `json:"created_at" db:"created_at"`
+}

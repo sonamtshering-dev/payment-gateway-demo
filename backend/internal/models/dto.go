@@ -194,3 +194,12 @@ type ErrorResponse struct {
 	Error   string `json:"error"`
 	Code    string `json:"code,omitempty"`
 }
+
+// ============================================================================
+// IP WHITELIST DTOs
+// ============================================================================
+
+type AddIPWhitelistRequest struct {
+	IPCIDR string `json:"ip_cidr" binding:"required,min=7,max=50"`
+	Label  string `json:"label" binding:"max=100"`
+}
