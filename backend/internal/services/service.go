@@ -17,14 +17,21 @@ import (
 )
 
 type Service struct {
-	repo   *repository.Repository
-	redis  *redis.Client
-	config *config.Config
-	email  *EmailService
+	repo       *repository.Repository
+	redis      *redis.Client
+	config     *config.Config
+	email      *EmailService
+	cloudflare *CloudflareService
 }
 
 func New(repo *repository.Repository, redis *redis.Client, cfg *config.Config) *Service {
-	return &Service{repo: repo, redis: redis, config: cfg, email: NewEmailService()}
+	return &Service{
+		repo:       repo,
+		redis:      redis,
+		config:     cfg,
+		email:      NewEmailService(),
+		cloudflare: NewCloudflareService(cfg.Cloudflare.APIToken, cfg.Cloudflare.ZoneID),
+	}
 }
 
 ////////////////////////////////////////////////////////////////////

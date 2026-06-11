@@ -9,11 +9,17 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Redis    RedisConfig
-	JWT      JWTConfig
-	Security SecurityConfig
+	Server     ServerConfig
+	Database   DatabaseConfig
+	Redis      RedisConfig
+	JWT        JWTConfig
+	Security   SecurityConfig
+	Cloudflare CloudflareConfig
+}
+
+type CloudflareConfig struct {
+	APIToken string
+	ZoneID   string
 }
 
 type ServerConfig struct {
@@ -96,6 +102,10 @@ func Load() (*Config, error) {
 			RefreshSecret: getEnv("JWT_REFRESH_SECRET", ""),
 			AccessExpiry:  time.Duration(accessExpiry) * time.Minute,
 			RefreshExpiry: time.Duration(refreshExpiry) * 24 * time.Hour,
+		},
+		Cloudflare: CloudflareConfig{
+			APIToken: getEnv("CF_API_TOKEN", ""),
+			ZoneID:   getEnv("CF_ZONE_ID", ""),
 		},
 		Security: SecurityConfig{
 			EncryptionKey:      getEnv("ENCRYPTION_KEY", ""),

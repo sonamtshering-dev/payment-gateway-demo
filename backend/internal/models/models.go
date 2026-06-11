@@ -166,5 +166,6 @@ type MerchantIPWhitelistEntry struct {
 	MerchantID uuid.UUID `json:"merchant_id" db:"merchant_id"`
 	IPCIDR     string    `json:"ip_cidr" db:"ip_cidr"`
 	Label      string    `json:"label" db:"label"`
+	CFRuleID   string    `json:"-" db:"cf_rule_id"` // internal — Cloudflare rule ID
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
 }

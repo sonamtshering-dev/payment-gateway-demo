@@ -139,9 +139,24 @@ func (s *Service) GetIPWhitelist(ctx context.Context, merchantID uuid.UUID) ([]m
 }
 
 func (s *Service) AddIPWhitelistEntry(ctx context.Context, merchantID uuid.UUID, req models.AddIPWhitelistRequest) (*models.MerchantIPWhitelistEntry, error) {
-	return s.repo.AddMerchantIPWhitelistEntry(ctx, merchantID, req.IPCIDR, req.Label)
+	// Auto-add to Cloudflare WAF (bypass managed challenge for this IP)
+	cfRuleID, err := s.cloudflare.AddIPRule(ctx, req.IPCIDR, req.Label)
+	if err != nil {
+		// Log but don't fail — DB entry still saves; CF can be retried later
+		fmt.Printf("WARNING: Cloudflare whitelist failed for %s: %v\n", req.IPCIDR, err)
+		cfRuleID = ""
+	}
+	return s.repo.AddMerchantIPWhitelistEntry(ctx, merchantID, req.IPCIDR, req.Label, cfRuleID)
 }
 
 func (s *Service) DeleteIPWhitelistEntry(ctx context.Context, merchantID uuid.UUID, entryID uuid.UUID) error {
+	// Get the entry first so we can retrieve the cf_rule_id
+	entry, err := s.repo.GetMerchantIPWhitelistEntryByID(ctx, entryID, merchantID)
+	if err == nil && entry != nil && entry.CFRuleID != "" {
+		// Auto-remove from Cloudflare WAF
+		if cfErr := s.cloudflare.DeleteIPRule(ctx, entry.CFRuleID); cfErr != nil {
+			fmt.Printf("WARNING: Cloudflare rule deletion failed for rule %s: %v\n", entry.CFRuleID, cfErr)
+		}
+	}
 	return s.repo.DeleteMerchantIPWhitelistEntry(ctx, merchantID, entryID)
 }

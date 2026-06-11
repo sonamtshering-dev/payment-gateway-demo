@@ -733,7 +733,7 @@ func (r *Repository) GetMerchantIPWhitelistRaw(ctx context.Context, merchantIDSt
 
 func (r *Repository) GetMerchantIPWhitelist(ctx context.Context, merchantID uuid.UUID) ([]models.MerchantIPWhitelistEntry, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT id, merchant_id, ip_cidr, COALESCE(label,''), created_at FROM merchant_ip_whitelist WHERE merchant_id = $1 ORDER BY created_at ASC`,
+		`SELECT id, merchant_id, ip_cidr, COALESCE(label,''), COALESCE(cf_rule_id,''), created_at FROM merchant_ip_whitelist WHERE merchant_id = $1 ORDER BY created_at ASC`,
 		merchantID,
 	)
 	if err != nil {
@@ -743,7 +743,7 @@ func (r *Repository) GetMerchantIPWhitelist(ctx context.Context, merchantID uuid
 	var entries []models.MerchantIPWhitelistEntry
 	for rows.Next() {
 		var e models.MerchantIPWhitelistEntry
-		if err := rows.Scan(&e.ID, &e.MerchantID, &e.IPCIDR, &e.Label, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.MerchantID, &e.IPCIDR, &e.Label, &e.CFRuleID, &e.CreatedAt); err != nil {
 			continue
 		}
 		entries = append(entries, e)
@@ -751,18 +751,32 @@ func (r *Repository) GetMerchantIPWhitelist(ctx context.Context, merchantID uuid
 	return entries, nil
 }
 
-func (r *Repository) AddMerchantIPWhitelistEntry(ctx context.Context, merchantID uuid.UUID, ipCIDR, label string) (*models.MerchantIPWhitelistEntry, error) {
+func (r *Repository) AddMerchantIPWhitelistEntry(ctx context.Context, merchantID uuid.UUID, ipCIDR, label, cfRuleID string) (*models.MerchantIPWhitelistEntry, error) {
 	entry := &models.MerchantIPWhitelistEntry{
 		ID:         uuid.New(),
 		MerchantID: merchantID,
 		IPCIDR:     ipCIDR,
 		Label:      label,
+		CFRuleID:   cfRuleID,
 	}
 	err := r.db.QueryRow(ctx,
-		`INSERT INTO merchant_ip_whitelist (id, merchant_id, ip_cidr, label) VALUES ($1, $2, $3, $4) RETURNING created_at`,
-		entry.ID, entry.MerchantID, entry.IPCIDR, entry.Label,
+		`INSERT INTO merchant_ip_whitelist (id, merchant_id, ip_cidr, label, cf_rule_id) VALUES ($1, $2, $3, $4, $5) RETURNING created_at`,
+		entry.ID, entry.MerchantID, entry.IPCIDR, entry.Label, entry.CFRuleID,
 	).Scan(&entry.CreatedAt)
 	return entry, err
+}
+
+// GetMerchantIPWhitelistEntryByID returns a single whitelist entry (used to get cf_rule_id before deletion).
+func (r *Repository) GetMerchantIPWhitelistEntryByID(ctx context.Context, entryID uuid.UUID, merchantID uuid.UUID) (*models.MerchantIPWhitelistEntry, error) {
+	var e models.MerchantIPWhitelistEntry
+	err := r.db.QueryRow(ctx,
+		`SELECT id, merchant_id, ip_cidr, COALESCE(label,''), COALESCE(cf_rule_id,''), created_at FROM merchant_ip_whitelist WHERE id = $1 AND merchant_id = $2`,
+		entryID, merchantID,
+	).Scan(&e.ID, &e.MerchantID, &e.IPCIDR, &e.Label, &e.CFRuleID, &e.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
 }
 
 func (r *Repository) DeleteMerchantIPWhitelistEntry(ctx context.Context, merchantID uuid.UUID, entryID uuid.UUID) error {
