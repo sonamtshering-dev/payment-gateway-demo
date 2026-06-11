@@ -8,7 +8,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nova-pay.in';
 const SIGNATURE_JS = `const crypto = require('crypto');
 
 function signRequest(apiSecret, timestamp, body) {
-  // message = timestamp + "." + raw JSON body
+  // message = timestamp + "." + raw JSON body string
   const message = \`\${timestamp}.\${body}\`;
   return crypto
     .createHmac('sha256', apiSecret)
@@ -16,18 +16,43 @@ function signRequest(apiSecret, timestamp, body) {
     .digest('hex');
 }
 
+// Always use the EXACT same JSON string you send as the body
 const timestamp = Math.floor(Date.now() / 1000).toString();
 const body = JSON.stringify({ order_id: 'ORD-001', amount: 49900, currency: 'INR' });
-const signature = signRequest(YOUR_API_SECRET, timestamp, body);`;
+const signature = signRequest(process.env.NOVAPAY_API_SECRET, timestamp, body);
 
-const SIGNATURE_PY = `import hmac, hashlib, time, json
+// Then send the request:
+// headers: { 'X-API-Key': process.env.NOVAPAY_API_KEY, 'X-Timestamp': timestamp, 'X-Signature': signature }`;
 
-def sign_request(api_secret, body_dict):
+const SIGNATURE_PY = `import hmac, hashlib, time, json, os
+
+def sign_request(api_secret: str, body_dict: dict) -> tuple[str, str]:
     timestamp = str(int(time.time()))
+    # separators=(',',':') produces compact JSON — same as your request body
     body = json.dumps(body_dict, separators=(',', ':'))
     message = f"{timestamp}.{body}"
     sig = hmac.new(api_secret.encode(), message.encode(), hashlib.sha256).hexdigest()
-    return timestamp, sig`;
+    return timestamp, sig
+
+# Usage:
+timestamp, sig = sign_request(os.environ['NOVAPAY_API_SECRET'], payload_dict)
+# headers: { 'X-API-Key': os.environ['NOVAPAY_API_KEY'], 'X-Timestamp': timestamp, 'X-Signature': sig }`;
+
+const SIGNATURE_PHP = `<?php
+function signRequest(string $apiSecret, string $timestamp, string $body): string {
+    // message = timestamp + "." + raw JSON body
+    $message = $timestamp . '.' . $body;
+    return hash_hmac('sha256', $message, $apiSecret);
+}
+
+$timestamp = (string) time();
+$body = json_encode(['order_id' => 'ORD-001', 'amount' => 49900, 'currency' => 'INR'],
+                     JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+$signature = signRequest($_ENV['NOVAPAY_API_SECRET'], $timestamp, $body);
+
+// Then send with curl:
+// $headers = ["X-API-Key: {$_ENV['NOVAPAY_API_KEY']}", "X-Timestamp: $timestamp", "X-Signature: $signature"];
+?>`;
 
 const CREATE_HEADERS = `X-API-Key:    upay_your_api_key_here
 X-Timestamp:  1774001171
@@ -52,7 +77,7 @@ const CREATE_RESPONSE = `{
     "order_id":        "ORD-2026-00123",
     "upi_intent_link": "upi://pay?pa=merchant@oksbi&pn=Store&am=499.00&cu=INR&tn=ORD-2026-00123",
     "qr_code_base64":  "data:image/png;base64,iVBOR...",
-    "pay_url":         "http://yourdomain.com/pay/019d0aa1-af3a-79ce-aa49-336dfa67e48b",
+    "pay_url":         "https://nova-pay.in/pay/019d0aa1-af3a-79ce-aa49-336dfa67e48b",
     "amount":          49900,
     "currency":        "INR",
     "status":          "pending",
@@ -73,9 +98,11 @@ const STATUS_RESPONSE = `{
   }
 }`;
 
-const CURL_EXAMPLE = `# Set your credentials
+const CURL_EXAMPLE = `# Set your credentials (copy from API Credentials tab)
 API_KEY="upay_your_api_key"
 API_SECRET="your_api_secret"
+BASE="https://nova-pay.in/api/v1"
+
 TIMESTAMP=$(date +%s)
 BODY='{"order_id":"ORD-001","amount":49900,"currency":"INR","redirect_url":"https://yoursite.com/success"}'
 
@@ -84,12 +111,15 @@ SIG=$(echo -n "\${TIMESTAMP}.\${BODY}" | \\
   openssl dgst -sha256 -hmac "\${API_SECRET}" | \\
   awk '{print $2}')
 
-curl -X POST BASE_URL/api/v1/payments/create \\
+curl -X POST \${BASE}/payments/create \\
   -H "X-API-Key: \${API_KEY}" \\
   -H "X-Timestamp: \${TIMESTAMP}" \\
   -H "X-Signature: \${SIG}" \\
   -H "Content-Type: application/json" \\
-  -d "\${BODY}"`;
+  -d "\${BODY}"
+
+# Check payment status (no auth needed)
+# curl \${BASE}/public/payment/{payment_id}`;
 
 const WEBHOOK_PAYLOAD = `{
   "event":      "payment.success",
@@ -127,10 +157,11 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   res.sendStatus(200);
 });`;
 
-const WEBHOOK_VERIFY_PY = `import hmac, hashlib
+const WEBHOOK_VERIFY_PY = `import hmac, hashlib, os
 from flask import Flask, request
 
 app = Flask(__name__)
+WEBHOOK_SECRET = os.environ['NOVAPAY_WEBHOOK_SECRET']
 
 def verify_webhook(raw_body: bytes, signature: str, secret: str) -> bool:
     expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
@@ -142,8 +173,33 @@ def webhook():
     if not verify_webhook(request.data, sig, WEBHOOK_SECRET):
         return 'Invalid signature', 401
     event = request.get_json(force=True)
+    # Always deduplicate using payment_id before fulfilling
     print('Payment confirmed:', event['order_id'], 'UTR:', event['utr'])
     return '', 200`;
+
+const WEBHOOK_VERIFY_PHP = `<?php
+$webhookSecret = $_ENV['NOVAPAY_WEBHOOK_SECRET'];
+$rawBody = file_get_contents('php://input');
+$signature = $_SERVER['HTTP_X_NOVAPAY_SIGNATURE'] ?? '';
+
+$expected = hash_hmac('sha256', $rawBody, $webhookSecret);
+
+// Use hash_equals — timing-safe comparison
+if (!hash_equals($expected, $signature)) {
+    http_response_code(401);
+    exit('Invalid signature');
+}
+
+$event = json_decode($rawBody, true);
+
+// Always deduplicate using payment_id before fulfilling
+if ($event['status'] === 'paid') {
+    // fulfil order for $event['order_id']
+    error_log('Payment confirmed: ' . $event['order_id'] . ' UTR: ' . $event['utr']);
+}
+
+http_response_code(200);
+?>`;
 
 // ── Reusable components ───────────────────────────────────────────────────────
 
@@ -249,10 +305,11 @@ function FieldTable({ rows }: { rows: { field: string; type: string; required?: 
   );
 }
 
-function LangToggle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function LangToggle({ value, onChange, langs }: { value: string; onChange: (v: string) => void; langs?: [string,string][] }) {
+  const options = langs || [['js', 'Node.js'], ['py', 'Python'], ['php', 'PHP']];
   return (
     <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: 3, marginBottom: 12, width: 'fit-content' }}>
-      {[['js', 'Node.js'], ['py', 'Python']].map(([k, label]) => (
+      {options.map(([k, label]) => (
         <button key={k} onClick={() => onChange(k)}
           style={{ background: value === k ? 'rgba(29,78,216,0.3)' : 'transparent', border: 'none', borderRadius: 6, padding: '5px 16px', color: value === k ? '#93c5fd' : 'rgba(255,255,255,0.3)', fontSize: 12, fontWeight: value === k ? 700 : 400, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
           {label}
@@ -553,19 +610,53 @@ export default function APIDocsPage() {
           {activeTab === 'guide' && (
             <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 0 }}>
 
+              {/* Prerequisites */}
+              <SectionCard>
+                <CardTitle>Before You Start</CardTitle>
+                <CardSubtitle>You need three things from the API Credentials tab. Keep them in environment variables — never hardcode them.</CardSubtitle>
+                <div style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, overflow: 'hidden', marginBottom: 16 }}>
+                  {[
+                    { name: 'NOVAPAY_API_KEY',    example: 'upay_a1b2c3…',  desc: 'Sent as X-API-Key header on every payment request' },
+                    { name: 'NOVAPAY_API_SECRET', example: 'sk_d4e5f6…',   desc: 'Used to sign requests with HMAC-SHA256. Never send in the body.' },
+                    { name: 'NOVAPAY_WEBHOOK_SECRET', example: 'whsec_g7h8…', desc: 'Used to verify X-NovaPay-Signature on incoming webhooks' },
+                  ].map((item, i, arr) => (
+                    <div key={item.name} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 2fr', borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
+                      <div style={{ padding: '11px 14px', fontSize: 12, color: '#f59e0b', fontFamily: 'monospace' }}>{item.name}</div>
+                      <div style={{ padding: '11px 14px', fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>{item.example}</div>
+                      <div style={{ padding: '11px 14px', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{item.desc}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+                  {[
+                    ['API Key & Secret', 'credentials'],
+                    ['Webhook Secret', 'credentials'],
+                    ['Add your server IP', 'credentials'],
+                  ].map(([label, tab]) => (
+                    <button key={label} onClick={() => setActiveTab(tab as any)}
+                      style={{ background: 'rgba(29,78,216,0.1)', border: '1px solid rgba(29,78,216,0.2)', borderRadius: 8, padding: '6px 14px', color: '#93c5fd', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                      → {label}
+                    </button>
+                  ))}
+                </div>
+              </SectionCard>
+
               {/* Signing */}
               <SectionCard>
                 <CardTitle>Step 1 — Sign Your Requests</CardTitle>
-                <CardSubtitle>Every request needs an HMAC-SHA256 signature. This prevents tampering and replay attacks.</CardSubtitle>
+                <CardSubtitle>Every payment API request needs an HMAC-SHA256 signature. This prevents tampering and replay attacks.</CardSubtitle>
 
                 <div style={{ background: '#030d1f', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '14px 16px', fontFamily: 'monospace', fontSize: 12, color: '#93c5fd', lineHeight: 1.9, marginBottom: 16 }}>
                   message &nbsp;&nbsp;&nbsp;= timestamp + <span style={{ color: '#f59e0b' }}>"."</span> + raw_json_body<br/>
-                  signature = HMAC-SHA256(api_secret, message)<br/>
+                  signature = HMAC-SHA256(<span style={{ color: '#f59e0b' }}>NOVAPAY_API_SECRET</span>, message)<br/>
                   X-Signature = hex(signature)
                 </div>
 
                 <LangToggle value={sigLang} onChange={setSigLang} />
-                <CodeBlock code={sigLang === 'js' ? SIGNATURE_JS : SIGNATURE_PY} lang={sigLang === 'js' ? 'JavaScript' : 'Python'} />
+                <CodeBlock
+                  code={sigLang === 'js' ? SIGNATURE_JS : sigLang === 'py' ? SIGNATURE_PY : SIGNATURE_PHP}
+                  lang={sigLang === 'js' ? 'JavaScript' : sigLang === 'py' ? 'Python' : 'PHP'}
+                />
                 <InfoBox type="warn" title="Timestamp tolerance is 5 minutes">
                   Requests older than 300 seconds are rejected. Always use the current server time — never a cached value.
                 </InfoBox>
@@ -650,9 +741,11 @@ export default function APIDocsPage() {
                 <div style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, overflow: 'hidden' }}>
                   {[
                     ['400', 'Bad request — missing or invalid fields'],
-                    ['401', 'Invalid API key or signature'],
-                    ['408', 'Timestamp too old — replay attack prevention (>5 min)'],
-                    ['409', 'Duplicate order_id — already used'],
+                    ['401', 'Invalid API key or HMAC signature'],
+                    ['403', 'IP not in whitelist — add your server IP under API Credentials'],
+                    ['408', 'Timestamp too old — replay attack prevention (> 5 min drift)'],
+                    ['409', 'Duplicate order_id — this order was already paid or is pending'],
+                    ['429', 'Rate limit exceeded — slow down and retry'],
                     ['500', 'Server error — retry after a few seconds'],
                   ].map(([code, desc], i, arr) => (
                     <div key={code} style={{ display: 'flex', gap: 16, padding: '10px 14px', borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
@@ -671,14 +764,29 @@ export default function APIDocsPage() {
               </SectionCard>
 
               {/* Checklist */}
-              <InfoBox type="success" title="Integration checklist">
-                ✓ Store payment_id after creation &nbsp;·&nbsp;
-                ✓ Show pay_url or embed QR to customer &nbsp;·&nbsp;
-                ✓ Poll /public/payment/:id every 3–5s &nbsp;·&nbsp;
-                ✓ Set up webhook endpoint &nbsp;·&nbsp;
-                ✓ Verify X-NovaPay-Signature on webhooks &nbsp;·&nbsp;
-                ✓ Deduplicate using payment_id
-              </InfoBox>
+              <SectionCard>
+                <CardTitle>Integration Checklist</CardTitle>
+                <div style={{ height: 10 }} />
+                {[
+                  ['Copy API Key + Secret from Credentials tab', 'Store as env vars — never commit to git'],
+                  ['Copy Webhook Secret from Credentials tab', 'Store as NOVAPAY_WEBHOOK_SECRET env var'],
+                  ['Add your server IP to the whitelist', 'Only needed if Cloudflare blocks your requests (403 error)'],
+                  ['Save your webhook URL', 'Must be HTTPS — NovaPay will POST payment events here'],
+                  ['Store payment_id after creation', 'Use it to track and deduplicate payments'],
+                  ['Show pay_url or embed QR to customer', 'Option A: redirect to pay_url · Option B: embed qr_code_base64'],
+                  ['Poll /public/payment/:id every 3–5s', 'No auth needed — stop polling when status ≠ pending'],
+                  ['Verify X-NovaPay-Signature on webhooks', 'Use HMAC-SHA256 with your Webhook Secret'],
+                  ['Deduplicate with payment_id', 'Webhooks may fire more than once — always check before fulfilling'],
+                ].map(([item, note], i, arr) => (
+                  <div key={item} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'flex-start' }}>
+                    <span style={{ color: '#10b981', fontSize: 14, flexShrink: 0, marginTop: 1 }}>✓</span>
+                    <div>
+                      <div style={{ fontSize: 13, color: '#dbeafe', fontWeight: 500 }}>{item}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>{note}</div>
+                    </div>
+                  </div>
+                ))}
+              </SectionCard>
             </div>
           )}
 
@@ -763,7 +871,10 @@ export default function APIDocsPage() {
                   X-NovaPay-Signature: a3f9c2d8...&nbsp;&nbsp;<span style={{ color: '#475569' }}>(HMAC-SHA256 of raw body using your Webhook Secret)</span>
                 </div>
                 <LangToggle value={verifyLang} onChange={setVerifyLang} />
-                <CodeBlock code={verifyLang === 'js' ? WEBHOOK_VERIFY_JS : WEBHOOK_VERIFY_PY} lang={verifyLang === 'js' ? 'JavaScript' : 'Python'} />
+                <CodeBlock
+                  code={verifyLang === 'js' ? WEBHOOK_VERIFY_JS : verifyLang === 'py' ? WEBHOOK_VERIFY_PY : WEBHOOK_VERIFY_PHP}
+                  lang={verifyLang === 'js' ? 'JavaScript' : verifyLang === 'py' ? 'Python' : 'PHP'}
+                />
                 <InfoBox type="warn" title="Use the raw request body">
                   Parse JSON only after verifying. Use timingSafeEqual / compare_digest — never plain string comparison.
                 </InfoBox>
