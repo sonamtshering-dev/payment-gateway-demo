@@ -33,15 +33,16 @@ type RefreshRequest struct {
 }
 
 type MerchantPublic struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	APIKey    string    `json:"api_key"`
-	IsActive  bool      `json:"is_active"`
-	IsAdmin   bool      `json:"is_admin"`
-	LogoURL      string `json:"logo_url,omitempty"`
-	BusinessName string `json:"business_name,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	Email        string    `json:"email"`
+	APIKey       string    `json:"api_key"`
+	APISecret    string    `json:"api_secret,omitempty"` // only returned at registration & rotation
+	IsActive     bool      `json:"is_active"`
+	IsAdmin      bool      `json:"is_admin"`
+	LogoURL      string    `json:"logo_url,omitempty"`
+	BusinessName string    `json:"business_name,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // ============================================================================

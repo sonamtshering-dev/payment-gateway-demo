@@ -121,6 +121,19 @@ func (s *Service) GetWebhookSecret(ctx context.Context, merchantID uuid.UUID) (s
 	return merchant.WebhookSecret, nil
 }
 
+func (s *Service) GetAPISecret(ctx context.Context, merchantID uuid.UUID) (string, error) {
+	merchant, err := s.repo.GetMerchantByID(ctx, merchantID)
+	if err != nil || merchant == nil {
+		return "", fmt.Errorf("merchant not found")
+	}
+	// Decrypt the stored secret and return it
+	plaintext, err := utils.Decrypt(merchant.APISecret, s.config.Security.EncryptionKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve secret")
+	}
+	return plaintext, nil
+}
+
 func (s *Service) GetIPWhitelist(ctx context.Context, merchantID uuid.UUID) ([]models.MerchantIPWhitelistEntry, error) {
 	return s.repo.GetMerchantIPWhitelist(ctx, merchantID)
 }

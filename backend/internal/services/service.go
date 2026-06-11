@@ -166,6 +166,7 @@ func (s *Service) generateAuthResponse(ctx context.Context, merchant *models.Mer
 			Name:      merchant.Name,
 			Email:     merchant.Email,
 			APIKey:    merchant.APIKey,
+			APISecret: secret, // plaintext — only returned at registration
 			IsActive:  merchant.IsActive,
 			IsAdmin:   merchant.IsAdmin,
 			CreatedAt: merchant.CreatedAt,

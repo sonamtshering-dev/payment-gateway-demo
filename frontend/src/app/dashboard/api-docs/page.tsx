@@ -330,9 +330,12 @@ export default function APIDocsPage() {
   const [rotating, setRotating]       = useState(false);
   const [saving, setSaving]           = useState(false);
   const [copied, setCopied]           = useState('');
-  const [showKey, setShowKey]         = useState(false);
-  const [showSecret, setShowSecret]   = useState(false);
+  const [showKey, setShowKey]           = useState(false);
+  const [showSecret, setShowSecret]     = useState(false);
+  const [showAPISecret, setShowAPISecret] = useState(false);
+  const [apiSecret, setApiSecret]       = useState('');
   const [webhookSecret, setWebhookSecret] = useState('');
+  const [rotatedKeys, setRotatedKeys]   = useState<{api_key: string; api_secret: string} | null>(null);
   const [ipList, setIPList]           = useState<IPEntry[]>([]);
   const [newIP, setNewIP]             = useState('');
   const [newIPLabel, setNewIPLabel]   = useState('');
@@ -367,6 +370,8 @@ export default function APIDocsPage() {
       .then(d => { if (d.success) setWebhook(d.data?.webhook_url || ''); });
     fetch('/api/v1/dashboard/webhook-secret', { headers }).then(r => r.json())
       .then(d => { if (d.success) setWebhookSecret(d.data?.webhook_secret || ''); });
+    fetch('/api/v1/dashboard/api-secret', { headers }).then(r => r.json())
+      .then(d => { if (d.success) setApiSecret(d.data?.api_secret || ''); });
     fetchIPList();
   }, []);
 
@@ -386,14 +391,17 @@ export default function APIDocsPage() {
   };
 
   const handleRotate = async () => {
-    if (!confirm('Rotate API keys? Your existing integrations will stop working until updated.')) return;
+    if (!confirm('Rotate API keys? Your existing integrations will stop working until updated. You will be shown your new API Secret — save it immediately.')) return;
     setRotating(true);
     try {
       const r = await fetch('/api/v1/dashboard/rotate-keys', { method: 'POST', headers });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Failed');
       setProfile((p: any) => ({ ...p, api_key: d.data.api_key }));
-      flash('API keys rotated successfully!');
+      setApiSecret(d.data.api_secret);
+      setShowAPISecret(true);
+      // Show the new credentials prominently
+      setRotatedKeys({ api_key: d.data.api_key, api_secret: d.data.api_secret });
     } catch (e: any) { flash(e.message, true); }
     finally { setRotating(false); }
   };
@@ -451,6 +459,52 @@ export default function APIDocsPage() {
       {error   && <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '12px 16px', color: '#f87171', fontSize: 13, marginBottom: 20 }}>{error}</div>}
       {success && <div style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 10, padding: '12px 16px', color: '#3b82f6', fontSize: 13, marginBottom: 20 }}>{success}</div>}
 
+      {/* ── ROTATION SUCCESS MODAL ── */}
+      {rotatedKeys && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: '#0f1d35', border: '2px solid rgba(245,158,11,0.4)', borderRadius: 20, padding: '28px 32px', maxWidth: 560, width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 22 }}>⚠️</span>
+              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 18, fontWeight: 800, color: '#fde68a' }}>Save your new credentials NOW</div>
+            </div>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>
+              Your API Secret is shown <strong style={{ color: '#fde68a' }}>only here</strong>. Once you close this dialog it cannot be retrieved — only rotated again.
+            </p>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 6 }}>New API Key</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input readOnly value={rotatedKeys.api_key} style={{ ...inp, flex: 1, color: '#93c5fd', fontSize: 12 }} />
+                <button onClick={() => copy(rotatedKeys.api_key, 'rot-key')} style={{ background: 'rgba(29,78,216,0.15)', border: '1px solid rgba(29,78,216,0.25)', borderRadius: 8, padding: '0 14px', color: '#93c5fd', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'DM Sans, sans-serif', whiteSpace: 'nowrap' as const }}>
+                  {copied === 'rot-key' ? '✓ Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 6 }}>New API Secret <span style={{ color: '#fde68a' }}>— Save this, you won&apos;t see it again</span></div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input readOnly value={rotatedKeys.api_secret} style={{ ...inp, flex: 1, color: '#fde68a', fontSize: 12 }} />
+                <button onClick={() => copy(rotatedKeys.api_secret, 'rot-sec')} style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, padding: '0 14px', color: '#fde68a', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'DM Sans, sans-serif', whiteSpace: 'nowrap' as const }}>
+                  {copied === 'rot-sec' ? '✓ Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => { copy(rotatedKeys.api_key + '\n' + rotatedKeys.api_secret, 'rot-both'); }}
+                style={{ flex: 1, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, padding: '10px 0', color: '#fde68a', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Syne, sans-serif' }}>
+                {copied === 'rot-both' ? '✓ Copied both' : 'Copy both'}
+              </button>
+              <button onClick={() => setRotatedKeys(null)}
+                style={{ flex: 1, background: 'linear-gradient(135deg,#1d4ed8,#1e40af)', border: 'none', borderRadius: 10, padding: '10px 0', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Syne, sans-serif' }}>
+                I&apos;ve saved them — Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 22, fontWeight: 800, marginBottom: 4 }}>API Documentation</div>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)' }}>Integrate NovaPay payments into your application</div>
@@ -502,6 +556,25 @@ export default function APIDocsPage() {
               </SectionCard>
 
               <SectionCard>
+                <CardTitle>API Secret</CardTitle>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 14 }}>
+                  Used to sign every payment request with HMAC-SHA256. Send as <code style={{ fontFamily: 'monospace', color: '#93c5fd' }}>X-Signature</code> — never in the request body or client-side code.
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input style={{ ...inp, flex: 1, color: '#8b9ab5' }} readOnly
+                    value={showAPISecret ? apiSecret : '••••••••••••••••••••••••••••••••'} />
+                  <button onClick={() => setShowAPISecret(s => !s)}
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '0 14px', color: '#64748b', cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' as const, fontFamily: 'DM Sans, sans-serif' }}>
+                    {showAPISecret ? 'Hide' : 'Show'}
+                  </button>
+                  <button onClick={() => copy(apiSecret, 'apisec')}
+                    style={{ background: 'rgba(29,78,216,0.1)', border: '1px solid rgba(29,78,216,0.2)', borderRadius: 10, padding: '0 14px', color: '#93c5fd', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' as const, fontFamily: 'DM Sans, sans-serif' }}>
+                    {copied === 'apisec' ? '✓ Copied' : 'Copy'}
+                  </button>
+                </div>
+              </SectionCard>
+
+              <SectionCard>
                 <CardTitle>Webhook Secret</CardTitle>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 14 }}>
                   Used to verify the <code style={{ fontFamily: 'monospace', color: '#93c5fd' }}>X-NovaPay-Signature</code> header on incoming webhooks.
@@ -520,10 +593,6 @@ export default function APIDocsPage() {
                   </button>
                 </div>
               </SectionCard>
-
-              <InfoBox type="warn" title="API Secret">
-                Your API Secret is shown only once at registration. It signs requests — never send it in the body or expose it client-side. If lost, rotate your keys above to get a new pair.
-              </InfoBox>
 
               <SectionCard>
                 <CardTitle>Merchant ID</CardTitle>

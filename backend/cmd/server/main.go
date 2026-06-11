@@ -176,6 +176,7 @@ func main() {
 			dashboard.GET("/webhook", h.GetWebhook)
 			dashboard.PUT("/webhook", h.UpdateWebhook)
 			dashboard.GET("/webhook-secret", h.GetWebhookSecret)
+			dashboard.GET("/api-secret", h.GetAPISecret)
 
 			// IP whitelist management
 			dashboard.GET("/ip-whitelist", h.GetIPWhitelist)

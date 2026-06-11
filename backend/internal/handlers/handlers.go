@@ -336,6 +336,19 @@ func (h *Handler) UpdateWebhook(c *gin.Context) {
 	})
 }
 
+func (h *Handler) GetAPISecret(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
+	secret, err := h.service.GetAPISecret(c.Request.Context(), merchantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to fetch API secret"})
+		return
+	}
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Data:    map[string]string{"api_secret": secret},
+	})
+}
+
 func (h *Handler) GetWebhookSecret(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 	secret, err := h.service.GetWebhookSecret(c.Request.Context(), merchantID)
