@@ -43,6 +43,31 @@ func isValidEmail(email string) bool {
 	return emailRegex.MatchString(strings.TrimSpace(email))
 }
 
+// internalErrPatterns are substrings that indicate a raw DB/internal error that
+// must never be shown to end users.
+var internalErrPatterns = []string{
+	"host=", "SQLSTATE", "pgx", "pq:", "postgres", "pg_",
+	"upay_gateway", "recovery mode", "connection refused",
+	"dial tcp", "i/o timeout", "EOF", "no rows",
+	"ERROR:", "FATAL:", "syntax error",
+}
+
+// safeErr returns the original error message for known business errors, or a
+// generic "service unavailable" message for anything that looks like a raw
+// DB / infrastructure error.
+func safeErr(err error) (string, int) {
+	if err == nil {
+		return "", http.StatusOK
+	}
+	msg := err.Error()
+	for _, pat := range internalErrPatterns {
+		if strings.Contains(msg, pat) {
+			return "Service temporarily unavailable. Please try again shortly.", http.StatusServiceUnavailable
+		}
+	}
+	return msg, http.StatusInternalServerError
+}
+
 // ============================================================================
 // AUTH HANDLERS
 // ============================================================================
@@ -76,20 +101,18 @@ func (h *Handler) Register(c *gin.Context) {
 func (h *Handler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid request"})
 		return
 	}
 
 	resp, err := h.service.Login(c.Request.Context(), req)
 	if err != nil {
-		msg := err.Error()
-		// Never expose raw DB/internal errors to clients
-		if strings.Contains(msg, "host=") || strings.Contains(msg, "SQLSTATE") ||
-			strings.Contains(msg, "database") || strings.Contains(msg, "connection") {
-			c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Service temporarily unavailable. Please try again shortly."})
+		msg, status := safeErr(err)
+		if status == http.StatusServiceUnavailable {
+			c.JSON(status, models.ErrorResponse{Error: msg})
 			return
 		}
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: msg})
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 
@@ -102,13 +125,18 @@ func (h *Handler) Login(c *gin.Context) {
 func (h *Handler) RefreshToken(c *gin.Context) {
 	var req models.RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid request"})
 		return
 	}
 
 	resp, err := h.service.RefreshTokens(c.Request.Context(), req.RefreshToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: err.Error()})
+		msg, status := safeErr(err)
+		if status == http.StatusServiceUnavailable {
+			c.JSON(status, models.ErrorResponse{Error: msg})
+			return
+		}
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "invalid or expired token"})
 		return
 	}
 
@@ -136,8 +164,13 @@ func (h *Handler) CreatePayment(c *gin.Context) {
 	req.MerchantID = merchantID.String()
 	resp, err := h.service.CreatePayment(c.Request.Context(), req, c.ClientIP())
 	if err != nil {
-		// FIX: use error code map instead of string comparison
-		status := http.StatusBadRequest
+		msg, status := safeErr(err)
+		if status == http.StatusServiceUnavailable {
+			c.JSON(status, models.ErrorResponse{Error: msg})
+			return
+		}
+		// Use error code map for known business errors
+		status = http.StatusBadRequest
 		for code, s := range errCodeStatus {
 			if strings.Contains(err.Error(), code) {
 				status = s
@@ -164,7 +197,8 @@ func (h *Handler) GetPaymentStatus(c *gin.Context) {
 
 	resp, err := h.service.GetPaymentStatus(c.Request.Context(), paymentID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: err.Error()})
+		msg, _ := safeErr(err)
+		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: msg})
 		return
 	}
 
@@ -184,6 +218,11 @@ func (h *Handler) VerifyPayment(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 
 	if err := h.service.VerifyPayment(c.Request.Context(), req, merchantID); err != nil {
+		msg, status := safeErr(err)
+		if status == http.StatusServiceUnavailable {
+			c.JSON(status, models.ErrorResponse{Error: msg})
+			return
+		}
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -281,6 +320,11 @@ func (h *Handler) AddUPI(c *gin.Context) {
 	}
 
 	if err := h.service.AddUPI(c.Request.Context(), merchantID, req); err != nil {
+		msg, status := safeErr(err)
+		if status == http.StatusServiceUnavailable {
+			c.JSON(status, models.ErrorResponse{Error: msg})
+			return
+		}
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -398,7 +442,8 @@ func (h *Handler) AddIPWhitelist(c *gin.Context) {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			c.JSON(http.StatusConflict, models.ErrorResponse{Error: "IP already in whitelist"})
 		} else {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+			msg, status := safeErr(err)
+			c.JSON(status, models.ErrorResponse{Error: msg})
 		}
 		return
 	}
