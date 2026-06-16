@@ -128,14 +128,12 @@ func (s *Service) Login(ctx context.Context, req models.LoginRequest) (*models.A
 	// Successful login — clear failed attempts
 	s.redis.Del(ctx, attemptsKey, lockKey)
 
-	apiSecret, err := utils.Decrypt(merchant.APISecret, s.config.Security.EncryptionKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.generateAuthResponse(ctx, merchant, apiSecret)
+	// Don't expose the API secret on login — merchant retrieves it from the dashboard
+	return s.generateAuthResponse(ctx, merchant, "")
 }
 
+// generateAuthResponse builds a login/refresh token response.
+// Pass plaintext secret only on registration (it will be included once); pass "" on login.
 func (s *Service) generateAuthResponse(ctx context.Context, merchant *models.Merchant, secret string) (*models.AuthResponse, error) {
 
 	accessToken, err := utils.GenerateAccessToken(

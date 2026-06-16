@@ -241,6 +241,16 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 			return
 		}
 
+		// Reject stale/future timestamps before verifying HMAC
+		if !utils.ValidateTimestamp(timestamp, cfg.Security.TimestampTolerance) {
+			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+				Error: "request timestamp out of tolerance window",
+				Code:  "INVALID_TIMESTAMP",
+			})
+			c.Abort()
+			return
+		}
+
 		// Verify HMAC signature: HMAC_SHA256(secret + timestamp + body)
 		if !utils.VerifyHMAC(apiSecret, timestamp, string(body), signature) {
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse{

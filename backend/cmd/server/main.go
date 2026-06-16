@@ -129,9 +129,12 @@ func main() {
 	// ROUTES
 	// ========================================================================
 
-	// Health + Metrics (internal)
+	// Health (public) + Metrics (admin only)
 	r.GET("/health", h.HealthCheck)
-	r.GET("/metrics", middleware.MetricsEndpoint())
+	metricsGroup := r.Group("/metrics")
+	metricsGroup.Use(middleware.JWTAuth(cfg))
+	metricsGroup.Use(middleware.AdminOnly())
+	metricsGroup.GET("", middleware.MetricsEndpoint())
 
 	// Public — no auth required (landing page pricing)
 	r.GET("/api/v1/public/plans", h.GetPublicPlans)
@@ -204,8 +207,7 @@ func main() {
 					dashboard.POST("/paytm-mid", h.SavePaytmMID)
 				dashboard.GET("/kyc", h.GetKYC)
 					dashboard.POST("/kyc", h.SubmitKYC)
-					dashboard.POST("/payments/create", h.CreatePayment)
-					dashboard.GET("/payments/status/:payment_id", h.GetPaymentStatus)
+					// Removed: payment creation must use /api/v1/payments/* (API-key + HMAC auth)
 		}
 
 		// ---- ADMIN (JWT + admin role) ----
