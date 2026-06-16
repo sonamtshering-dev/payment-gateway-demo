@@ -54,10 +54,11 @@ $signature = signRequest($_ENV['NOVAPAY_API_SECRET'], $timestamp, $body);
 // $headers = ["X-API-Key: {$_ENV['NOVAPAY_API_KEY']}", "X-Timestamp: $timestamp", "X-Signature: $signature"];
 ?>`;
 
-const CREATE_HEADERS = `X-API-Key:    upay_your_api_key_here
-X-Timestamp:  1774001171
-X-Signature:  a3f9c2d8e1b4...   (HMAC-SHA256 hex)
-Content-Type: application/json`;
+const CREATE_HEADERS = `X-API-Key:          upay_your_api_key_here
+X-Timestamp:        1774001171
+X-Signature:        a3f9c2d8e1b4...   (HMAC-SHA256 hex)
+X-Idempotency-Key:  ORD-2026-00123     (your order_id — prevents double-charge)
+Content-Type:       application/json`;
 
 const CREATE_BODY = `{
   "order_id":           "ORD-2026-00123",
@@ -147,8 +148,8 @@ function verifyWebhook(rawBody, signature, webhookSecret) {
 
 // Express example
 app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
-  const sig = req.headers['x-novapay-signature'];
-  if (!verifyWebhook(req.body, sig, process.env.WEBHOOK_SECRET)) {
+  const sig = req.headers['x-webhook-signature'];  // header sent by NovaPay
+  if (!verifyWebhook(req.body, sig, process.env.NOVAPAY_WEBHOOK_SECRET)) {
     return res.status(401).send('Invalid signature');
   }
   const event = JSON.parse(req.body);
@@ -169,7 +170,7 @@ def verify_webhook(raw_body: bytes, signature: str, secret: str) -> bool:
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    sig = request.headers.get('X-NovaPay-Signature', '')
+    sig = request.headers.get('X-Webhook-Signature', '')  # header sent by NovaPay
     if not verify_webhook(request.data, sig, WEBHOOK_SECRET):
         return 'Invalid signature', 401
     event = request.get_json(force=True)
@@ -180,7 +181,7 @@ def webhook():
 const WEBHOOK_VERIFY_PHP = `<?php
 $webhookSecret = $_ENV['NOVAPAY_WEBHOOK_SECRET'];
 $rawBody = file_get_contents('php://input');
-$signature = $_SERVER['HTTP_X_NOVAPAY_SIGNATURE'] ?? '';
+$signature = $_SERVER['HTTP_X_WEBHOOK_SIGNATURE'] ?? '';  // header sent by NovaPay
 
 $expected = hash_hmac('sha256', $rawBody, $webhookSecret);
 
@@ -630,7 +631,7 @@ export default function APIDocsPage() {
               <SectionCard>
                 <CardTitle>IP Whitelist</CardTitle>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 4 }}>
-                  Restrict payment API calls to specific server IPs. <strong style={{ color: '#fde68a' }}>Required if Cloudflare is blocking your requests.</strong>
+                  Optional — restrict your payment API to only accept calls from specific server IPs. Recommended for production.
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', marginBottom: 16 }}>
                   Leave empty to allow all IPs. Supports exact IPs (<code style={{ color: '#93c5fd', fontFamily: 'monospace' }}>203.0.113.5</code>) and CIDR ranges (<code style={{ color: '#93c5fd', fontFamily: 'monospace' }}>10.0.0.0/24</code>).
@@ -700,7 +701,6 @@ export default function APIDocsPage() {
                   {[
                     ['API Key & Secret', 'credentials'],
                     ['Webhook Secret', 'credentials'],
-                    ['Add your server IP', 'credentials'],
                   ].map(([label, tab]) => (
                     <button key={label} onClick={() => setActiveTab(tab as any)}
                       style={{ background: 'rgba(29,78,216,0.1)', border: '1px solid rgba(29,78,216,0.2)', borderRadius: 8, padding: '6px 14px', color: '#93c5fd', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
@@ -744,11 +744,11 @@ export default function APIDocsPage() {
 
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>Request Body Fields</div>
                 <FieldTable rows={[
-                  { field: 'order_id',          type: 'string',  required: true,  desc: 'Your unique order ID. Must be unique per transaction.' },
+                  { field: 'order_id',          type: 'string',  required: true,  desc: 'Your unique order ID. Must be unique per transaction. Also used as X-Idempotency-Key.' },
                   { field: 'amount',             type: 'integer', required: true,  desc: 'Amount in paise. ₹1 = 100  |  ₹499 = 49900.' },
                   { field: 'currency',           type: 'string',  required: true,  desc: 'Must be "INR".' },
                   { field: 'customer_reference', type: 'string',  required: false, desc: 'Customer name or note shown in payment. Max 128 chars.' },
-                  { field: 'redirect_url',       type: 'string',  required: false, desc: 'After payment, customer is redirected here with ?payment_id=&status=paid&order_id= appended.' },
+                  { field: 'redirect_url',       type: 'string',  required: false, desc: 'After payment, customer is redirected here. NovaPay appends: ?payment_id=UUID&status=paid&order_id=YOUR_ID' },
                 ]} />
 
                 <InfoBox type="warn" title="Do not include merchant_id in the body">
@@ -777,6 +777,25 @@ export default function APIDocsPage() {
 
                 <InfoBox type="info" title="utr field">
                   The <code style={{ fontFamily: 'monospace', color: '#93c5fd' }}>utr</code> (Unique Transaction Reference) is the bank reference number. Use this to reconcile payments in your records. Only present when status = "paid".
+                </InfoBox>
+              </SectionCard>
+
+              {/* Verify Payment (manual) */}
+              <SectionCard>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                  <MethodBadge method="POST" />
+                  <CardTitle>Step 3b — Manually Verify Payment (optional)</CardTitle>
+                </div>
+                <CardSubtitle>Use this if your customer reports a payment that wasn't auto-detected. Requires the UTR from the customer's UPI app.</CardSubtitle>
+
+                <CodeBlock code={`${BASE_URL}/api/v1/payments/verify`} label="Endpoint (API-key + signature auth required)" />
+                <FieldTable rows={[
+                  { field: 'payment_id', type: 'string',  required: true,  desc: 'The payment_id from the create response.' },
+                  { field: 'utr',        type: 'string',  required: true,  desc: 'Bank UTR from the customer — visible in their UPI app payment history.' },
+                  { field: 'amount',     type: 'integer', required: true,  desc: 'Must match the original payment amount exactly.' },
+                ]} />
+                <InfoBox type="warn" title="Only use as a fallback">
+                  NovaPay auto-detects payments within ~10 seconds. Only call verify if the customer paid but status is still pending after 2 minutes.
                 </InfoBox>
               </SectionCard>
 
@@ -810,12 +829,14 @@ export default function APIDocsPage() {
                 <div style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, overflow: 'hidden' }}>
                   {[
                     ['400', 'Bad request — missing or invalid fields'],
-                    ['401', 'Invalid API key or HMAC signature'],
-                    ['403', 'IP not in whitelist — add your server IP under API Credentials'],
-                    ['408', 'Timestamp too old — replay attack prevention (> 5 min drift)'],
+                    ['401', 'Invalid API key or HMAC signature mismatch'],
+                    ['403', 'IP not in whitelist — your account has IP restrictions enabled. Add your server IP under API Credentials → IP Whitelist.'],
+                    ['408', 'Timestamp too old — replay prevention (> 5 min drift). Use server time, not client.'],
                     ['409', 'Duplicate order_id — this order was already paid or is pending'],
-                    ['429', 'Rate limit exceeded — slow down and retry'],
+                    ['422', 'KYC not approved or subscription not active — contact support'],
+                    ['429', 'Rate limit exceeded — max 100 requests/min per merchant. Retry after 1 minute.'],
                     ['500', 'Server error — retry after a few seconds'],
+                    ['503', 'Service temporarily unavailable — database or infra issue. Retry after 10 seconds.'],
                   ].map(([code, desc], i, arr) => (
                     <div key={code} style={{ display: 'flex', gap: 16, padding: '10px 14px', borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
                       <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#ef4444', minWidth: 36 }}>{code}</span>
@@ -837,15 +858,15 @@ export default function APIDocsPage() {
                 <CardTitle>Integration Checklist</CardTitle>
                 <div style={{ height: 10 }} />
                 {[
-                  ['Copy API Key + Secret from Credentials tab', 'Store as env vars — never commit to git'],
+                  ['Copy API Key + Secret from Credentials tab', 'Store as NOVAPAY_API_KEY and NOVAPAY_API_SECRET env vars — never commit to git'],
                   ['Copy Webhook Secret from Credentials tab', 'Store as NOVAPAY_WEBHOOK_SECRET env var'],
-                  ['Add your server IP to the whitelist', 'Only needed if Cloudflare blocks your requests (403 error)'],
-                  ['Save your webhook URL', 'Must be HTTPS — NovaPay will POST payment events here'],
-                  ['Store payment_id after creation', 'Use it to track and deduplicate payments'],
-                  ['Show pay_url or embed QR to customer', 'Option A: redirect to pay_url · Option B: embed qr_code_base64'],
-                  ['Poll /public/payment/:id every 3–5s', 'No auth needed — stop polling when status ≠ pending'],
-                  ['Verify X-NovaPay-Signature on webhooks', 'Use HMAC-SHA256 with your Webhook Secret'],
-                  ['Deduplicate with payment_id', 'Webhooks may fire more than once — always check before fulfilling'],
+                  ['Set your webhook URL', 'Must be HTTPS — NovaPay POSTs payment events here. Set it in the Webhook Settings card.'],
+                  ['Sign every payment request with HMAC-SHA256', 'message = timestamp + "." + raw JSON body → see Step 1'],
+                  ['Store payment_id after creation', 'Use it to poll status and deduplicate webhooks'],
+                  ['Redirect customer to pay_url or embed QR', 'Option A: redirect to pay_url · Option B: embed qr_code_base64 in your page'],
+                  ['Poll GET /public/payment/:id every 3–5s', 'No auth needed — stop when status changes from pending'],
+                  ['Verify X-Webhook-Signature on incoming webhooks', 'HMAC-SHA256 of the raw request body using your Webhook Secret'],
+                  ['Deduplicate with payment_id before fulfilling', 'Webhooks may fire more than once — always check first'],
                 ].map(([item, note], i, arr) => (
                   <div key={item} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'flex-start' }}>
                     <span style={{ color: '#10b981', fontSize: 14, flexShrink: 0, marginTop: 1 }}>✓</span>
@@ -932,12 +953,13 @@ export default function APIDocsPage() {
               {/* Verify */}
               <SectionCard>
                 <CardTitle>Verify Webhook Signature</CardTitle>
-                <CardSubtitle>Every webhook includes an X-NovaPay-Signature header. Always verify before processing.</CardSubtitle>
+                <CardSubtitle>Every webhook includes an X-Webhook-Signature header. Always verify before processing.</CardSubtitle>
                 <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 10, padding: '12px 16px', marginBottom: 14, fontSize: 12, color: '#a7f3d0' }}>
-                  Your Webhook Secret is in the <strong>API Credentials</strong> tab — copy it and store as an environment variable.
+                  Your Webhook Secret is in the <strong>API Credentials</strong> tab — copy it and store as <code style={{ fontFamily: 'monospace' }}>NOVAPAY_WEBHOOK_SECRET</code> env var.
                 </div>
                 <div style={{ background: '#030d1f', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontFamily: 'monospace', fontSize: 12, color: '#93c5fd' }}>
-                  X-NovaPay-Signature: a3f9c2d8...&nbsp;&nbsp;<span style={{ color: '#475569' }}>(HMAC-SHA256 of raw body using your Webhook Secret)</span>
+                  X-Webhook-Signature: a3f9c2d8...&nbsp;&nbsp;<span style={{ color: '#475569' }}>(HMAC-SHA256 of raw body using NOVAPAY_WEBHOOK_SECRET)</span><br/>
+                  X-Webhook-Timestamp: 1774001171&nbsp;&nbsp;<span style={{ color: '#475569' }}>(Unix timestamp of delivery)</span>
                 </div>
                 <LangToggle value={verifyLang} onChange={setVerifyLang} />
                 <CodeBlock
