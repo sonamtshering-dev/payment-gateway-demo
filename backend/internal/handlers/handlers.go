@@ -82,7 +82,14 @@ func (h *Handler) Login(c *gin.Context) {
 
 	resp, err := h.service.Login(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: err.Error()})
+		msg := err.Error()
+		// Never expose raw DB/internal errors to clients
+		if strings.Contains(msg, "host=") || strings.Contains(msg, "SQLSTATE") ||
+			strings.Contains(msg, "database") || strings.Contains(msg, "connection") {
+			c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Service temporarily unavailable. Please try again shortly."})
+			return
+		}
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: msg})
 		return
 	}
 

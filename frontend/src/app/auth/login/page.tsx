@@ -39,7 +39,18 @@ export default function LoginPage() {
       await login(email, password);
       router.push('/dashboard');
     } catch (e: any) {
-      setError(e.message || 'Login failed');
+      const msg: string = e.message || '';
+      // Never show raw DB/internal errors — map them to friendly messages
+      if (
+        msg.toLowerCase().includes('host=') ||
+        msg.toLowerCase().includes('sqlstate') ||
+        msg.toLowerCase().includes('unavailable') ||
+        msg.toLowerCase().includes('service')
+      ) {
+        setError('We\'re experiencing a temporary issue. Please try again in a moment.');
+      } else {
+        setError(msg || 'Sign in failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }

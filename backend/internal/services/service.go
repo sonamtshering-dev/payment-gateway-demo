@@ -107,7 +107,7 @@ func (s *Service) Login(ctx context.Context, req models.LoginRequest) (*models.A
 
 	merchant, err := s.repo.GetMerchantByEmail(ctx, req.Email)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("service unavailable")
 	}
 	if merchant == nil {
 		return nil, fmt.Errorf("invalid credentials")
