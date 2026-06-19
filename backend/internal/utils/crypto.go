@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 
@@ -185,16 +186,11 @@ func ValidateTimestamp(ts string, tolerance time.Duration) bool {
 // UPI VALIDATION
 // ============================================================================
 
+var upiIDRegex = regexp.MustCompile(`^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$`)
+
 func ValidateUPIID(upiID string) bool {
-	// Basic format: name@provider
-	parts := strings.Split(upiID, "@")
-	if len(parts) != 2 {
-		return false
-	}
-	if len(parts[0]) < 1 || len(parts[1]) < 2 {
-		return false
-	}
-	return true
+	_ = strings.Contains // keep import used by GenerateUPILink below
+	return upiIDRegex.MatchString(upiID)
 }
 
 // GenerateUPILink creates a UPI intent URI

@@ -38,8 +38,8 @@ func main() {
 		email = "admin@upay.dev"
 	}
 	password := os.Getenv("ADMIN_PASSWORD")
-	if password == "" {
-		password = "admin-change-me-immediately"
+	if len(password) < 12 {
+		log.Fatal("ADMIN_PASSWORD env var is required and must be at least 12 characters")
 	}
 
 	// Check if admin already exists

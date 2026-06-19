@@ -349,6 +349,10 @@ func (s *Service) VerifyPayment(ctx context.Context, req models.VerifyPaymentReq
 		return fmt.Errorf("unauthorized")
 	}
 
+	if time.Now().After(payment.ExpiresAt) {
+		return fmt.Errorf("payment has expired")
+	}
+
 	if payment.Status != models.PaymentStatusPending {
 		return fmt.Errorf("payment already processed")
 	}

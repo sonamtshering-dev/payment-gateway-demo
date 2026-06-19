@@ -52,7 +52,7 @@ type MerchantPublic struct {
 type CreatePaymentRequest struct {
 	MerchantID        string `json:"merchant_id" binding:"omitempty,uuid"`
 	OrderID           string `json:"order_id" binding:"required,min=1,max=64"`
-	Amount            int64  `json:"amount" binding:"required,min=100"`
+	Amount            int64  `json:"amount" binding:"required,min=100,max=999999900"`
 	Currency          string `json:"currency" binding:"required,eq=INR"`
 	CustomerReference string `json:"customer_reference" binding:"max=128"`
 	RedirectURL       string `json:"redirect_url" binding:"omitempty,max=512"`

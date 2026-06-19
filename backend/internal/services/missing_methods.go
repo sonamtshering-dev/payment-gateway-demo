@@ -3,10 +3,13 @@ package services
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
+	"strings"
 
 	"github.com/google/uuid"
-	"github.com/upay/gateway/internal/utils"
 	"github.com/upay/gateway/internal/models"
+	"github.com/upay/gateway/internal/utils"
 )
 
 func (s *Service) DeleteUPI(ctx context.Context, upiID uuid.UUID, merchantID uuid.UUID) error {
@@ -48,12 +51,8 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*mode
 		return nil, fmt.Errorf("merchant not found")
 	}
 
-	apiSecret, err := utils.Decrypt(merchant.APISecret, s.config.Security.EncryptionKey)
-	if err != nil {
-		return nil, fmt.Errorf("internal error")
-	}
-
-	return s.generateAuthResponse(ctx, merchant, apiSecret)
+	// Don't expose API secret on token refresh — only returned at registration
+	return s.generateAuthResponse(ctx, merchant, "")
 }
 
 func (s *Service) GetMerchantByID(ctx context.Context, merchantID uuid.UUID) (*models.Merchant, error) {
@@ -64,23 +63,56 @@ func (s *Service) GetUPIs(ctx context.Context, merchantID uuid.UUID) ([]models.M
 	return s.repo.GetMerchantUPIs(ctx, merchantID)
 }
 
+// privateRanges covers all RFC-1918, loopback, link-local, and cloud metadata CIDRs.
+var privateRanges = func() []*net.IPNet {
+	cidrs := []string{
+		"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+		"127.0.0.0/8", "169.254.0.0/16",
+		"::1/128", "fc00::/7", "fe80::/10",
+	}
+	var nets []*net.IPNet
+	for _, c := range cidrs {
+		_, n, _ := net.ParseCIDR(c)
+		nets = append(nets, n)
+	}
+	return nets
+}()
+
+func isPrivateIP(host string) bool {
+	// Strip brackets from IPv6 literal
+	host = strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
+	ips, err := net.LookupHost(host)
+	if err != nil {
+		return true // treat unresolvable as unsafe
+	}
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			return true
+		}
+		for _, r := range privateRanges {
+			if r.Contains(ip) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (s *Service) UpdateWebhook(ctx context.Context, merchantID uuid.UUID, webhookURL string) error {
 	if webhookURL != "" {
-		if len(webhookURL) < 8 || webhookURL[:8] != "https://" {
+		parsed, err := url.Parse(webhookURL)
+		if err != nil || parsed.Scheme != "https" {
 			return fmt.Errorf("invalid webhook URL: must use HTTPS")
 		}
-		for _, blocked := range []string{"localhost", "127.", "10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31."} {
-			if len(webhookURL) > 8 && contains(webhookURL[8:], blocked) {
-				return fmt.Errorf("invalid webhook URL: internal addresses not allowed")
-			}
+		host := parsed.Hostname()
+		if host == "" || isPrivateIP(host) {
+			return fmt.Errorf("invalid webhook URL: internal or unresolvable addresses not allowed")
 		}
 	}
 	return s.repo.UpdateMerchantWebhook(ctx, merchantID, webhookURL)
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s[:len(substr)] == substr)
-}
 
 func (s *Service) AdminListMerchants(ctx context.Context, filter models.AdminMerchantFilter) ([]models.Merchant, error) {
 	return s.repo.AdminListMerchants(ctx, filter)

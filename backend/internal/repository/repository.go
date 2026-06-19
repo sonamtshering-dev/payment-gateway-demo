@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/upay/gateway/internal/logger"
 	"github.com/upay/gateway/internal/models"
 )
 
@@ -59,8 +60,8 @@ func (r *Repository) GetMerchantByID(ctx context.Context, id uuid.UUID) (*models
 		&m.WebhookURL, &m.WebhookSecret, &m.IsActive, &m.IsAdmin, &m.DailyLimit, &m.CreatedAt, &m.UpdatedAt, &m.BusinessName, &logoURL,
 	)
 	if err != nil {
-		fmt.Printf("GetMerchantByID error: %v\n", err)
 		if err == pgx.ErrNoRows { return nil, nil }
+		logger.Error().Err(err).Str("merchant_id", id.String()).Msg("GetMerchantByID failed")
 		return nil, err
 	}
 	m.LogoURL = &logoURL

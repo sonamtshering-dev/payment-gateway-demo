@@ -80,7 +80,7 @@ func Load() (*Config, error) {
 		Server: ServerConfig{
 			Host: getEnv("SERVER_HOST", "0.0.0.0"),
 			Port: getEnv("SERVER_PORT", "8080"),
-			Mode: getEnv("GIN_MODE", "debug"),
+			Mode: getEnv("GIN_MODE", "release"),
 		},
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
@@ -128,17 +128,23 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) validate() error {
-	if c.JWT.AccessSecret == "" {
-		return fmt.Errorf("JWT_ACCESS_SECRET is required")
+	if len(c.JWT.AccessSecret) < 32 {
+		return fmt.Errorf("JWT_ACCESS_SECRET must be at least 32 characters (use: openssl rand -hex 64)")
 	}
-	if c.JWT.RefreshSecret == "" {
-		return fmt.Errorf("JWT_REFRESH_SECRET is required")
+	if len(c.JWT.RefreshSecret) < 32 {
+		return fmt.Errorf("JWT_REFRESH_SECRET must be at least 32 characters (use: openssl rand -hex 64)")
 	}
-	if c.Security.EncryptionKey == "" {
-		return fmt.Errorf("ENCRYPTION_KEY is required (32 bytes hex)")
+	if c.JWT.AccessSecret == c.JWT.RefreshSecret {
+		return fmt.Errorf("JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different")
+	}
+	if len(c.Security.EncryptionKey) != 64 {
+		return fmt.Errorf("ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes, use: openssl rand -hex 32)")
 	}
 	if c.Database.Password == "" {
 		return fmt.Errorf("DB_PASSWORD is required")
+	}
+	if c.Security.TimestampTolerance > 10*time.Minute {
+		return fmt.Errorf("TIMESTAMP_TOLERANCE_SECONDS must not exceed 600 (10 minutes)")
 	}
 	return nil
 }

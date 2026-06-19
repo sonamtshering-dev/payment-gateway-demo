@@ -195,23 +195,6 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 			return
 		}
 
-	// DEV MODE – skip signature verification for local testing
-// WARNING: Do NOT use this in production
-
-// DEV MODE: Skip signature verification
-// Commented for local testing
-
-// if !utils.VerifyHMAC(apiSecret, timestamp, string(body), signature) {
-//     c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-//         Error: "invalid signature",
-//         Code:  "INVALID_SIGNATURE",
-//     })
-//     c.Abort()
-//     return
-// }
-
-
-
 		// Look up merchant by API key
 		merchant, err := repo.GetMerchantByAPIKey(c.Request.Context(), apiKey)
 		if err != nil || merchant == nil {
@@ -261,8 +244,8 @@ func APISignatureVerification(repo *repository.Repository, cfg *config.Config) g
 			return
 		}
 
-		// Check replay: store signature in Redis with TTL
-		replayKey := fmt.Sprintf("replay:%s", signature)
+		// Check replay: hash the signature to avoid storing raw HMAC in Redis keys
+		replayKey := fmt.Sprintf("replay:%s", utils.HashToken(signature))
 		exists, _ := cfg_redis(c).Exists(c.Request.Context(), replayKey).Result()
 		if exists > 0 {
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
