@@ -2,15 +2,91 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
+import {
+  DollarSign, Activity, TrendingUp, CheckCircle,
+  Link2, Plug, BarChart2, FileCode2, Package, AlertCircle,
+} from 'lucide-react';
 
-const fmt = (p: number) => `₹${(p/100).toLocaleString('en-IN')}`;
-const fmtDate = (s: string) => new Date(s).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmt = (p: number) => `₹${(p / 100).toLocaleString('en-IN')}`;
+const fmtDate = (s: string) =>
+  new Date(s).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmtTime = (s: string) =>
+  new Date(s).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
-const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
-  paid:    { bg: 'rgba(59,130,246,0.1)',   color: '#3b82f6' },
-  pending: { bg: 'rgba(245,158,11,0.1)',  color: '#f59e0b' },
-  failed:  { bg: 'rgba(239,68,68,0.1)',   color: '#ef4444' },
-  expired: { bg: 'rgba(100,116,139,0.1)', color: '#64748b' },
+const STATUS_MAP: Record<string, { bg: string; color: string; label: string }> = {
+  paid:    { bg: '#ECFDF5', color: '#059669', label: 'Paid'    },
+  pending: { bg: '#FFFBEB', color: '#D97706', label: 'Pending' },
+  failed:  { bg: '#FEF2F2', color: '#DC2626', label: 'Failed'  },
+  expired: { bg: '#F8FAFF', color: '#94A3B8', label: 'Expired' },
+};
+
+const C = {
+  bg:      '#F1F5FB',
+  surface: '#FFFFFF',
+  border:  '#E2E8F0',
+  text:    '#0F172A',
+  text2:   '#475569',
+  text3:   '#94A3B8',
+  blue:    '#2563EB',
+  blue50:  '#EFF6FF',
+  blue100: '#DBEAFE',
+  blue700: '#1D4ED8',
+  green:   '#059669',
+  greenBg: '#ECFDF5',
+  red:     '#DC2626',
+  redBg:   '#FEF2F2',
+  amber:   '#D97706',
+  amberBg: '#FFFBEB',
+  shadow:  '0 1px 3px rgba(15,23,42,.05),0 1px 2px rgba(15,23,42,.04)',
+} as const;
+
+const STAT_CARDS = [
+  {
+    key: 'volume',
+    label: 'Total Revenue',
+    sub: 'All time',
+    icon: DollarSign,
+    iconBg: C.blue50,
+    iconColor: C.blue,
+  },
+  {
+    key: 'transactions',
+    label: 'Total Payments',
+    sub: 'All time',
+    icon: Activity,
+    iconBg: C.blue50,
+    iconColor: C.blue,
+  },
+  {
+    key: 'today',
+    label: "Today's Revenue",
+    sub: 'today',
+    icon: TrendingUp,
+    iconBg: C.greenBg,
+    iconColor: C.green,
+  },
+  {
+    key: 'rate',
+    label: 'Success Rate',
+    sub: 'Last 30 days',
+    icon: CheckCircle,
+    iconBg: C.greenBg,
+    iconColor: C.green,
+  },
+];
+
+const QUICK = [
+  { label: 'Payment Links', icon: Link2,     href: '/dashboard/payments'          },
+  { label: 'Connect Merchant', icon: Plug,   href: '/dashboard/connect-merchant'  },
+  { label: 'View Stats',    icon: BarChart2, href: '/dashboard/stats'             },
+  { label: 'API & Webhooks', icon: FileCode2, href: '/dashboard/api-docs'         },
+];
+
+const card: React.CSSProperties = {
+  background: C.surface,
+  border: `1px solid ${C.border}`,
+  borderRadius: 12,
+  boxShadow: C.shadow,
 };
 
 export default function DashboardPage() {
@@ -29,146 +105,277 @@ export default function DashboardPage() {
     Promise.all([
       fetch('/api/v1/dashboard/stats', { headers: h }).then(r => r.json()),
       fetch('/api/v1/dashboard/subscription/detail', { headers: h }).then(r => r.json()),
-      fetch('/api/v1/dashboard/transactions?page=1&limit=5', { headers: h }).then(r => r.json()),
-    ]).then(([s, sub, t]) => {
+      fetch('/api/v1/dashboard/transactions?page=1&limit=8', { headers: h }).then(r => r.json()),
+    ]).then(([s, sd, t]) => {
       if (s.success) setStats(s.data);
-      if (sub.success && sub.data?.subscription) { setSub(sub.data.subscription); setPlan(sub.data.plan); }
+      if (sd.success && sd.data?.subscription) {
+        setSub(sd.data.subscription);
+        setPlan(sd.data.plan);
+      }
       if (t.success) setTxns(t.data?.data || []);
     }).finally(() => setLoading(false));
   }, []);
 
-  const daysLeft = sub?.expires_at ? Math.max(0, Math.ceil((new Date(sub.expires_at).getTime() - Date.now()) / 86400000)) : null;
+  const daysLeft = sub?.expires_at
+    ? Math.max(0, Math.ceil((new Date(sub.expires_at).getTime() - Date.now()) / 86400000))
+    : null;
 
-  const QUICK = [
-    { label: 'Payment Link', icon: '🔗', href: '/dashboard/payments' },
-    { label: 'Connect Merchant', icon: '🔌', href: '/dashboard/connect-merchant' },
-    { label: 'View Stats', icon: '📊', href: '/dashboard/stats' },
-    { label: 'API Docs', icon: '📄', href: '/dashboard/api-docs' },
-  ];
+  const statValues: Record<string, string> = {
+    volume:       stats ? fmt(stats.total_volume) : '—',
+    transactions: stats ? stats.total_transactions.toLocaleString('en-IN') : '—',
+    today:        stats ? fmt(stats.today_volume) : '—',
+    rate:         stats ? `${stats.success_rate.toFixed(1)}%` : '—',
+  };
+  const todaySub = stats ? `${stats.today_transactions} txns today` : 'today';
 
   return (
-    <div style={{ color: '#dbeafe', fontFamily: 'DM Sans, sans-serif', maxWidth: 1100, overflowX: 'hidden' as const }}>
+    <div style={{ color: C.text, fontFamily: 'inherit', maxWidth: 1200 }}>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+        .ov-txn-row:hover { background: #F8FAFF !important; }
+        .ov-quick-btn:hover { background: #F8FAFF !important; }
+        .ov-link-btn:hover { opacity: .8; }
 
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap' as const, gap: 12 }}>
+        /* Layout grid */
+        .ov-grid { display: grid; grid-template-columns: 1fr 280px; gap: 14px; }
+        .ov-stat-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+
+        /* Table: show on desktop, hide on mobile */
+        .ov-tbl-wrap { display: block; overflow-x: auto; }
+        .ov-card-wrap { display: none; flex-direction: column; gap: 8px; }
+
+        @media (max-width: 1024px) {
+          .ov-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 640px) {
+          .ov-stat-row { grid-template-columns: repeat(2,1fr); }
+          .ov-tbl-wrap { display: none; }
+          .ov-card-wrap { display: flex; }
+        }
+        @media (max-width: 380px) {
+          .ov-stat-row { grid-template-columns: 1fr; }
+        }
+      `}</style>
+
+      {/* Page header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 32, fontWeight: 800 }}>
-            Welcome back, {merchant?.name || 'User'}
+          <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-.04em', color: C.text }}>
+            Overview
           </div>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>Here's what's happening with your payments today.</div>
+          <div style={{ fontSize: 13, color: C.text2, marginTop: 2 }}>
+            Welcome back, <span style={{ color: C.blue, fontWeight: 600 }}>{merchant?.name || 'there'}</span>. Here&apos;s what&apos;s happening today.
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {sub?.status === 'active' ? (
-            <span style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', color: '#3b82f6', fontSize: 12, fontWeight: 700, padding: '6px 14px', borderRadius: 100 }}>
-              ● {plan?.name || 'Active'} Plan
-            </span>
-          ) : (
-            <button onClick={() => router.push('/dashboard/subscription')} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', fontSize: 12, fontWeight: 700, padding: '6px 14px', borderRadius: 100, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-              ⚠ No Active Plan
-            </button>
-          )}
-        </div>
+        <button
+          onClick={() => router.push('/dashboard/transactions')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 15px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', letterSpacing: '-.01em', fontFamily: 'inherit' }}
+        >
+          View All Transactions
+        </button>
       </div>
 
       {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 20 }}>
-        {[
-          { label: 'Total Revenue',    value: stats ? fmt(stats.total_volume) : '₹0',                      sub: 'All time',          icon: '💸', iconBg: 'rgba(16,185,129,0.15)' },
-          { label: 'Total Payments',   value: stats ? stats.total_transactions.toLocaleString() : '0',     sub: 'All time',          icon: '🛍️', iconBg: 'rgba(99,102,241,0.15)' },
-          { label: "Today's Revenue",  value: stats ? fmt(stats.today_volume) : '₹0',                      sub: `${stats?.today_transactions || 0} txns today`, icon: '📈', iconBg: 'rgba(245,158,11,0.15)' },
-          { label: 'Success Rate',     value: stats ? `${stats.success_rate.toFixed(1)}%` : '—',           sub: 'Last 30 days',      icon: '🎯', iconBg: 'rgba(139,92,246,0.15)' },
-        ].map(c => (
-          <div key={c.label} style={{ background: '#0f1d35', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 11, background: c.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{c.icon}</div>
-            <div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 3 }}>{c.label}</div>
-              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 28, fontWeight: 800, letterSpacing: -0.5 }}>{loading ? '—' : c.value}</div>
-              <div style={{ fontSize: 11, color: '#4b5563', marginTop: 1 }}>{c.sub}</div>
+      <div className="ov-stat-row" style={{ marginBottom: 14 }}>
+        {STAT_CARDS.map(s => {
+          const Icon = s.icon;
+          const val = s.key === 'today' ? statValues.today : statValues[s.key];
+          const sub = s.key === 'today' ? todaySub : s.sub;
+          return (
+            <div key={s.key} style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 9, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                <Icon size={16} color={s.iconColor} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, color: C.text3, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '.06em' }}>{s.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-.05em', margin: '2px 0 2px', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, overflowWrap: 'break-word' }}>
+                  {loading ? <span style={{ color: C.text3 }}>—</span> : val}
+                </div>
+                <div style={{ fontSize: 10.5, color: C.text3 }}>{sub}</div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Middle row: subscription status + quick actions */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+      {/* Two-column layout */}
+      <div className="ov-grid">
 
-        {/* Subscription status */}
-        <div style={{ background: sub?.status === 'active' ? 'rgba(59,130,246,0.05)' : 'rgba(239,68,68,0.05)', border: `1px solid ${sub?.status === 'active' ? 'rgba(59,130,246,0.15)' : 'rgba(239,68,68,0.15)'}`, borderRadius: 16, padding: '20px 22px' }}>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 12 }}>Subscription Status</div>
-          {sub?.status === 'active' ? (
-            <>
-              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 18, fontWeight: 800, marginBottom: 4 }}>{plan?.name || 'Active Plan'}</div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 12 }}>
-                {sub.expires_at ? `Expires ${fmtDate(sub.expires_at)}` : 'Never expires'}
-                {daysLeft !== null && daysLeft <= 7 && <span style={{ color: '#f59e0b', marginLeft: 8 }}>⚠ {daysLeft} days left</span>}
-              </div>
-              <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-                <span>QR: {plan?.qr_limit === 0 ? '∞' : plan?.qr_limit || '—'}</span>
-                <span>Links: {plan?.link_limit === 0 ? '∞' : plan?.link_limit || '—'}</span>
-                <span>API: {plan?.api_limit === 0 ? '∞' : plan?.api_limit || '—'}/day</span>
-              </div>
-              <button onClick={() => router.push('/dashboard/active-subscription')} style={{ marginTop: 14, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8, padding: '7px 16px', color: '#3b82f6', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                View Details →
-              </button>
-            </>
+        {/* Left: Recent Transactions */}
+        <div style={{ ...card, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px 11px', borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: '-.02em' }}>Recent Transactions</span>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#059669', display: 'inline-block', animation: 'np-blink 2s infinite' }} />
+            </div>
+            <button
+              onClick={() => router.push('/dashboard/transactions')}
+              className="ov-link-btn"
+              style={{ background: 'none', border: 'none', color: C.blue, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              View all
+            </button>
+          </div>
+
+          {loading ? (
+            <div style={{ padding: 40, textAlign: 'center', color: C.text3 }}>
+              <div style={{ width: 22, height: 22, border: `2px solid ${C.border}`, borderTopColor: C.blue, borderRadius: '50%', animation: 'spin .8s linear infinite', margin: '0 auto 10px' }} />
+              Loading...
+            </div>
+          ) : txns.length === 0 ? (
+            <div style={{ padding: 48, textAlign: 'center', color: C.text3 }}>
+              <Activity size={32} style={{ margin: '0 auto 10px', opacity: .3 }} />
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>No transactions yet</div>
+              <div style={{ fontSize: 13 }}>Create a payment link to get started.</div>
+            </div>
           ) : (
             <>
-              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 18, fontWeight: 800, marginBottom: 4, color: '#ef4444' }}>No Active Plan</div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 14 }}>Purchase a plan to activate gateway access for your merchants.</div>
-              <button onClick={() => router.push('/dashboard/subscription')} style={{ background: 'linear-gradient(135deg,#1d4ed8,#1e40af)', border: 'none', borderRadius: 8, padding: '8px 18px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                View Plans →
-              </button>
+              {/* Desktop table */}
+              <div className="ov-tbl-wrap">
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                      {['Order', 'Amount', 'Status', 'Date'].map(h => (
+                        <th key={h} style={{ padding: '9px 16px 7px', textAlign: 'left', fontSize: 10.5, fontWeight: 700, color: C.text3, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {txns.map((tx, i) => {
+                      const s = STATUS_MAP[tx.status] || STATUS_MAP.pending;
+                      return (
+                        <tr key={tx.id} className="ov-txn-row" style={{ borderBottom: i < txns.length - 1 ? `1px solid ${C.border}` : 'none', transition: 'background .1s' }}>
+                          <td style={{ padding: '10px 16px' }}>
+                            <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{tx.order_id}</div>
+                            <div style={{ fontSize: 10.5, color: C.text3, fontFamily: 'monospace' }}>{tx.id?.slice(0, 12)}...</div>
+                          </td>
+                          <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 800, letterSpacing: '-.02em', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmt(tx.amount)}</td>
+                          <td style={{ padding: '10px 16px' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: s.bg, color: s.color, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>
+                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                              {s.label}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 16px' }}>
+                            <div style={{ fontSize: 12, color: C.text2 }}>{fmtDate(tx.created_at)}</div>
+                            <div style={{ fontSize: 10.5, color: C.text3 }}>{fmtTime(tx.created_at)}</div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="ov-card-wrap" style={{ padding: '10px 12px' }}>
+                {txns.map(tx => {
+                  const s = STATUS_MAP[tx.status] || STATUS_MAP.pending;
+                  return (
+                    <div key={tx.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, paddingRight: 8 }}>{tx.order_id}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: s.bg, color: s.color, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, flexShrink: 0 }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.color }} />
+                          {s.label}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.03em', fontVariantNumeric: 'tabular-nums' }}>{fmt(tx.amount)}</span>
+                        <span style={{ fontSize: 11, color: C.text3 }}>{fmtDate(tx.created_at)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
         </div>
 
-        {/* Quick actions */}
-        <div style={{ background: '#0f1d35', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '20px 22px' }}>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 14 }}>Quick Actions</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {QUICK.map(q => (
-              <button key={q.label} onClick={() => router.push(q.href)} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 14px', color: '#dbeafe', fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', textAlign: 'left' as const, display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.15s' }}
-                onMouseEnter={e => (e.currentTarget.style.background='rgba(255,255,255,0.06)')}
-                onMouseLeave={e => (e.currentTarget.style.background='rgba(255,255,255,0.03)')}
-              >
-                <span style={{ fontSize: 16 }}>{q.icon}</span>
-                <span style={{ fontSize: 12, fontWeight: 500 }}>{q.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+        {/* Right column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-      {/* Recent transactions */}
-      <div style={{ background: '#0f1d35', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, overflow: 'hidden' }}>
-        <div style={{ padding: '18px 22px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 15, fontWeight: 700 }}>Recent Orders</div>
-          <button onClick={() => router.push('/dashboard/transactions')} style={{ background: 'none', border: 'none', color: '#3b82f6', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>View all →</button>
-        </div>
-        {loading ? (
-          <div style={{ padding: 40, textAlign: 'center' as const, color: '#4b5563' }}>Loading…</div>
-        ) : txns.length === 0 ? (
-          <div style={{ padding: 48, textAlign: 'center' as const }}>
-            <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
-            <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 15, fontWeight: 700, marginBottom: 6 }}>No transactions yet</div>
-            <div style={{ fontSize: 13, color: '#4b5563' }}>Create a payment link or connect a merchant to get started.</div>
-          </div>
-        ) : txns.map((tx, i) => {
-          const s = STATUS_STYLE[tx.status] || STATUS_STYLE.pending;
-          return (
-            <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', padding: '14px 22px', borderBottom: i < txns.length-1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center', fontSize: 13 }}
-              onMouseEnter={e => (e.currentTarget.style.background='rgba(255,255,255,0.02)')}
-              onMouseLeave={e => (e.currentTarget.style.background='transparent')}
-            >
-              <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#8b9ab5' }}>{tx.order_id}</span>
-              <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700 }}>{fmt(tx.amount)}</span>
-              <span style={{ fontSize: 11, color: '#64748b' }}>{fmtDate(tx.created_at)}</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: s.bg, color: s.color, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 100, width: 'fit-content' }}>
-                <span style={{ width: 4, height: 4, borderRadius: '50%', background: s.color }} />{tx.status}
-              </span>
+          {/* Subscription status */}
+          <div style={{
+            ...card,
+            borderColor: sub?.status === 'active' ? C.blue100 : '#FCA5A5',
+            background: sub?.status === 'active' ? C.blue50 : '#FFF5F5',
+            padding: '14px 16px',
+          }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 10 }}>
+              Subscription
             </div>
-          );
-        })}
+            {sub?.status === 'active' ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                  <Package size={16} color={C.blue} />
+                  <span style={{ fontSize: 14, fontWeight: 800, color: C.text, letterSpacing: '-.02em' }}>{plan?.name || 'Active Plan'}</span>
+                </div>
+                <div style={{ fontSize: 12, color: C.text2, marginBottom: 10 }}>
+                  {sub.expires_at ? `Expires ${fmtDate(sub.expires_at)}` : 'Never expires'}
+                  {daysLeft !== null && daysLeft <= 7 && (
+                    <span style={{ color: C.amber, marginLeft: 6, fontWeight: 700 }}>
+                      {daysLeft}d left
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 8, fontSize: 11.5, color: C.text2, marginBottom: 12, flexWrap: 'wrap' } as React.CSSProperties}>
+                  <span>QR: <b style={{ color: C.text }}>{plan?.qr_limit === 0 ? 'Unlimited' : plan?.qr_limit || '—'}</b></span>
+                  <span>Links: <b style={{ color: C.text }}>{plan?.link_limit === 0 ? 'Unlimited' : plan?.link_limit || '—'}</b></span>
+                </div>
+                <button
+                  onClick={() => router.push('/dashboard/active-subscription')}
+                  style={{ background: C.blue, border: 'none', borderRadius: 7, padding: '7px 13px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  View Details
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+                  <AlertCircle size={16} color={C.red} />
+                  <span style={{ fontSize: 14, fontWeight: 800, color: C.red, letterSpacing: '-.02em' }}>No Active Plan</span>
+                </div>
+                <div style={{ fontSize: 12, color: C.text2, marginBottom: 12 }}>
+                  Purchase a plan to activate gateway access.
+                </div>
+                <button
+                  onClick={() => router.push('/dashboard/subscription')}
+                  style={{ background: C.blue, border: 'none', borderRadius: 7, padding: '7px 13px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  View Plans
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Quick actions */}
+          <div style={{ ...card, padding: '14px 16px' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 10 }}>
+              Quick Actions
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {QUICK.map(q => {
+                const Icon = q.icon;
+                return (
+                  <button
+                    key={q.label}
+                    onClick={() => router.push(q.href)}
+                    className="ov-quick-btn"
+                    style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, transition: 'background .1s' }}
+                  >
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: C.blue50, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Icon size={13} color={C.blue} />
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{q.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
   );

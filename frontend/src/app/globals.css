@@ -5,12 +5,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  --foreground: #0f1d35;
-  --background: #020817;
-  --card: #ffffff;
-  --border: #e5e7eb;
-  --muted: #6b7280;
-  --accent: #1d4ed8;
+  --foreground: #0F172A;
+  --background: #F1F5FB;
+  --surface: #FFFFFF;
+  --card: #FFFFFF;
+  --border: #E2E8F0;
+  --muted: #94A3B8;
+  --accent: #2563EB;
+  --accent-50: #EFF6FF;
+  --accent-100: #DBEAFE;
+  --text-2: #475569;
 }
 
 body {
