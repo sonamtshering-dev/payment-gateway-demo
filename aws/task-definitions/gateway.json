@@ -1,0 +1,84 @@
+{
+  "family": "novapay-gateway",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/novapay-task-role",
+  "containerDefinitions": [
+    {
+      "name": "gateway",
+      "image": "ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/novapay/gateway:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "SERVER_HOST",                   "value": "0.0.0.0" },
+        { "name": "SERVER_PORT",                   "value": "8080" },
+        { "name": "GIN_MODE",                      "value": "release" },
+        { "name": "DB_PORT",                       "value": "5432" },
+        { "name": "DB_USER",                       "value": "upay" },
+        { "name": "DB_NAME",                       "value": "upay_gateway" },
+        { "name": "DB_SSL_MODE",                   "value": "require" },
+        { "name": "DB_MAX_CONNS",                  "value": "25" },
+        { "name": "REDIS_PORT",                    "value": "6379" },
+        { "name": "REDIS_DB",                      "value": "0" },
+        { "name": "JWT_ACCESS_EXPIRY_MINUTES",     "value": "1440" },
+        { "name": "JWT_REFRESH_EXPIRY_DAYS",       "value": "7" },
+        { "name": "TIMESTAMP_TOLERANCE_SECONDS",   "value": "300" },
+        { "name": "RATE_LIMIT_PER_MINUTE",         "value": "60" },
+        { "name": "PAYMENT_SESSION_TTL_MINUTES",   "value": "5" },
+        { "name": "MAX_TRANSACTIONS_PER_DAY",      "value": "10000" },
+        { "name": "WEBHOOK_TIMEOUT_SECONDS",       "value": "10" },
+        { "name": "WEBHOOK_MAX_RETRIES",           "value": "5" },
+        { "name": "FRONTEND_URL",                  "value": "https://nova-pay.in" },
+        { "name": "APP_URL",                       "value": "https://nova-pay.in" },
+        { "name": "NEXT_PUBLIC_API_URL",           "value": "https://nova-pay.in" },
+        { "name": "RESEND_FROM_EMAIL",             "value": "noreply@novapay.in" },
+        { "name": "ADMIN_EMAIL",                   "value": "admin@novapay.in" }
+      ],
+      "secrets": [
+        { "name": "DB_HOST",           "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:novapay/prod:DB_HOST::" },
+        { "name": "DB_PASSWORD",       "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:novapay/prod:DB_PASSWORD::" },
+        { "name": "REDIS_HOST",        "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:novapay/prod:REDIS_HOST::" },
+        { "name": "REDIS_PASSWORD",    "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:novapay/prod:REDIS_PASSWORD::" },
+        { "name": "JWT_ACCESS_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:novapay/prod:JWT_ACCESS_SECRET::" },
+        { "name": "JWT_REFRESH_SECRET","valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:novapay/prod:JWT_REFRESH_SECRET::" },
+        { "name": "ENCRYPTION_KEY",    "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:novapay/prod:ENCRYPTION_KEY::" },
+        { "name": "HMAC_SECRET",       "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:novapay/prod:HMAC_SECRET::" },
+        { "name": "RESEND_API_KEY",    "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:novapay/prod:RESEND_API_KEY::" },
+        { "name": "CF_API_TOKEN",      "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:novapay/prod:CF_API_TOKEN::" },
+        { "name": "CF_ZONE_ID",        "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:novapay/prod:CF_ZONE_ID::" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group":         "/ecs/novapay-gateway",
+          "awslogs-region":        "ap-south-1",
+          "awslogs-stream-prefix": "gateway",
+          "awslogs-create-group":  "true"
+        }
+      },
+      "healthCheck": {
+        "command":     ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
+        "interval":    15,
+        "timeout":     5,
+        "retries":     3,
+        "startPeriod": 30
+      },
+      "stopTimeout": 30,
+      "ulimits": [
+        {
+          "name":      "nofile",
+          "softLimit": 65536,
+          "hardLimit": 65536
+        }
+      ]
+    }
+  ]
+}
