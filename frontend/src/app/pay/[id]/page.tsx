@@ -17,6 +17,20 @@ interface PaymentData {
   customer_reference?: string;
   utr?: string;
   redirect_url?: string;
+  usdt_enabled?: boolean;
+  crypto_networks?: { id: string; label: string }[];
+}
+
+interface CryptoInit {
+  crypto_payment_id: string;
+  network: string;
+  network_label: string;
+  merchant_wallet: string;
+  expected_usdt: string;
+  exchange_rate: number;
+  inr_amount: number;
+  qr_code_base64: string;
+  expires_at: string;
 }
 
 const UPI_APPS = [
@@ -73,6 +87,51 @@ export default function PayPage() {
   const [orderCopied, setOrderCopied] = useState(false);
   const [upiCopied, setUpiCopied] = useState(false);
   const [paidAt, setPaidAt] = useState('');
+
+  // Crypto / USDT flow
+  const [method, setMethod] = useState<'upi' | 'usdt'>('upi');
+  const [cryptoNetwork, setCryptoNetwork] = useState<string>('');
+  const [cryptoData, setCryptoData] = useState<CryptoInit | null>(null);
+  const [cryptoLoading, setCryptoLoading] = useState(false);
+  const [cryptoErr, setCryptoErr] = useState('');
+  const [walletCopied, setWalletCopied] = useState(false);
+  const [amtCopied, setAmtCopied] = useState(false);
+  const [txHash, setTxHash] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const initCrypto = useCallback(async (network: string) => {
+    setCryptoLoading(true); setCryptoErr(''); setCryptoData(null);
+    try {
+      const res = await fetch(`/api/v1/public/payment/${paymentId}/crypto/init`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ network }),
+      });
+      const data = await res.json();
+      if (data.success) { setCryptoData(data.data); setCryptoNetwork(network); }
+      else setCryptoErr(data.error || 'Could not start USDT payment');
+    } catch { setCryptoErr('Network error, please try again'); }
+    finally { setCryptoLoading(false); }
+  }, [paymentId]);
+
+  const verifyCrypto = async () => {
+    if (!cryptoData || !txHash.trim()) return;
+    setVerifying(true); setVerifyMsg(null);
+    try {
+      const res = await fetch('/api/v1/public/crypto/verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ crypto_payment_id: cryptoData.crypto_payment_id, tx_hash: txHash.trim() }),
+      });
+      const data = await res.json();
+      if (data.success && data.data?.status === 'paid') {
+        setVerifyMsg({ ok: true, text: 'Payment confirmed!' });
+        setTimeout(() => fetchPayment(), 600);
+      } else {
+        setVerifyMsg({ ok: false, text: data.error || 'Verification failed' });
+      }
+    } catch { setVerifyMsg({ ok: false, text: 'Network error, please try again' }); }
+    finally { setVerifying(false); }
+  };
 
   const fetchPayment = useCallback(async () => {
     try {
@@ -638,6 +697,103 @@ export default function PayPage() {
                 </div>
               </div>
 
+              {/* Payment method toggle (shown only if merchant enabled USDT) */}
+              {payment?.usdt_enabled && (payment?.crypto_networks?.length ?? 0) > 0 && (
+                <div className="pay-card" style={{ padding: 6, display: 'flex', gap: 6 }}>
+                  {([['upi', 'UPI / INR'], ['usdt', 'USDT']] as const).map(([m, label]) => (
+                    <button key={m} onClick={() => setMethod(m)}
+                      style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                        fontSize: 13.5, fontWeight: 700, transition: 'all .15s',
+                        background: method === m ? (m === 'usdt' ? '#26A17B' : '#2563EB') : 'transparent',
+                        color: method === m ? '#fff' : '#64748B' }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* ── USDT PANEL ── */}
+              {method === 'usdt' && (
+                <div className="pay-card">
+                  {/* Network selector */}
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 10 }}>Select network</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: cryptoData ? 18 : 0 }}>
+                    {payment?.crypto_networks?.map(n => (
+                      <button key={n.id} onClick={() => initCrypto(n.id)} disabled={cryptoLoading}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 11,
+                          cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                          border: `1.5px solid ${cryptoNetwork === n.id ? '#26A17B' : '#E2E8F0'}`,
+                          background: cryptoNetwork === n.id ? '#F0FDF9' : '#fff' }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 600, color: '#0F172A' }}>{n.label}</span>
+                        {cryptoLoading && cryptoNetwork === n.id
+                          ? <span style={{ width: 14, height: 14, border: '2px solid #A7F3D0', borderTopColor: '#26A17B', borderRadius: '50%', display: 'inline-block', animation: 'pp-spin .7s linear infinite' }} />
+                          : <span style={{ fontSize: 18, color: '#26A17B' }}>›</span>}
+                      </button>
+                    ))}
+                  </div>
+
+                  {cryptoErr && <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 9, fontSize: 12.5, background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626' }}>{cryptoErr}</div>}
+
+                  {cryptoData && (
+                    <>
+                      {/* Amount to send */}
+                      <div style={{ background: '#F0FDF9', border: '1px solid #A7F3D0', borderRadius: 12, padding: 16, marginBottom: 14 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Send exactly</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ fontSize: 26, fontWeight: 800, color: '#065F46', letterSpacing: '-.5px' }}>{cryptoData.expected_usdt} <span style={{ fontSize: 15 }}>USDT</span></div>
+                          <button onClick={() => copyText(cryptoData.expected_usdt, setAmtCopied)}
+                            style={{ background: '#26A17B', border: 'none', borderRadius: 8, padding: '7px 12px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            {amtCopied ? 'Copied' : 'Copy'}
+                          </button>
+                        </div>
+                        <div style={{ fontSize: 11.5, color: '#047857', marginTop: 6 }}>
+                          ₹{fmtAmount(cryptoData.inr_amount)} · rate ₹{cryptoData.exchange_rate.toFixed(2)}/USDT · send the exact amount incl. decimals
+                        </div>
+                      </div>
+
+                      {/* Wallet QR */}
+                      <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>Scan or copy the {cryptoData.network_label} address</div>
+                        {cryptoData.qr_code_base64 && <img src={cryptoData.qr_code_base64} alt="Wallet QR" style={{ width: 168, height: 168, borderRadius: 12, border: '1px solid #E2E8F0' }} />}
+                      </div>
+
+                      {/* Wallet address */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: '10px 12px', marginBottom: 16 }}>
+                        <span style={{ flex: 1, fontSize: 12, fontFamily: 'monospace', color: '#334155', wordBreak: 'break-all' }}>{cryptoData.merchant_wallet}</span>
+                        <button onClick={() => copyText(cryptoData.merchant_wallet, setWalletCopied)}
+                          style={{ background: '#26A17B', border: 'none', borderRadius: 7, padding: '6px 11px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                          {walletCopied ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+
+                      {/* Paste TxID + verify */}
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>After sending, paste your transaction hash</div>
+                      <input value={txHash} onChange={e => setTxHash(e.target.value)} placeholder="Transaction hash (TxID)"
+                        style={{ width: '100%', padding: '11px 12px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 12.5, fontFamily: 'monospace', color: '#0F172A', outline: 'none', marginBottom: 10 }} />
+                      <button onClick={verifyCrypto} disabled={verifying || !txHash.trim()}
+                        style={{ width: '100%', padding: '13px', borderRadius: 11, border: 'none', fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+                          cursor: verifying || !txHash.trim() ? 'not-allowed' : 'pointer',
+                          background: verifying || !txHash.trim() ? '#94D3BF' : '#26A17B', color: '#fff' }}>
+                        {verifying ? 'Verifying…' : 'Verify Payment'}
+                      </button>
+
+                      {verifyMsg && (
+                        <div style={{ marginTop: 12, padding: '11px 14px', borderRadius: 9, fontSize: 13, fontWeight: 500,
+                          background: verifyMsg.ok ? '#F0FDF4' : '#FEF2F2', border: `1px solid ${verifyMsg.ok ? '#BBF7D0' : '#FECACA'}`,
+                          color: verifyMsg.ok ? '#059669' : '#DC2626' }}>
+                          {verifyMsg.text}
+                        </div>
+                      )}
+
+                      <div style={{ marginTop: 12, fontSize: 11, color: '#94A3B8', lineHeight: 1.6 }}>
+                        Send only <strong>USDT on {cryptoData.network_label}</strong> to this address. Sending a different token or network will result in loss of funds.
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {method === 'upi' && (<>
               {/* Scan & Pay card */}
               <div className="pay-card scan-section">
                 <div className="scan-title">Scan &amp; Pay</div>
@@ -687,6 +843,8 @@ export default function PayPage() {
                 </div>
               </div>
 
+              </>)}
+
               {/* Timer card */}
               <div className="pay-card" style={{ padding: '14px 20px' }}>
                 <div className="timer-row">
@@ -706,7 +864,8 @@ export default function PayPage() {
                 <span style={{ fontSize: 12, color: '#94A3B8' }}>Need help? <a style={{ color: '#2563EB', fontWeight: 600, cursor: 'pointer', textDecoration: 'none' }}>Contact Support</a></span>
               </div>
 
-              {/* Payment instructions card */}
+              {/* Payment instructions card (UPI only) */}
+              {method === 'upi' && (
               <div className="pay-card">
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: 18 }}>Payment Instructions</div>
                 <div className="inst-grid">
@@ -736,6 +895,7 @@ export default function PayPage() {
                   ))}
                 </div>
               </div>
+              )}
             </>
           )}
 

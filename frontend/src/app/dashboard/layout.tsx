@@ -8,7 +8,7 @@ import {
   FileCode2, Shield, Home, LogOut, Bell, Menu, X,
   BarChart2, Palette, CreditCard, Users,
   ShieldCheck, AlertTriangle, PackagePlus, ChevronDown,
-  ChevronLeft, ChevronRight, Settings, Send,
+  ChevronLeft, ChevronRight, Settings, Send, Coins,
 } from 'lucide-react';
 
 // ── Navigation structure ─────────────────────────────────────────
@@ -63,6 +63,7 @@ const NAV_GROUPS = [
     label: 'Settings',
     icon: Settings,
     items: [
+      { label: 'Crypto Payments', href: '/dashboard/crypto', icon: Coins },
       { label: 'Telegram Alerts', href: '/dashboard/telegram', icon: Send },
     ],
   },
@@ -82,6 +83,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/dashboard/kyc':                 'KYC Verification',
   '/dashboard/branding':            'Branding',
   '/dashboard/telegram':            'Telegram Alerts',
+  '/dashboard/crypto':              'Crypto Payments',
 };
 
 const STYLES = `

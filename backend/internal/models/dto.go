@@ -96,6 +96,15 @@ type PaymentStatusResponse struct {
 	CustomerRef   string `json:"customer_reference,omitempty"`
 	MerchantLogo  string `json:"merchant_logo,omitempty"`
 	BusinessName  string `json:"business_name,omitempty"`
+
+	// Crypto availability for the checkout page (only networks with a wallet set).
+	USDTEnabled    bool                  `json:"usdt_enabled"`
+	CryptoNetworks []CryptoNetworkOption `json:"crypto_networks,omitempty"`
+}
+
+type CryptoNetworkOption struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
 }
 
 type VerifyPaymentRequest struct {

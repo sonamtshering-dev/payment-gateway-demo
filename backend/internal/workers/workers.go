@@ -86,6 +86,12 @@ func (w *Worker) paymentExpiryWorker(ctx context.Context) {
 						services.FormatPaymentExpired(p.OrderID, p.Amount))
 				}
 			}
+			// Release stale crypto reservations so their unique payable amount can be reused.
+			if n, cerr := w.repo.ExpireCryptoPayments(ctx); cerr != nil {
+				log.Error().Err(cerr).Msg("Error expiring crypto payments")
+			} else if n > 0 {
+				log.Info().Int64("count", n).Msg("Expired pending crypto payments")
+			}
 		}
 	}
 }

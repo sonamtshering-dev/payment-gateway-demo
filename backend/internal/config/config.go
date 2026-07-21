@@ -16,6 +16,7 @@ type Config struct {
 	Security   SecurityConfig
 	Cloudflare CloudflareConfig
 	Telegram   TelegramConfig
+	Crypto     CryptoConfig
 }
 
 type TelegramConfig struct {
@@ -119,6 +120,7 @@ func Load() (*Config, error) {
 			BotName:       getEnv("TELEGRAM_BOT_NAME", ""),
 			WebhookSecret: getEnv("TELEGRAM_WEBHOOK_SECRET", ""),
 		},
+		Crypto: loadCryptoConfig(),
 		Security: SecurityConfig{
 			EncryptionKey:      getEnv("ENCRYPTION_KEY", ""),
 			HMACSecret:         getEnv("HMAC_SECRET", ""),

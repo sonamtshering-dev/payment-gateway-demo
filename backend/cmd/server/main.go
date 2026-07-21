@@ -140,6 +140,8 @@ func main() {
 	r.GET("/api/v1/public/plans", h.GetPublicPlans)
 	r.GET("/api/v1/public/payment/:payment_id", h.GetPaymentStatus)
 	r.POST("/api/v1/public/payment/:payment_id/customer-details", h.SaveCustomerDetails)
+	r.POST("/api/v1/public/payment/:payment_id/crypto/init", h.InitCryptoPayment)
+	r.POST("/api/v1/public/crypto/verify", h.VerifyCryptoPayment)
 	r.POST("/api/v1/public/subscribe", h.EmailSubscribe)
 
 	v1 := r.Group("/api/v1")
@@ -214,7 +216,13 @@ func main() {
 					dashboard.POST("/payments/create", h.CreatePayment)
 
 				// Telegram notifications
-				dashboard.GET("/telegram", h.GetTelegramStatus)
+				// Crypto / USDT settings
+			dashboard.GET("/crypto", h.GetCryptoSettings)
+			dashboard.PUT("/crypto/config", h.UpdateCryptoConfig)
+			dashboard.POST("/crypto/wallet", h.SaveCryptoWallet)
+			dashboard.DELETE("/crypto/wallet/:network", h.DeleteCryptoWallet)
+
+			dashboard.GET("/telegram", h.GetTelegramStatus)
 				dashboard.POST("/telegram/connect", h.GenerateTelegramCode)
 				dashboard.PUT("/telegram/settings", h.UpdateTelegramSettings)
 				dashboard.POST("/telegram/test", h.SendTelegramTest)

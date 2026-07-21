@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/upay/gateway/internal/blockchain"
 	"github.com/upay/gateway/internal/config"
 	"github.com/upay/gateway/internal/logger"
 	"github.com/upay/gateway/internal/models"
@@ -23,6 +24,7 @@ type Service struct {
 	email      *EmailService
 	cloudflare *CloudflareService
 	telegram   *TelegramService
+	verifier   *blockchain.Verifier
 }
 
 func New(repo *repository.Repository, redis *redis.Client, cfg *config.Config) *Service {
@@ -33,6 +35,7 @@ func New(repo *repository.Repository, redis *redis.Client, cfg *config.Config) *
 		email:      NewEmailService(),
 		cloudflare: NewCloudflareService(cfg.Cloudflare.APIToken, cfg.Cloudflare.ZoneID),
 		telegram:   NewTelegramService(cfg.Telegram.BotToken, cfg.Telegram.BotName, redis),
+		verifier:   blockchain.NewVerifier(cfg.Crypto),
 	}
 }
 
@@ -311,6 +314,23 @@ func (s *Service) GetPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*m
 			businessName = merchant.Name
 		}
 	}
+	// Advertise USDT only when enabled AND at least one network has an active wallet.
+	usdtEnabled := false
+	var cryptoNets []models.CryptoNetworkOption
+	if cc, _ := s.repo.GetCryptoConfig(ctx, payment.MerchantID); cc != nil && cc.USDTEnabled {
+		if wallets, _ := s.repo.ListCryptoWallets(ctx, payment.MerchantID); len(wallets) > 0 {
+			for _, w := range wallets {
+				if !w.IsActive || w.Address == "" {
+					continue
+				}
+				if net, ok := config.CryptoNetworks[w.Network]; ok {
+					cryptoNets = append(cryptoNets, models.CryptoNetworkOption{ID: net.ID, Label: net.Label})
+				}
+			}
+			usdtEnabled = len(cryptoNets) > 0
+		}
+	}
+
 	return &models.PaymentStatusResponse{
 		PaymentID:     payment.ID,
 		OrderID:       payment.OrderID,
@@ -328,6 +348,8 @@ func (s *Service) GetPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*m
 		CustomerRef:   payment.CustomerReference,
 		MerchantLogo:  merchantLogo,
 		BusinessName:  businessName,
+		USDTEnabled:    usdtEnabled,
+		CryptoNetworks: cryptoNets,
 	}, nil
 }
 
