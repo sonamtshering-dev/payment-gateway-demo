@@ -32,6 +32,7 @@ const NAV_GROUPS = [
     icon: Users,
     items: [
       { label: 'Connect Merchant', href: '/dashboard/connect-merchant', icon: Plug        },
+      { label: 'Crypto Payments',  href: '/dashboard/crypto',           icon: Coins       },
       { label: 'Referrals',        href: '/dashboard/referral',         icon: Users       },
       { label: 'KYC Verification', href: '/dashboard/kyc',              icon: ShieldCheck },
     ],
@@ -63,7 +64,6 @@ const NAV_GROUPS = [
     label: 'Settings',
     icon: Settings,
     items: [
-      { label: 'Crypto Payments', href: '/dashboard/crypto', icon: Coins },
       { label: 'Telegram Alerts', href: '/dashboard/telegram', icon: Send },
     ],
   },
