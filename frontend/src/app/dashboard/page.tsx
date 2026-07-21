@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import {
   DollarSign, Activity, TrendingUp, CheckCircle,
-  Link2, Plug, BarChart2, FileCode2, Package, AlertCircle,
+  Package, Zap,
 } from 'lucide-react';
 
 const fmt = (p: number) => `₹${(p / 100).toLocaleString('en-IN')}`;
@@ -73,13 +73,6 @@ const STAT_CARDS = [
     iconBg: C.greenBg,
     iconColor: C.green,
   },
-];
-
-const QUICK = [
-  { label: 'Payment Links', icon: Link2,     href: '/dashboard/payments'          },
-  { label: 'Connect Merchant', icon: Plug,   href: '/dashboard/connect-merchant'  },
-  { label: 'View Stats',    icon: BarChart2, href: '/dashboard/stats'             },
-  { label: 'API & Webhooks', icon: FileCode2, href: '/dashboard/api-docs'         },
 ];
 
 const card: React.CSSProperties = {
@@ -297,83 +290,96 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
           {/* Subscription status */}
-          <div style={{
-            ...card,
-            borderColor: sub?.status === 'active' ? C.blue100 : '#FCA5A5',
-            background: sub?.status === 'active' ? C.blue50 : '#FFF5F5',
-            padding: '14px 16px',
-          }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 10 }}>
-              Subscription
+          {sub?.status === 'active' ? (
+            <div style={{ ...card, padding: '16px', borderColor: C.blue100, background: C.blue50 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 10 }}>
+                Subscription
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                <Package size={16} color={C.blue} />
+                <span style={{ fontSize: 14, fontWeight: 800, color: C.text, letterSpacing: '-.02em' }}>{plan?.name || 'Active Plan'}</span>
+              </div>
+              <div style={{ fontSize: 12, color: C.text2, marginBottom: 10 }}>
+                {sub.expires_at ? `Expires ${fmtDate(sub.expires_at)}` : 'Never expires'}
+                {daysLeft !== null && daysLeft <= 7 && (
+                  <span style={{ color: C.amber, marginLeft: 6, fontWeight: 700 }}>{daysLeft}d left</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, fontSize: 11.5, color: C.text2, marginBottom: 12, flexWrap: 'wrap' } as React.CSSProperties}>
+                <span>QR: <b style={{ color: C.text }}>{plan?.qr_limit === 0 ? 'Unlimited' : plan?.qr_limit || '—'}</b></span>
+                <span>Links: <b style={{ color: C.text }}>{plan?.link_limit === 0 ? 'Unlimited' : plan?.link_limit || '—'}</b></span>
+              </div>
+              <button
+                onClick={() => router.push('/dashboard/active-subscription')}
+                style={{ background: C.blue, border: 'none', borderRadius: 7, padding: '7px 13px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                View Details
+              </button>
             </div>
-            {sub?.status === 'active' ? (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-                  <Package size={16} color={C.blue} />
-                  <span style={{ fontSize: 14, fontWeight: 800, color: C.text, letterSpacing: '-.02em' }}>{plan?.name || 'Active Plan'}</span>
+          ) : (
+            /* Premium "no plan" card */
+            <div style={{
+              borderRadius: 14,
+              background: 'linear-gradient(145deg, #0F172A 0%, #1E3A5F 60%, #1a3358 100%)',
+              padding: '20px',
+              position: 'relative',
+              overflow: 'hidden',
+            }}>
+              {/* Subtle grid texture */}
+              <div style={{
+                position: 'absolute', inset: 0, opacity: 0.04,
+                backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
+                backgroundSize: '24px 24px',
+                pointerEvents: 'none',
+              }} />
+              {/* Glow accent */}
+              <div style={{
+                position: 'absolute', top: -30, right: -30,
+                width: 120, height: 120, borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(37,99,235,0.35) 0%, transparent 70%)',
+                pointerEvents: 'none',
+              }} />
+              <div style={{ position: 'relative' }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  background: 'rgba(37,99,235,0.25)',
+                  border: '1px solid rgba(37,99,235,0.4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginBottom: 14,
+                }}>
+                  <Zap size={17} color="#60A5FA" fill="#60A5FA" />
                 </div>
-                <div style={{ fontSize: 12, color: C.text2, marginBottom: 10 }}>
-                  {sub.expires_at ? `Expires ${fmtDate(sub.expires_at)}` : 'Never expires'}
-                  {daysLeft !== null && daysLeft <= 7 && (
-                    <span style={{ color: C.amber, marginLeft: 6, fontWeight: 700 }}>
-                      {daysLeft}d left
-                    </span>
-                  )}
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#F1F5F9', letterSpacing: '-.03em', marginBottom: 6 }}>
+                  Unlock Full Access
                 </div>
-                <div style={{ display: 'flex', gap: 8, fontSize: 11.5, color: C.text2, marginBottom: 12, flexWrap: 'wrap' } as React.CSSProperties}>
-                  <span>QR: <b style={{ color: C.text }}>{plan?.qr_limit === 0 ? 'Unlimited' : plan?.qr_limit || '—'}</b></span>
-                  <span>Links: <b style={{ color: C.text }}>{plan?.link_limit === 0 ? 'Unlimited' : plan?.link_limit || '—'}</b></span>
+                <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.6, marginBottom: 18 }}>
+                  Choose a plan to start accepting UPI payments and access all gateway features.
                 </div>
-                <button
-                  onClick={() => router.push('/dashboard/active-subscription')}
-                  style={{ background: C.blue, border: 'none', borderRadius: 7, padding: '7px 13px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-                >
-                  View Details
-                </button>
-              </>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-                  <AlertCircle size={16} color={C.red} />
-                  <span style={{ fontSize: 14, fontWeight: 800, color: C.red, letterSpacing: '-.02em' }}>No Active Plan</span>
-                </div>
-                <div style={{ fontSize: 12, color: C.text2, marginBottom: 12 }}>
-                  Purchase a plan to activate gateway access.
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                  {['0% Fees', 'Instant UPI', 'Analytics'].map(f => (
+                    <span key={f} style={{
+                      fontSize: 10.5, fontWeight: 600, color: '#60A5FA',
+                      background: 'rgba(37,99,235,0.15)',
+                      border: '1px solid rgba(37,99,235,0.25)',
+                      borderRadius: 5, padding: '3px 8px',
+                    }}>{f}</span>
+                  ))}
                 </div>
                 <button
                   onClick={() => router.push('/dashboard/subscription')}
-                  style={{ background: C.blue, border: 'none', borderRadius: 7, padding: '7px 13px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                  style={{
+                    width: '100%', padding: '10px', border: 'none', borderRadius: 9,
+                    background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                    color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    fontFamily: 'inherit', letterSpacing: '-.01em',
+                    boxShadow: '0 2px 12px rgba(37,99,235,0.4)',
+                  }}
                 >
-                  View Plans
+                  View Plans →
                 </button>
-              </>
-            )}
-          </div>
-
-          {/* Quick actions */}
-          <div style={{ ...card, padding: '14px 16px' }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 10 }}>
-              Quick Actions
+              </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {QUICK.map(q => {
-                const Icon = q.icon;
-                return (
-                  <button
-                    key={q.label}
-                    onClick={() => router.push(q.href)}
-                    className="ov-quick-btn"
-                    style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, transition: 'background .1s' }}
-                  >
-                    <div style={{ width: 28, height: 28, borderRadius: 7, background: C.blue50, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Icon size={13} color={C.blue} />
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{q.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          )}
 
         </div>
       </div>

@@ -15,6 +15,13 @@ type Config struct {
 	JWT        JWTConfig
 	Security   SecurityConfig
 	Cloudflare CloudflareConfig
+	Telegram   TelegramConfig
+}
+
+type TelegramConfig struct {
+	BotToken      string
+	BotName       string
+	WebhookSecret string
 }
 
 type CloudflareConfig struct {
@@ -106,6 +113,11 @@ func Load() (*Config, error) {
 		Cloudflare: CloudflareConfig{
 			APIToken: getEnv("CF_API_TOKEN", ""),
 			ZoneID:   getEnv("CF_ZONE_ID", ""),
+		},
+		Telegram: TelegramConfig{
+			BotToken:      getEnv("TELEGRAM_BOT_TOKEN", ""),
+			BotName:       getEnv("TELEGRAM_BOT_NAME", ""),
+			WebhookSecret: getEnv("TELEGRAM_WEBHOOK_SECRET", ""),
 		},
 		Security: SecurityConfig{
 			EncryptionKey:      getEnv("ENCRYPTION_KEY", ""),

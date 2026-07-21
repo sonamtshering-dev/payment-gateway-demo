@@ -180,6 +180,24 @@ func (r *Repository) DeleteMerchantUPI(ctx context.Context, upiID, merchantID uu
 	return err
 }
 
+// SetMerchantUPIActiveByEncrypted enables or disables merchant_upis rows matching an encrypted UPI ID.
+func (r *Repository) SetMerchantUPIActiveByEncrypted(ctx context.Context, merchantID uuid.UUID, encryptedUPIID string, active bool) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE merchant_upis SET is_active=$1 WHERE merchant_id=$2 AND upi_id=$3`,
+		active, merchantID, encryptedUPIID,
+	)
+	return err
+}
+
+// DeleteMerchantUPIByEncrypted soft-deletes merchant_upis rows matching an encrypted UPI ID.
+func (r *Repository) DeleteMerchantUPIByEncrypted(ctx context.Context, merchantID uuid.UUID, encryptedUPIID string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE merchant_upis SET is_active=false WHERE merchant_id=$1 AND upi_id=$2`,
+		merchantID, encryptedUPIID,
+	)
+	return err
+}
+
 // GetNextUPIForRotation returns the next active UPI ID using round-robin priority
 func (r *Repository) GetNextUPIForRotation(ctx context.Context, merchantID uuid.UUID) (*models.MerchantUPI, error) {
 	// Get the UPI with lowest usage count in current hour for load distribution
@@ -245,25 +263,36 @@ func (r *Repository) GetCashierPhones(ctx context.Context, merchantID uuid.UUID)
 
 func (r *Repository) CreatePayment(ctx context.Context, p *models.Payment) error {
 	query := `
-		INSERT INTO payments (id, merchant_id, order_id, amount, currency, status, customer_reference, upi_id, upi_intent_link, qr_code_data, expires_at, client_ip, created_at, updated_at, paytm_txn_ref, redirect_url)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`
+		INSERT INTO payments (id, merchant_id, order_id, amount, currency, status, customer_reference, upi_id, upi_intent_link, qr_code_data, expires_at, client_ip, created_at, updated_at, paytm_txn_ref, redirect_url, notify_on_paid, collect_customer_details)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`
 
 	_, err := r.db.Exec(ctx, query,
 		p.ID, p.MerchantID, p.OrderID, p.Amount, p.Currency, p.Status,
 		p.CustomerReference, p.UPIID, p.UPIIntentLink, p.QRCodeData,
 		p.ExpiresAt, p.ClientIP, p.CreatedAt, p.UpdatedAt, p.PaytmTxnRef, p.RedirectURL,
+		p.NotifyOnPaid, p.CollectCustomerDetails,
+	)
+	return err
+}
+
+func (r *Repository) SaveCustomerDetails(ctx context.Context, paymentID uuid.UUID, name, email, phone string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE payments SET customer_name=$1, customer_email=$2, customer_phone=$3, updated_at=NOW()
+		 WHERE id=$4 AND status='pending' AND collect_customer_details=true`,
+		name, email, phone, paymentID,
 	)
 	return err
 }
 
 func (r *Repository) GetPaymentByID(ctx context.Context, id uuid.UUID) (*models.Payment, error) {
-	query := `SELECT id, merchant_id, order_id, amount, currency, status, customer_reference, upi_id, upi_intent_link, utr, qr_code_data, expires_at, paid_at, client_ip, created_at, updated_at, COALESCE(redirect_url,'') FROM payments WHERE id = $1`
+	query := `SELECT id, merchant_id, order_id, amount, currency, status, customer_reference, upi_id, upi_intent_link, utr, qr_code_data, expires_at, paid_at, client_ip, created_at, updated_at, COALESCE(redirect_url,''), COALESCE(notify_on_paid,false), COALESCE(collect_customer_details,false), COALESCE(customer_name,''), COALESCE(customer_email,''), COALESCE(customer_phone,'') FROM payments WHERE id = $1`
 
 	p := &models.Payment{}
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&p.ID, &p.MerchantID, &p.OrderID, &p.Amount, &p.Currency, &p.Status,
 		&p.CustomerReference, &p.UPIID, &p.UPIIntentLink, &p.UTR, &p.QRCodeData,
 		&p.ExpiresAt, &p.PaidAt, &p.ClientIP, &p.CreatedAt, &p.UpdatedAt, &p.RedirectURL,
+		&p.NotifyOnPaid, &p.CollectCustomerDetails, &p.CustomerName, &p.CustomerEmail, &p.CustomerPhone,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -364,14 +393,30 @@ func (r *Repository) GetMerchantDailyVolume(ctx context.Context, merchantID uuid
 	return volume, err
 }
 
-func (r *Repository) ExpirePendingPayments(ctx context.Context) (int64, error) {
-	result, err := r.db.Exec(ctx,
-		`UPDATE payments SET status = 'expired', updated_at = NOW() WHERE status = 'pending' AND expires_at < NOW()`,
+type ExpiredPaymentInfo struct {
+	MerchantID uuid.UUID
+	OrderID    string
+	Amount     int64
+}
+
+func (r *Repository) ExpirePendingPayments(ctx context.Context) ([]ExpiredPaymentInfo, error) {
+	rows, err := r.db.Query(ctx,
+		`UPDATE payments SET status = 'expired', updated_at = NOW()
+		 WHERE status = 'pending' AND expires_at < NOW()
+		 RETURNING merchant_id, order_id, amount`,
 	)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	var results []ExpiredPaymentInfo
+	for rows.Next() {
+		var info ExpiredPaymentInfo
+		if err := rows.Scan(&info.MerchantID, &info.OrderID, &info.Amount); err == nil {
+			results = append(results, info)
+		}
+	}
+	return results, nil
 }
 
 // ============================================================================
@@ -784,6 +829,14 @@ func (r *Repository) DeleteMerchantIPWhitelistEntry(ctx context.Context, merchan
 	_, err := r.db.Exec(ctx,
 		`DELETE FROM merchant_ip_whitelist WHERE id = $1 AND merchant_id = $2`,
 		entryID, merchantID,
+	)
+	return err
+}
+
+func (r *Repository) UpdateMerchantPassword(ctx context.Context, merchantID string, passwordHash string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE merchants SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+		passwordHash, merchantID,
 	)
 	return err
 }

@@ -44,21 +44,18 @@ func (s *Service) CheckMerchantGating(ctx context.Context, merchantID uuid.UUID)
 	}
 
 
-	// Check plan limits
-	sub2, _ := s.repo.GetMerchantSubscription(ctx, merchantID)
-	if sub2 != nil {
-		plan, _ := s.repo.GetPlanByID(ctx, sub2.PlanID)
-		if plan != nil {
-			qrUsed, linksActive, apiToday, _ := s.repo.GetMerchantUsage(ctx, merchantID)
-			if plan.QRLimit > 0 && qrUsed >= plan.QRLimit {
-				return fmt.Errorf("QR_LIMIT_REACHED: You have reached your plan limit of %d QR codes. Please upgrade your plan", plan.QRLimit)
-			}
-			if plan.LinkLimit > 0 && linksActive >= plan.LinkLimit {
-				return fmt.Errorf("LINK_LIMIT_REACHED: You have reached your plan limit of %d active payment links. Please upgrade your plan", plan.LinkLimit)
-			}
-			if plan.APILimit > 0 && apiToday >= plan.APILimit {
-				return fmt.Errorf("API_LIMIT_REACHED: You have reached your daily API limit of %d calls. Limit resets every 24 hours", plan.APILimit)
-			}
+	// Check plan limits using current billing period (since subscription started_at)
+	plan, _ := s.repo.GetPlanByID(ctx, sub.PlanID)
+	if plan != nil {
+		qrUsed, linksActive, apiToday, _ := s.repo.GetMerchantUsage(ctx, merchantID, sub.StartedAt)
+		if plan.QRLimit > 0 && qrUsed >= plan.QRLimit {
+			return fmt.Errorf("QR_LIMIT_REACHED: You have reached your plan limit of %d payment requests this billing period. Please upgrade your plan", plan.QRLimit)
+		}
+		if plan.LinkLimit > 0 && linksActive >= plan.LinkLimit {
+			return fmt.Errorf("LINK_LIMIT_REACHED: You have reached your plan limit of %d active payment links. Please upgrade your plan", plan.LinkLimit)
+		}
+		if plan.APILimit > 0 && apiToday >= plan.APILimit {
+			return fmt.Errorf("API_LIMIT_REACHED: You have reached your daily API limit of %d calls. Limit resets every 24 hours", plan.APILimit)
 		}
 	}
 

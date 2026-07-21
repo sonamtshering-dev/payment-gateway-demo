@@ -126,7 +126,11 @@ func (s *Service) AdminGetFraudAlerts(ctx context.Context, filter models.AdminFr
 }
 
 func (s *Service) GetPaymentByIDFull(ctx context.Context, paymentID uuid.UUID) (*models.Payment, error) {
-	return nil, fmt.Errorf("not implemented")
+	return s.repo.GetPaymentByID(ctx, paymentID)
+}
+
+func (s *Service) SaveCustomerDetails(ctx context.Context, paymentID uuid.UUID, name, email, phone string) error {
+	return s.repo.SaveCustomerDetails(ctx, paymentID, name, email, phone)
 }
 
 func (s *Service) AdminListPayments(ctx context.Context) (interface{}, error) {

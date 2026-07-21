@@ -187,6 +187,25 @@ func (h *Handler) CreatePayment(c *gin.Context) {
 	})
 }
 
+func (h *Handler) SaveCustomerDetails(c *gin.Context) {
+	paymentIDStr := c.Param("payment_id")
+	paymentID, err := uuid.Parse(paymentIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid payment_id"})
+		return
+	}
+	var req models.SubmitCustomerDetailsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	if err := h.service.SaveCustomerDetails(c.Request.Context(), paymentID, req.Name, req.Email, req.Phone); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "could not save details"})
+		return
+	}
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "details saved"})
+}
+
 func (h *Handler) GetPaymentStatus(c *gin.Context) {
 	paymentIDStr := c.Param("payment_id")
 	paymentID, err := uuid.Parse(paymentIDStr)
@@ -526,6 +545,22 @@ func (h *Handler) GetReferralStats(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": stats})
+}
+
+func (h *Handler) ApplyReferralCode(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
+	var req struct {
+		Code string `json:"code" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Referral code is required"})
+		return
+	}
+	if err := h.service.ApplyReferralCode(merchantID.String(), req.Code); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Referral code applied! Your referrer has been rewarded."})
 }
 
 func (h *Handler) EmailSubscribe(c *gin.Context) {

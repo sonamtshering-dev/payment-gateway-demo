@@ -50,12 +50,21 @@ type MerchantPublic struct {
 // ============================================================================
 
 type CreatePaymentRequest struct {
-	MerchantID        string `json:"merchant_id" binding:"omitempty,uuid"`
-	OrderID           string `json:"order_id" binding:"required,min=1,max=64"`
-	Amount            int64  `json:"amount" binding:"required,min=100,max=999999900"`
-	Currency          string `json:"currency" binding:"required,eq=INR"`
-	CustomerReference string `json:"customer_reference" binding:"max=128"`
-	RedirectURL       string `json:"redirect_url" binding:"omitempty,max=512"`
+	MerchantID             string `json:"merchant_id" binding:"omitempty,uuid"`
+	OrderID                string `json:"order_id" binding:"required,min=1,max=64"`
+	Amount                 int64  `json:"amount" binding:"required,min=100,max=999999900"`
+	Currency               string `json:"currency" binding:"required,eq=INR"`
+	CustomerReference      string `json:"customer_reference" binding:"max=128"`
+	RedirectURL            string `json:"redirect_url" binding:"omitempty,max=512"`
+	ExpiresInHours         int    `json:"expires_in_hours"`
+	NotifyOnPaid           bool   `json:"notify_on_paid"`
+	CollectCustomerDetails bool   `json:"collect_customer_details"`
+}
+
+type SubmitCustomerDetailsRequest struct {
+	Name  string `json:"name" binding:"required,min=2,max=100"`
+	Email string `json:"email" binding:"omitempty,email,max=150"`
+	Phone string `json:"phone" binding:"omitempty,min=10,max=20"`
 }
 
 type CreatePaymentResponse struct {
@@ -203,4 +212,38 @@ type ErrorResponse struct {
 type AddIPWhitelistRequest struct {
 	IPCIDR string `json:"ip_cidr" binding:"required,min=7,max=50"`
 	Label  string `json:"label" binding:"max=100"`
+}
+
+// ============================================================================
+// TELEGRAM DTOs
+// ============================================================================
+
+type TelegramStatusResponse struct {
+	Connected         bool       `json:"connected"`
+	IsEnabled         bool       `json:"is_enabled"`
+	NotificationTypes []string   `json:"notification_types"`
+	ConnectedAt       *time.Time `json:"connected_at,omitempty"`
+	BotName           string     `json:"bot_name"`
+}
+
+type TelegramConnectResponse struct {
+	Code      string `json:"code"`
+	BotName   string `json:"bot_name"`
+	ExpiresIn int    `json:"expires_in_seconds"`
+}
+
+type TelegramSettingsRequest struct {
+	IsEnabled         bool     `json:"is_enabled"`
+	NotificationTypes []string `json:"notification_types"`
+}
+
+type TelegramWebhookUpdate struct {
+	UpdateID int64 `json:"update_id"`
+	Message  *struct {
+		MessageID int64 `json:"message_id"`
+		Chat      struct {
+			ID int64 `json:"id"`
+		} `json:"chat"`
+		Text string `json:"text"`
+	} `json:"message"`
 }

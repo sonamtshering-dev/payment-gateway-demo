@@ -38,6 +38,8 @@ func (s *Service) RotateAPIKeys(ctx context.Context, merchantID uuid.UUID) (stri
 	s.repo.RevokeAllMerchantTokens(ctx, merchantID)
 	s.redis.Del(ctx, fmt.Sprintf("merchant:%s", merchantID.String()))
 
+	s.notifyTelegramAPIKeyRotated(ctx, merchantID)
+
 	return newKey, newSecret, nil
 }
 
@@ -101,6 +103,9 @@ func (s *Service) AdminUpdatePaymentStatus(ctx context.Context, paymentID uuid.U
 
 	if status == models.PaymentStatusPaid {
 		go s.dispatchWebhook(context.Background(), payment, "")
+	}
+	if status == models.PaymentStatusFailed {
+		go s.notifyTelegramPaymentFailed(context.Background(), payment.MerchantID, payment.OrderID, payment.Amount)
 	}
 
 	return nil

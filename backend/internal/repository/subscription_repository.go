@@ -66,12 +66,25 @@ func (r *Repository) ExpireSubscriptions(ctx context.Context) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
-func (r *Repository) GetMerchantUsage(ctx context.Context, merchantID uuid.UUID) (qrUsed int, linksActive int, apiToday int, err error) {
-	err = r.db.QueryRow(ctx, `SELECT COUNT(*) FROM payments WHERE merchant_id=$1`, merchantID).Scan(&qrUsed)
+// GetMerchantUsage returns usage counters for the current billing period.
+// qrUsed  = total payments created since billingStart (the subscription's started_at)
+// linksActive = currently pending payments (active payment links)
+// apiToday    = payments created in the last 24 hours
+func (r *Repository) GetMerchantUsage(ctx context.Context, merchantID uuid.UUID, billingStart time.Time) (qrUsed int, linksActive int, apiToday int, err error) {
+	err = r.db.QueryRow(ctx,
+		`SELECT COUNT(*) FROM payments WHERE merchant_id=$1 AND created_at >= $2`,
+		merchantID, billingStart,
+	).Scan(&qrUsed)
 	if err != nil { return }
-	err = r.db.QueryRow(ctx, `SELECT COUNT(*) FROM payments WHERE merchant_id=$1 AND status='pending'`, merchantID).Scan(&linksActive)
+	err = r.db.QueryRow(ctx,
+		`SELECT COUNT(*) FROM payments WHERE merchant_id=$1 AND status='pending'`,
+		merchantID,
+	).Scan(&linksActive)
 	if err != nil { return }
-	err = r.db.QueryRow(ctx, `SELECT COUNT(*) FROM payments WHERE merchant_id=$1 AND created_at >= NOW() - INTERVAL '24 hours'`, merchantID).Scan(&apiToday)
+	err = r.db.QueryRow(ctx,
+		`SELECT COUNT(*) FROM payments WHERE merchant_id=$1 AND created_at >= NOW() - INTERVAL '24 hours'`,
+		merchantID,
+	).Scan(&apiToday)
 	return
 }
 
@@ -85,10 +98,19 @@ func (r *Repository) UpdateSubscriptionStatus(ctx context.Context, merchantID uu
 }
 
 func (r *Repository) ChangeMerchantPlan(ctx context.Context, merchantID uuid.UUID, planID uuid.UUID, expiresAt *time.Time) error {
-	_, err := r.db.Exec(ctx, `
+	result, err := r.db.Exec(ctx, `
 		UPDATE merchant_subscriptions SET plan_id=$1, expires_at=$2, status='active', updated_at=NOW()
 		WHERE merchant_id=$3
 		AND id = (SELECT id FROM merchant_subscriptions WHERE merchant_id=$3 ORDER BY created_at DESC LIMIT 1)
 	`, planID, expiresAt, merchantID)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		_, err = r.db.Exec(ctx, `
+			INSERT INTO merchant_subscriptions (id, merchant_id, plan_id, status, started_at, expires_at, created_at, updated_at)
+			VALUES (gen_random_uuid(), $1, $2, 'active', NOW(), $3, NOW(), NOW())
+		`, merchantID, planID, expiresAt)
+	}
 	return err
 }

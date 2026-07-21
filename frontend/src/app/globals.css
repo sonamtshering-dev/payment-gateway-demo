@@ -43,3 +43,10 @@ body {
 code, pre {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
+
+/* Prevent iOS Safari from auto-zooming on input focus (requires font-size >= 16px) */
+@supports (-webkit-overflow-scrolling: touch) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}

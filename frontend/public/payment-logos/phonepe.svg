@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80">
+  <rect width="120" height="80" rx="10" fill="#5F259F"/>
+  <text x="60" y="34" text-anchor="middle" font-family="Arial Black,sans-serif" font-size="32" font-weight="900" fill="white">Pe</text>
+  <text x="60" y="64" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" fill="white" opacity="0.85">PhonePe</text>
+</svg>

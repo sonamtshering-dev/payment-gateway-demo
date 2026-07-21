@@ -22,14 +22,15 @@ func (h *Handler) GetSubscription(c *gin.Context) {
 func (h *Handler) CreateSubscription(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
 	var req struct {
-		PlanID string `json:"plan_id" binding:"required,uuid"`
+		PlanID         string `json:"plan_id" binding:"required,uuid"`
+		ForceDowngrade bool   `json:"force_downgrade"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 	planID, _ := uuid.Parse(req.PlanID)
-	sub, err := h.service.CreateSubscription(c.Request.Context(), merchantID, planID)
+	sub, err := h.service.CreateSubscription(c.Request.Context(), merchantID, planID, req.ForceDowngrade)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return

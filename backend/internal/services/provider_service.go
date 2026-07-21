@@ -57,6 +57,10 @@ func (s *Service) ConnectProvider(ctx context.Context, merchantID uuid.UUID, req
 		Priority:   len(existing),
 	}
 	s.repo.AddMerchantUPI(ctx, upi)
+	// Sync Paytm MID into merchant_upis so the Paytm worker can find it
+	if req.MerchantMID != "" {
+		s.repo.SavePaytmMID(ctx, merchantID, req.UPIID, req.MerchantMID)
+	}
 	if len(req.UPIID) > 7 {
 		p.UPIID = req.UPIID[:3] + "****" + req.UPIID[len(req.UPIID)-4:]
 	}
@@ -64,6 +68,9 @@ func (s *Service) ConnectProvider(ctx context.Context, merchantID uuid.UUID, req
 }
 
 func (s *Service) UpdateProvider(ctx context.Context, providerID, merchantID uuid.UUID, req models.UpdateProviderRequest) error {
+	// Fetch current provider so we have the encrypted UPI ID for merchant_upis sync
+	existing, _ := s.repo.GetProviderByID(ctx, providerID, merchantID)
+
 	if req.UPIID != nil {
 		if !utils.ValidateUPIID(*req.UPIID) {
 			return fmt.Errorf("invalid UPI ID format")
@@ -74,9 +81,24 @@ func (s *Service) UpdateProvider(ctx context.Context, providerID, merchantID uui
 		}
 		req.UPIID = &encrypted
 	}
-	return s.repo.UpdateMerchantProvider(ctx, providerID, merchantID, req)
+	if err := s.repo.UpdateMerchantProvider(ctx, providerID, merchantID, req); err != nil {
+		return err
+	}
+	// Sync is_active into merchant_upis so payment routing respects the toggle
+	if req.IsActive != nil && existing != nil {
+		s.repo.SetMerchantUPIActiveByEncrypted(ctx, merchantID, existing.UPIID, *req.IsActive)
+	}
+	return nil
 }
 
 func (s *Service) DeleteProvider(ctx context.Context, providerID, merchantID uuid.UUID) error {
-	return s.repo.DeleteMerchantProvider(ctx, providerID, merchantID)
+	// Fetch provider before deleting so we can deactivate the matching merchant_upis row
+	existing, _ := s.repo.GetProviderByID(ctx, providerID, merchantID)
+	if err := s.repo.DeleteMerchantProvider(ctx, providerID, merchantID); err != nil {
+		return err
+	}
+	if existing != nil {
+		s.repo.DeleteMerchantUPIByEncrypted(ctx, merchantID, existing.UPIID)
+	}
+	return nil
 }

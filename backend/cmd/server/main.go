@@ -139,6 +139,7 @@ func main() {
 	// Public — no auth required (landing page pricing)
 	r.GET("/api/v1/public/plans", h.GetPublicPlans)
 	r.GET("/api/v1/public/payment/:payment_id", h.GetPaymentStatus)
+	r.POST("/api/v1/public/payment/:payment_id/customer-details", h.SaveCustomerDetails)
 	r.POST("/api/v1/public/subscribe", h.EmailSubscribe)
 
 	v1 := r.Group("/api/v1")
@@ -149,6 +150,8 @@ func main() {
 			auth.POST("/register", h.Register)
 			auth.POST("/login", h.Login)
 			auth.POST("/refresh", h.RefreshToken)
+			auth.POST("/forgot-password", h.ForgotPassword)
+			auth.POST("/reset-password", h.ResetPassword)
 		}
 
 		// ---- PAYMENT API (API-key + signature authenticated) ----
@@ -204,10 +207,19 @@ func main() {
 					dashboard.DELETE("/logo", h.DeleteMerchantLogo)
 					dashboard.PUT("/business-name", h.UpdateBusinessName)
 					dashboard.GET("/referral", h.GetReferralStats)
+					dashboard.POST("/referral/apply", h.ApplyReferralCode)
 					dashboard.POST("/paytm-mid", h.SavePaytmMID)
 				dashboard.GET("/kyc", h.GetKYC)
 					dashboard.POST("/kyc", h.SubmitKYC)
-					// Removed: payment creation must use /api/v1/payments/* (API-key + HMAC auth)
+					dashboard.POST("/payments/create", h.CreatePayment)
+
+				// Telegram notifications
+				dashboard.GET("/telegram", h.GetTelegramStatus)
+				dashboard.POST("/telegram/connect", h.GenerateTelegramCode)
+				dashboard.PUT("/telegram/settings", h.UpdateTelegramSettings)
+				dashboard.POST("/telegram/test", h.SendTelegramTest)
+				dashboard.DELETE("/telegram", h.DisconnectTelegram)
+				dashboard.GET("/telegram/history", h.GetTelegramHistory)
 		}
 
 		// ---- ADMIN (JWT + admin role) ----
@@ -236,6 +248,11 @@ func main() {
 			admin.DELETE("/plans/:id", h.AdminDeletePlan)
 		}
 	}
+
+	// ========================================================================
+	// TELEGRAM BOT WEBHOOK (public, validated via secret-token header)
+	// ========================================================================
+	r.POST("/api/v1/telegram/webhook", h.TelegramBotWebhook)
 
 	// ========================================================================
 	// PAYMENT CONFIRMATION PAGE (hosted by gateway)

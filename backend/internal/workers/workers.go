@@ -21,20 +21,22 @@ import (
 )
 
 type Worker struct {
-	repo   *repository.Repository
-	redis  *redis.Client
-	config *config.Config
-	client *http.Client
-	email  *services.EmailService
+	repo     *repository.Repository
+	redis    *redis.Client
+	config   *config.Config
+	client   *http.Client
+	email    *services.EmailService
+	telegram *services.TelegramService
 }
 
 func New(repo *repository.Repository, rdb *redis.Client, cfg *config.Config) *Worker {
 	return &Worker{
-		repo:  repo,
-		redis: rdb,
-		config: cfg,
-		client: &http.Client{Timeout: cfg.Security.WebhookTimeout},
-		email: services.NewEmailService(),
+		repo:     repo,
+		redis:    rdb,
+		config:   cfg,
+		client:   &http.Client{Timeout: cfg.Security.WebhookTimeout},
+		email:    services.NewEmailService(),
+		telegram: services.NewTelegramService(cfg.Telegram.BotToken, cfg.Telegram.BotName, rdb),
 	}
 }
 
@@ -57,6 +59,10 @@ func (w *Worker) StartWithWaitGroup(ctx context.Context, wg *sync.WaitGroup) {
 	go func() { defer wg.Done(); w.paytmVerificationWorker(ctx) }()
 	wg.Add(1)
 	go func() { defer wg.Done(); w.subscriptionReminderWorker(ctx) }()
+	wg.Add(3)
+	go func() { defer wg.Done(); w.telegramDispatchWorker(ctx) }()
+	go func() { defer wg.Done(); w.telegramSummaryWorker(ctx) }()
+	go func() { defer wg.Done(); w.telegramRetentionWorker(ctx) }()
 }
 
 func (w *Worker) paymentExpiryWorker(ctx context.Context) {
@@ -73,8 +79,12 @@ func (w *Worker) paymentExpiryWorker(ctx context.Context) {
 				log.Error().Err(err).Msg("Error expiring payments")
 				continue
 			}
-			if expired > 0 {
-				log.Info().Int64("count", expired).Msg("Expired pending payments")
+			if len(expired) > 0 {
+				log.Info().Int("count", len(expired)).Msg("Expired pending payments")
+				for _, p := range expired {
+					w.enqueueTelegramForMerchant(ctx, p.MerchantID, services.TGNotifPaymentExpired,
+						services.FormatPaymentExpired(p.OrderID, p.Amount))
+				}
 			}
 		}
 	}
@@ -186,6 +196,8 @@ func (w *Worker) webhookRetryWorker(ctx context.Context) {
 				nextAttempt := d.Attempt + 1
 				if nextAttempt > 5 {
 					log.Warn().Str("delivery_id", d.ID.String()).Msg("Webhook max retries reached, giving up")
+					w.enqueueTelegramForMerchant(ctx, d.MerchantID, services.TGNotifWebhookFailure,
+						services.FormatWebhookFailure(d.URL))
 					continue
 				}
 				backoff := time.Duration(1<<uint(nextAttempt)) * time.Minute
@@ -246,6 +258,8 @@ func (w *Worker) subscriptionReminderWorker(ctx context.Context) {
 						planName = "Subscribed Plan"
 					}
 					go w.email.SendExpiryReminder(merchant.Email, planName, days)
+					w.enqueueTelegramForMerchant(ctx, sub.MerchantID, services.TGNotifSubscriptionExpiry,
+						services.FormatSubscriptionExpiring(planName, days))
 					log.Info().Str("merchant", merchant.Email).Int("days", days).Msg("Sent expiry reminder")
 				}
 			}

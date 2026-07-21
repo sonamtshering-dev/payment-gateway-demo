@@ -16,7 +16,15 @@ func (s *Service) AdminReviewKYC(ctx context.Context, merchantID uuid.UUID, stat
 	if status != "approved" && status != "rejected" {
 		return fmt.Errorf("invalid status")
 	}
-	return s.repo.AdminUpdateKYC(ctx, merchantID, status, reason)
+	if err := s.repo.AdminUpdateKYC(ctx, merchantID, status, reason); err != nil {
+		return err
+	}
+	if status == "approved" {
+		s.notifyTelegramKYCApproved(ctx, merchantID)
+	} else {
+		s.notifyTelegramKYCRejected(ctx, merchantID, reason)
+	}
+	return nil
 }
 
 func (s *Service) AdminExtendSubscription(ctx context.Context, merchantID uuid.UUID, days int) error {

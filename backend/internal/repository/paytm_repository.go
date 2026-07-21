@@ -39,12 +39,13 @@ func (r *Repository) GetPaytmMIDByUPIID(ctx context.Context, encryptedUPIID stri
 
 // SavePaytmMID saves or updates the Paytm MID for a merchant's UPI entry
 func (r *Repository) SavePaytmMID(ctx context.Context, merchantID uuid.UUID, upiID, mid string) error {
-	// upiID here is the UUID of the merchant_upis row
+	// Update the active UPI entry for the merchant. upiID is ignored — we update
+	// the highest-priority active UPI since that's what the verification worker uses.
 	_, err := r.db.Exec(ctx,
-		`UPDATE merchant_upis 
+		`UPDATE merchant_upis
 		 SET paytm_mid = $1, paytm_enabled = TRUE
-		 WHERE merchant_id = $2 AND id = $3`,
-		mid, merchantID, upiID,
+		 WHERE merchant_id = $2 AND is_active = TRUE`,
+		mid, merchantID,
 	)
 	return err
 }

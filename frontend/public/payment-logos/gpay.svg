@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80">
+  <rect width="120" height="80" rx="10" fill="white" stroke="#E8ECF0" stroke-width="1"/>
+  <text x="23" y="50" font-family="Arial Black,sans-serif" font-size="36" font-weight="900" fill="#4285F4">G</text>
+  <text x="54" y="38" font-family="Arial,sans-serif" font-size="13" fill="#5F6368">oogle</text>
+  <text x="54" y="56" font-family="Arial Black,sans-serif" font-size="14" font-weight="900" fill="#1A73E8">Pay</text>
+</svg>

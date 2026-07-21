@@ -22,6 +22,7 @@ type Service struct {
 	config     *config.Config
 	email      *EmailService
 	cloudflare *CloudflareService
+	telegram   *TelegramService
 }
 
 func New(repo *repository.Repository, redis *redis.Client, cfg *config.Config) *Service {
@@ -31,6 +32,7 @@ func New(repo *repository.Repository, redis *redis.Client, cfg *config.Config) *
 		config:     cfg,
 		email:      NewEmailService(),
 		cloudflare: NewCloudflareService(cfg.Cloudflare.APIToken, cfg.Cloudflare.ZoneID),
+		telegram:   NewTelegramService(cfg.Telegram.BotToken, cfg.Telegram.BotName, redis),
 	}
 }
 
@@ -241,24 +243,29 @@ func (s *Service) CreatePayment(ctx context.Context, req models.CreatePaymentReq
 
 	paymentID := utils.NewID()
 	expires := time.Now().Add(s.config.Security.PaymentSessionTTL)
+	if req.ExpiresInHours > 0 {
+		expires = time.Now().Add(time.Duration(req.ExpiresInHours) * time.Hour)
+	}
 
 	payment := &models.Payment{
-		ID:                paymentID,
-		MerchantID:        merchantID,
-		OrderID:           req.OrderID,
-		Amount:            req.Amount,
-		Currency:          req.Currency,
-		Status:            models.PaymentStatusPending,
-		CustomerReference: req.CustomerReference,
-		UPIID:             upi.UPIID,
-		UPIIntentLink:     upiLink,
-		QRCodeData:        qrBase64,
-		PaytmTxnRef:       paytmTxnRef,
-		RedirectURL:       req.RedirectURL,
-		ExpiresAt:         expires,
-		ClientIP:          clientIP,
-		CreatedAt:         time.Now(),
-		UpdatedAt:         time.Now(),
+		ID:                     paymentID,
+		MerchantID:             merchantID,
+		OrderID:                req.OrderID,
+		Amount:                 req.Amount,
+		Currency:               req.Currency,
+		Status:                 models.PaymentStatusPending,
+		CustomerReference:      req.CustomerReference,
+		UPIID:                  upi.UPIID,
+		UPIIntentLink:          upiLink,
+		QRCodeData:             qrBase64,
+		PaytmTxnRef:            paytmTxnRef,
+		RedirectURL:            req.RedirectURL,
+		NotifyOnPaid:           req.NotifyOnPaid,
+		CollectCustomerDetails: req.CollectCustomerDetails,
+		ExpiresAt:              expires,
+		ClientIP:               clientIP,
+		CreatedAt:              time.Now(),
+		UpdatedAt:              time.Now(),
 	}
 
 	if err := s.repo.CreatePayment(ctx, payment); err != nil {
@@ -369,6 +376,17 @@ func (s *Service) VerifyPayment(ctx context.Context, req models.VerifyPaymentReq
 
 	go s.dispatchWebhook(context.Background(), payment, utr)
 
+	s.notifyTelegramPaymentReceived(context.Background(), payment.MerchantID, payment.OrderID, payment.Amount)
+
+	if payment.NotifyOnPaid {
+		go func() {
+			merchant, err := s.repo.GetMerchantByID(context.Background(), payment.MerchantID)
+			if err == nil && merchant != nil {
+				s.email.SendPaymentConfirmation(merchant.Email, payment.OrderID, payment.Amount)
+			}
+		}()
+	}
+
 	return nil
 }
 
@@ -456,6 +474,10 @@ func (s *Service) UpdateBusinessName(ctx context.Context, merchantID uuid.UUID, 
 
 func (s *Service) GetReferralStats(merchantId string) (map[string]interface{}, error) {
 	return s.repo.GetReferralStats(merchantId)
+}
+
+func (s *Service) ApplyReferralCode(merchantId, code string) error {
+	return s.repo.ApplyReferralCode(merchantId, code)
 }
 
 func (s *Service) AddEmailSubscriber(email string) {

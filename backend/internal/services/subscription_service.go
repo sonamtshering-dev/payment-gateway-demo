@@ -15,10 +15,20 @@ func (s *Service) GetSubscription(ctx context.Context, merchantID uuid.UUID) (*r
 	return s.repo.GetMerchantSubscription(ctx, merchantID)
 }
 
-func (s *Service) CreateSubscription(ctx context.Context, merchantID, planID uuid.UUID) (*repository.MerchantSubscription, error) {
+func (s *Service) CreateSubscription(ctx context.Context, merchantID, planID uuid.UUID, forceDowngrade bool) (*repository.MerchantSubscription, error) {
 	plan, err := s.repo.GetPlanByID(ctx, planID)
 	if err != nil || plan == nil {
 		return nil, fmt.Errorf("plan not found")
+	}
+	// Guard: block silent downgrade from paid plan to free unless explicitly confirmed
+	if plan.Price == 0 && !forceDowngrade {
+		existingSub, _ := s.repo.GetMerchantSubscription(ctx, merchantID)
+		if existingSub != nil && existingSub.Status == "active" {
+			existingPlan, _ := s.repo.GetPlanByID(ctx, existingSub.PlanID)
+			if existingPlan != nil && existingPlan.Price > 0 {
+				return nil, fmt.Errorf("DOWNGRADE_BLOCKED: You have an active paid plan. To downgrade to free, confirm the downgrade explicitly")
+			}
+		}
 	}
 	sub := &repository.MerchantSubscription{
 		ID:         utils.NewID(),
@@ -37,6 +47,7 @@ func (s *Service) CreateSubscription(ctx context.Context, merchantID, planID uui
 	if err := s.repo.UpsertMerchantSubscription(ctx, sub); err != nil {
 		return nil, fmt.Errorf("failed to save subscription: %w", err)
 	}
+	s.notifyTelegramSubscriptionActivated(ctx, merchantID, plan.Name)
 	return sub, nil
 }
 
@@ -53,9 +64,15 @@ func (s *Service) GetSubscriptionWithPlan(ctx context.Context, merchantID uuid.U
 	if err != nil || plan == nil {
 		return map[string]interface{}{"subscription": sub}, nil
 	}
+	qrUsed, linksActive, apiToday, _ := s.repo.GetMerchantUsage(ctx, merchantID, sub.StartedAt)
 	return map[string]interface{}{
 		"subscription": sub,
 		"plan":         plan,
+		"usage": map[string]interface{}{
+			"qr_used":      qrUsed,
+			"links_active": linksActive,
+			"api_today":    apiToday,
+		},
 	}, nil
 }
 

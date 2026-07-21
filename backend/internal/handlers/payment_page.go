@@ -24,7 +24,15 @@ func (h *Handler) PaymentPage(c *gin.Context) {
 
 	payment, err := h.service.GetPaymentByIDFull(c.Request.Context(), paymentID)
 	if err != nil || payment == nil {
-		c.String(http.StatusNotFound, "Payment not found")
+		c.String(http.StatusNotFound, "Payment not found or link expired")
+		return
+	}
+
+	// If customer details required and not yet collected, show the details form
+	if payment.CollectCustomerDetails && payment.CustomerName == "" && payment.Status == "pending" {
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.Header("Cache-Control", "no-store")
+		c.String(http.StatusOK, customerDetailsPage(paymentIDStr, fmt.Sprintf("%.2f", float64(payment.Amount)/100.0)))
 		return
 	}
 
@@ -401,4 +409,91 @@ pollStatus();
 	)
 
 	c.String(http.StatusOK, html)
+}
+
+func customerDetailsPage(paymentID, amount string) string {
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Details — NovaPay</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#0f172a 0%%,#1e293b 50%%,#0f172a 100%%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#fff;border-radius:24px;max-width:400px;width:100%%;box-shadow:0 24px 64px rgba(0,0,0,0.3);overflow:hidden}
+.card-header{background:linear-gradient(135deg,#0f172a,#1e293b);padding:24px 28px 20px;color:#fff;text-align:center}
+.logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#fff}
+.logo-name{font-size:20px;font-weight:700;color:#fff}
+.amount{font-size:36px;font-weight:800;color:#fff;letter-spacing:-1px}
+.amount span{font-size:20px;vertical-align:super;margin-right:2px}
+.card-body{padding:24px 28px}
+h2{font-size:17px;font-weight:700;color:#0f172a;margin-bottom:6px}
+p{font-size:13px;color:#64748b;margin-bottom:20px}
+label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px}
+input{width:100%%;border:1.5px solid #e2e8f0;border-radius:10px;padding:11px 14px;font-size:14px;color:#0f172a;outline:none;font-family:inherit;margin-bottom:14px;transition:border 0.15s}
+input:focus{border-color:#6366f1}
+.err{font-size:12px;color:#dc2626;margin-bottom:12px;display:none}
+button{width:100%%;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;border-radius:12px;padding:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+button:disabled{opacity:0.6;cursor:not-allowed}
+.secure{display:flex;align-items:center;justify-content:center;gap:5px;font-size:11px;color:#9ca3af;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="card-header">
+    <div class="logo">
+      <div class="logo-icon">N</div>
+      <span class="logo-name">NovaPay</span>
+    </div>
+    <div style="font-size:13px;color:#94a3b8;margin-bottom:6px">Payment Request</div>
+    <div class="amount"><span>₹</span>%s</div>
+  </div>
+  <div class="card-body">
+    <h2>Your Details</h2>
+    <p>Please fill in your details before proceeding to pay.</p>
+    <div id="err" class="err"></div>
+    <label>Full Name *</label>
+    <input id="name" placeholder="Enter your name" />
+    <label>Email Address</label>
+    <input id="email" type="email" placeholder="you@example.com" />
+    <label>Phone Number</label>
+    <input id="phone" type="tel" placeholder="10-digit mobile number" />
+    <button id="btn" onclick="submit()">Continue to Pay →</button>
+    <div class="secure">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      256-bit encrypted · Secured by NovaPay
+    </div>
+  </div>
+</div>
+<script>
+const paymentId = "%s";
+async function submit() {
+  const name = document.getElementById('name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const phone = document.getElementById('phone').value.trim();
+  const err = document.getElementById('err');
+  const btn = document.getElementById('btn');
+  err.style.display='none';
+  if (!name || name.length < 2) { err.textContent='Please enter your full name.'; err.style.display='block'; return; }
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const resp = await fetch('/api/v1/public/payment/'+paymentId+'/customer-details', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, email, phone})
+    });
+    const data = await resp.json();
+    if (data.success) {
+      window.location.reload();
+    } else {
+      err.textContent = data.error || 'Something went wrong.'; err.style.display='block';
+      btn.disabled=false; btn.textContent='Continue to Pay →';
+    }
+  } catch(e) { err.textContent='Network error. Try again.'; err.style.display='block'; btn.disabled=false; btn.textContent='Continue to Pay →'; }
+}
+document.addEventListener('keydown', function(e){ if(e.key==='Enter') submit(); });
+</script>
+</body>
+</html>`, amount, paymentID)
 }

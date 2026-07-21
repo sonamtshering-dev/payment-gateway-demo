@@ -1,56 +1,76 @@
 import Link from 'next/link';
+
+const Logo = () => (
+  <svg width="28" height="28" viewBox="0 0 36 36" fill="none">
+    <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#60a5fa"/><stop offset="100%" stopColor="#2563eb"/></linearGradient></defs>
+    <path d="M8 28V8l7 13L22 8v20" stroke="url(#lg)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+const SECTIONS = [
+  { title: '1. Acceptance of Terms', body: `By registering for or using NovaPay, you confirm that you are at least 18 years of age, have the legal capacity to enter into this agreement, and agree to comply with these Terms. If you are using NovaPay on behalf of a business, you confirm you have the authority to bind that business to these Terms.` },
+  { title: '2. Description of Service', body: `NovaPay provides a UPI-based payment gateway that allows merchants to accept payments via dynamic QR codes, payment links, and a developer API. All payments are routed directly to the merchant's registered UPI account. NovaPay does not hold or escrow merchant funds.` },
+  { title: '3. Merchant Obligations', list: ['Provide accurate and complete registration information', 'Maintain the security of your account credentials and API keys', 'Use the platform only for lawful business purposes', 'Comply with all applicable Indian laws, RBI guidelines, and NPCI policies', 'Complete KYC (Know Your Customer) verification as required', 'Not resell, sublicense, or transfer your NovaPay account', 'Notify us immediately of any unauthorized use of your account'] },
+  { title: '4. Zero-Fee Commitment', body: `NovaPay charges no per-transaction fees. We may charge subscription fees for premium plan features, which are clearly disclosed at signup. Transaction amounts are passed through entirely to the merchant's UPI account. NovaPay reserves the right to introduce new paid features with advance notice.` },
+  { title: '5. Prohibited Activities', list: ['Using NovaPay for illegal transactions or money laundering', 'Accepting payments for prohibited goods or services under Indian law', 'Attempting to reverse-engineer, hack, or disrupt the platform', 'Creating false accounts or misrepresenting your identity', 'Processing payments in violation of RBI or NPCI guidelines'] },
+  { title: '6. KYC and Compliance', body: `We are required by law to collect and verify identity documents. Failure to complete KYC may result in suspension of payment collection features. By using NovaPay, you consent to identity verification checks and the sharing of necessary data with our regulated partners.` },
+  { title: '7. Limitation of Liability', body: `NovaPay provides its services "as is." To the maximum extent permitted by law, NovaPay shall not be liable for indirect, incidental, or consequential damages arising from your use of the platform. Our total liability to you shall not exceed the subscription fees paid in the three months prior to the claim.` },
+  { title: '8. Termination', body: `Either party may terminate this agreement at any time. We may suspend or terminate your account immediately for violations of these Terms, suspected fraud, or regulatory requirements. Upon termination, you retain access to your transaction history for 90 days.` },
+  { title: '9. Governing Law', body: `These Terms are governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of the courts in New Delhi, India.` },
+  { title: '10. Changes to Terms', body: `We may update these Terms from time to time. We will notify you via email and in-app notice. Your continued use of NovaPay after the effective date constitutes acceptance of the revised Terms.` },
+  { title: '11. Contact', body: `For questions about these Terms, contact us at legal@novapay.in or visit our contact page.` },
+];
+
 export default function TermsPage() {
-  const w={background:'#020817',color:'#dbeafe',fontFamily:'DM Sans,sans-serif',minHeight:'100vh',paddingBottom:80} as const;
-  const h2={fontFamily:'Syne,sans-serif',fontSize:20,fontWeight:700,color:'#dbeafe',marginTop:40,marginBottom:12} as const;
-  const p={fontSize:15,color:'rgba(255,255,255,0.55)',lineHeight:1.8,marginBottom:16} as const;
-  const ul={fontSize:15,color:'rgba(255,255,255,0.55)',lineHeight:1.8,paddingLeft:20,marginBottom:16} as const;
   return (
-    <div style={w}>
-      <style>{'@import url(https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap);*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}a{text-decoration:none;color:inherit}'}</style>
-      <nav style={{height:66,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 6vw',borderBottom:'1px solid rgba(255,255,255,0.06)',background:'rgba(2,8,23,0.95)',position:'sticky',top:0,zIndex:100}}>
-        <Link href="/" style={{fontFamily:'Syne,sans-serif',fontSize:20,fontWeight:800,color:'#60a5fa'}}>NovaPay</Link>
-        <Link href="/auth/login" style={{fontSize:14,color:'rgba(255,255,255,0.5)'}}>Login</Link>
+    <div style={{ background: '#fff', color: '#0F172A', fontFamily: "-apple-system,'Inter','Helvetica Neue',sans-serif", minHeight: '100vh' }}>
+      <style>{`*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; } a { text-decoration: none; color: inherit; } @media (max-width: 768px) { nav { padding: 0 20px !important; } .page-pad { padding: 48px 20px !important; } }`}</style>
+      <nav style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 48px', background: '#fff', borderBottom: '1px solid #E2E8F0', position: 'sticky', top: 0, zIndex: 100 }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Logo />
+          <span style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', letterSpacing: -0.5 }}>Nova<span style={{ color: '#2563EB' }}>Pay</span></span>
+        </Link>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link href="/auth/login" style={{ fontSize: 14, color: '#374151', padding: '8px 18px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontWeight: 500 }}>Log in</Link>
+          <Link href="/auth/register" style={{ fontSize: 14, color: '#fff', fontWeight: 600, padding: '8px 18px', background: '#2563EB', borderRadius: 9 }}>Get Started</Link>
+        </div>
       </nav>
-      <div style={{maxWidth:760,margin:'0 auto',padding:'60px 6vw 0'}}>
-        <h1 style={{fontFamily:'Syne,sans-serif',fontSize:'clamp(28px,4vw,42px)',fontWeight:800,marginBottom:8,color:'#dbeafe'}}>Terms &amp; Conditions</h1>
-        <p style={{fontSize:13,color:'rgba(255,255,255,0.3)',marginBottom:48}}>Last updated: March 20, 2026</p>
-        <p style={p}>By accessing or using NovaPay, you agree to be bound by these Terms and Conditions.</p>
-        <hr style={{borderColor:'rgba(255,255,255,0.06)',margin:'32px 0'}}/>
-        <h2 style={h2}>1. Acceptance of Terms</h2>
-        <p style={p}>By registering for NovaPay, you confirm you are at least 18 years old, have legal capacity to enter this agreement, and agree to comply with these terms.</p>
-        <h2 style={h2}>2. Description of Service</h2>
-        <p style={p}>NovaPay provides a UPI-based payment gateway platform allowing merchants to accept payments via dynamic QR codes and payment links. Payments go directly to the merchant's UPI account.</p>
-        <h2 style={h2}>3. Merchant Obligations</h2>
-        <ul style={ul}>
-          <li>Provide accurate registration information</li>
-          <li>Maintain security of your account credentials</li>
-          <li>Use the platform only for lawful business purposes</li>
-          <li>Comply with all applicable Indian laws and RBI guidelines</li>
-          <li>Complete KYC verification as required</li>
-        </ul>
-        <h2 style={h2}>4. Fees and Subscriptions</h2>
-        <p style={p}>NovaPay charges a flat subscription fee. There are no per-transaction fees. Subscription fees are charged in advance. NovaPay may modify pricing with 30 days notice.</p>
-        <h2 style={h2}>5. Prohibited Activities</h2>
-        <ul style={ul}>
-          <li>Illegal goods or services</li>
-          <li>Money laundering or financial fraud</li>
-          <li>Gambling without a license</li>
-          <li>Adult content or services</li>
-          <li>Any activity prohibited under Indian law</li>
-        </ul>
-        <h2 style={h2}>6. Limitation of Liability</h2>
-        <p style={p}>NovaPay shall not be liable for indirect or consequential damages. Maximum liability shall not exceed subscription fees paid in the 3 months preceding the claim.</p>
-        <h2 style={h2}>7. Governing Law</h2>
-        <p style={p}>These terms are governed by the laws of India. Disputes are subject to courts in Bengaluru, Karnataka.</p>
-        <h2 style={h2}>8. Contact</h2>
-        <p style={p}>Email: <a href="mailto:sonamtsheringsh@gmail.com" style={{color:'#60a5fa'}}>sonamtsheringsh@gmail.com</a><br/>NovaPay, Koramangala, Bengaluru, Karnataka 560095</p>
-        <hr style={{borderColor:'rgba(255,255,255,0.06)',margin:'40px 0'}}/>
-        <div style={{display:'flex',gap:24,flexWrap:'wrap'}}>
-          <Link href="/privacy" style={{fontSize:13,color:'#60a5fa'}}>Privacy Policy</Link>
-          <Link href="/refund" style={{fontSize:13,color:'#60a5fa'}}>Refund Policy</Link>
-          <Link href="/contact" style={{fontSize:13,color:'#60a5fa'}}>Contact Us</Link>
+
+      <div style={{ background: 'linear-gradient(180deg,#EFF6FF,#fff)', borderBottom: '1px solid #E2E8F0', padding: '56px 48px', textAlign: 'center' as const }}>
+        <div style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#2563EB', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 100, padding: '3px 12px', letterSpacing: '.05em', marginBottom: 14 }}>LEGAL</div>
+        <h1 style={{ fontSize: 44, fontWeight: 800, letterSpacing: -2, color: '#0F172A', marginBottom: 10 }}>Terms of Service</h1>
+        <p style={{ fontSize: 14, color: '#94A3B8' }}>Last updated: March 20, 2026</p>
+      </div>
+
+      <div className="page-pad" style={{ maxWidth: 760, margin: '0 auto', padding: '64px 48px 80px' }}>
+        <p style={{ fontSize: 15, color: '#64748B', lineHeight: 1.75, marginBottom: 40, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 20px' }}>
+          Please read these Terms of Service carefully before using NovaPay. By using our platform, you agree to be bound by these terms.
+        </p>
+        {SECTIONS.map(s => (
+          <div key={s.title} style={{ marginBottom: 36 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 10, letterSpacing: -0.3 }}>{s.title}</h2>
+            {s.body && <p style={{ fontSize: 15, color: '#475569', lineHeight: 1.8 }}>{s.body}</p>}
+            {s.list && (
+              <ul style={{ paddingLeft: 20, listStyleType: 'disc' }}>
+                {s.list.map(item => <li key={item} style={{ fontSize: 15, color: '#475569', lineHeight: 2 }}>{item}</li>)}
+              </ul>
+            )}
+          </div>
+        ))}
+        <div style={{ marginTop: 56, padding: '20px 24px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span style={{ fontSize: 14, color: '#475569', lineHeight: 1.65 }}>Questions? Email <a href="mailto:legal@novapay.in" style={{ color: '#2563EB', fontWeight: 600 }}>legal@novapay.in</a> or visit our <Link href="/contact" style={{ color: '#2563EB', fontWeight: 600 }}>Contact page</Link>.</span>
         </div>
       </div>
+
+      <footer style={{ background: '#F8FAFC', borderTop: '1px solid #E2E8F0', padding: '24px 48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 12 }}>
+        <span style={{ fontSize: 12, color: '#94A3B8' }}>© 2026 NovaPay Technologies Pvt. Ltd.</span>
+        <div style={{ display: 'flex', gap: 20 }}>
+          {[['Home','/'],['Privacy','/privacy'],['Refund','/refund'],['Contact','/contact']].map(([l,h]) => (
+            <Link key={l} href={h} style={{ fontSize: 12, color: '#94A3B8' }}>{l}</Link>
+          ))}
+        </div>
+      </footer>
     </div>
   );
 }

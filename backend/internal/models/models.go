@@ -78,9 +78,14 @@ type Payment struct {
 	ExpiresAt         time.Time     `json:"expires_at" db:"expires_at"`
 	PaidAt            *time.Time    `json:"paid_at,omitempty" db:"paid_at"`
 	ClientIP          string        `json:"-" db:"client_ip"`
-	RedirectURL       string        `json:"redirect_url" db:"redirect_url"`
-	CreatedAt         time.Time     `json:"created_at" db:"created_at"`
-	UpdatedAt         time.Time     `json:"updated_at" db:"updated_at"`
+	RedirectURL            string        `json:"redirect_url" db:"redirect_url"`
+	NotifyOnPaid           bool          `json:"notify_on_paid" db:"notify_on_paid"`
+	CollectCustomerDetails bool          `json:"collect_customer_details" db:"collect_customer_details"`
+	CustomerName           string        `json:"customer_name" db:"customer_name"`
+	CustomerEmail          string        `json:"customer_email" db:"customer_email"`
+	CustomerPhone          string        `json:"customer_phone" db:"customer_phone"`
+	CreatedAt              time.Time     `json:"created_at" db:"created_at"`
+	UpdatedAt              time.Time     `json:"updated_at" db:"updated_at"`
 }
 
 // ============================================================================
@@ -155,6 +160,30 @@ type RefreshToken struct {
 	ExpiresAt  time.Time `json:"expires_at" db:"expires_at"`
 	Revoked    bool      `json:"revoked" db:"revoked"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
+}
+
+// ============================================================================
+// TELEGRAM
+// ============================================================================
+
+type MerchantTelegram struct {
+	MerchantID        uuid.UUID `json:"merchant_id" db:"merchant_id"`
+	ChatIDEncrypted   string    `json:"-" db:"chat_id_encrypted"`
+	IsEnabled         bool      `json:"is_enabled" db:"is_enabled"`
+	NotificationTypes []string  `json:"notification_types" db:"notification_types"`
+	ConnectedAt       time.Time `json:"connected_at" db:"connected_at"`
+	UpdatedAt         time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type TelegramNotification struct {
+	ID               uuid.UUID  `json:"id" db:"id"`
+	MerchantID       uuid.UUID  `json:"merchant_id" db:"merchant_id"`
+	NotificationType string     `json:"notification_type" db:"notification_type"`
+	Message          string     `json:"message" db:"message"`
+	Success          bool       `json:"success" db:"success"`
+	ErrorMessage     *string    `json:"error_message,omitempty" db:"error_message"`
+	Attempt          int        `json:"attempt" db:"attempt"`
+	SentAt           time.Time  `json:"sent_at" db:"sent_at"`
 }
 
 // ============================================================================
