@@ -357,6 +357,15 @@ func (s *Service) VerifyCryptoPayment(ctx context.Context, req models.CryptoVeri
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			// Reusing an already-settled tx hash is a replay / front-running attempt.
+			s.repo.CreateFraudAlert(context.Background(), &models.FraudAlert{
+				ID: utils.NewID(), PaymentID: cp.PaymentID, MerchantID: cp.MerchantID,
+				AlertType: "crypto_tx_reuse", Severity: "high",
+				Details:   fmt.Sprintf("TxID %s (already settled) re-submitted for order %s from IP %s", txHash, cp.PaymentID.String(), clientIP),
+				CreatedAt: time.Now(),
+			})
+			s.notifyTelegramSuspiciousActivity(context.Background(), cp.MerchantID,
+				fmt.Sprintf("A transaction hash that was already used was re-submitted against order <code>%s</code>.", cp.PaymentID.String()))
 			return fail("that transaction has already been used for another order")
 		}
 		logger.Error().Err(err).Str("crypto_payment_id", cp.ID.String()).Msg("Failed to mark crypto payment paid")

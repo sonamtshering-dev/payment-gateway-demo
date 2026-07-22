@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/upay/gateway/internal/services"
 )
 
 type PaytmOrderStatus struct {
@@ -87,12 +88,18 @@ func (w *Worker) runPaytmVerification(ctx context.Context) {
 				Str("utr", utr).
 				Msg("Payment auto-confirmed via Paytm ✅")
 
+			// Telegram: payment received (auto-verified path)
+			w.enqueueTelegramForMerchant(ctx, payment.MerchantID, services.TGNotifPaymentReceived,
+				services.FormatPaymentReceived(payment.OrderID, payment.Amount))
+
 			// Auto-activate subscription if this is a SUB- payment
 			if len(payment.OrderID) > 4 && payment.OrderID[:4] == "SUB-" {
-				if aerr := w.repo.ActivateSubscriptionForPayment(ctx, payment.MerchantID, payment.OrderID); aerr != nil {
+				if subMerchantID, planName, aerr := w.repo.ActivateSubscriptionForPayment(ctx, payment.MerchantID, payment.OrderID); aerr != nil {
 					log.Error().Err(aerr).Str("order_id", payment.OrderID).Msg("Failed to activate subscription")
 				} else {
 					log.Info().Str("order_id", payment.OrderID).Msg("Subscription activated ✅")
+					w.enqueueTelegramForMerchant(ctx, subMerchantID, services.TGNotifSubscriptionActive,
+						services.FormatSubscriptionActivated(planName))
 				}
 			}
 		}

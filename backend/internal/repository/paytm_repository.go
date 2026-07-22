@@ -115,7 +115,9 @@ func (r *Repository) GetPaymentByIDSimple(ctx context.Context, id uuid.UUID) (*m
 	}
 	return &p, nil
 }
-func (r *Repository) ActivateSubscriptionForPayment(ctx context.Context, adminMerchantID uuid.UUID, orderID string) error {
+// ActivateSubscriptionForPayment activates the purchased plan and returns the
+// actual merchant it was activated for plus the plan name (for notifications).
+func (r *Repository) ActivateSubscriptionForPayment(ctx context.Context, adminMerchantID uuid.UUID, orderID string) (uuid.UUID, string, error) {
 	// Get customer_reference to find actual merchant: "Subscription: Pro plan for 019cf79a"
 	var customerRef string
 	r.db.QueryRow(ctx, `SELECT customer_reference FROM payments WHERE order_id = $1`, orderID).Scan(&customerRef)
@@ -135,12 +137,13 @@ func (r *Repository) ActivateSubscriptionForPayment(ctx context.Context, adminMe
 
 	// Find plan from order ID prefix
 	var planID uuid.UUID
+	var planName string
 	err := r.db.QueryRow(ctx,
-		`SELECT id FROM plans WHERE id::text LIKE $1 || '%' AND is_active = TRUE ORDER BY price DESC LIMIT 1`,
+		`SELECT id, name FROM plans WHERE id::text LIKE $1 || '%' AND is_active = TRUE ORDER BY price DESC LIMIT 1`,
 		orderID[4:12],
-	).Scan(&planID)
+	).Scan(&planID, &planName)
 	if err != nil {
-		return fmt.Errorf("plan not found for order %s: %w", orderID, err)
+		return merchantID, "", fmt.Errorf("plan not found for order %s: %w", orderID, err)
 	}
 
 	// Cancel existing active subscriptions for this merchant
@@ -158,5 +161,5 @@ func (r *Repository) ActivateSubscriptionForPayment(ctx context.Context, adminMe
 			     ELSE NULL END,
 			NOW(), NOW())
 	`, merchantID, planID)
-	return err
+	return merchantID, planName, err
 }
