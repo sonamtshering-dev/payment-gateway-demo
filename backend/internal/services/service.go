@@ -115,7 +115,8 @@ func (s *Service) Login(ctx context.Context, req models.LoginRequest) (*models.A
 		return nil, fmt.Errorf("service unavailable")
 	}
 	if merchant == nil {
-		return nil, fmt.Errorf("invalid credentials")
+		// Not an owner account — try team member login.
+		return s.teamMemberLogin(ctx, req, lockKey, attemptsKey)
 	}
 
 	if !utils.CheckPassword(req.Password, merchant.PasswordHash) {
@@ -137,14 +138,21 @@ func (s *Service) Login(ctx context.Context, req models.LoginRequest) (*models.A
 	return s.generateAuthResponse(ctx, merchant, "")
 }
 
-// generateAuthResponse builds a login/refresh token response.
+// generateAuthResponse builds a login/refresh token response for the account owner.
 // Pass plaintext secret only on registration (it will be included once); pass "" on login.
 func (s *Service) generateAuthResponse(ctx context.Context, merchant *models.Merchant, secret string) (*models.AuthResponse, error) {
+	return s.generateAuthResponseWithRole(ctx, merchant, secret, "owner", merchant.Email)
+}
+
+// generateAuthResponseWithRole issues tokens scoped to a merchant account with a
+// team role. For team members, email is the member's own email.
+func (s *Service) generateAuthResponseWithRole(ctx context.Context, merchant *models.Merchant, secret, role, email string) (*models.AuthResponse, error) {
 
 	accessToken, err := utils.GenerateAccessToken(
 		merchant.ID,
-		merchant.Email,
-		merchant.IsAdmin,
+		email,
+		merchant.IsAdmin && role == "owner",
+		role,
 		s.config.JWT.AccessSecret,
 		s.config.JWT.AccessExpiry,
 	)

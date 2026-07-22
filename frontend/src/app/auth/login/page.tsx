@@ -45,11 +45,45 @@ export default function LoginPage() {
     } finally { setLoading(false); }
   };
 
+  const [otpChannel, setOtpChannel] = useState('email');
+
   const handleSendOTP = async () => {
     if (!email) { setError('Enter your email first'); return; }
     setOtpLoading(true); setError('');
-    await new Promise(r => setTimeout(r, 1000));
-    setOtpSent(true); setOtpLoading(false);
+    try {
+      const r = await fetch('/api/v1/auth/otp/request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const d = await r.json();
+      if (r.ok && d.success) {
+        setOtpChannel(d.data?.channel || 'email');
+        setOtpSent(true);
+      } else {
+        setError(d.error || 'Could not send code. Try again.');
+      }
+    } catch { setError('Network error. Please try again.'); }
+    finally { setOtpLoading(false); }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (otp.length !== 6) { setError('Enter the 6-digit code'); return; }
+    setOtpLoading(true); setError('');
+    try {
+      const r = await fetch('/api/v1/auth/otp/verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), code: otp }),
+      });
+      const d = await r.json();
+      if (r.ok && d.success && d.data?.access_token) {
+        localStorage.setItem('upay_access_token', d.data.access_token);
+        localStorage.setItem('upay_refresh_token', d.data.refresh_token);
+        window.location.href = '/dashboard';
+      } else {
+        setError(d.error || 'Verification failed. Try again.');
+      }
+    } catch { setError('Network error. Please try again.'); }
+    finally { setOtpLoading(false); }
   };
 
   const inp: React.CSSProperties = {
@@ -224,20 +258,29 @@ export default function LoginPage() {
                 </button>
               ) : (
                 <>
-                  <div style={{ background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:10, padding:'11px 14px', color:'#166534', fontSize:13, marginBottom:16, display:'flex', alignItems:'center', gap:8 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
-                    OTP sent to {email}
+                  <div style={{ background: otpChannel === 'telegram' ? '#EFF6FF' : '#F0FDF4', border: `1px solid ${otpChannel === 'telegram' ? '#BFDBFE' : '#BBF7D0'}`, borderRadius:10, padding:'11px 14px', color: otpChannel === 'telegram' ? '#1D4ED8' : '#166534', fontSize:13, marginBottom:16, display:'flex', alignItems:'center', gap:8 }}>
+                    {otpChannel === 'telegram' ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                    )}
+                    {otpChannel === 'telegram' ? 'Code sent to your Telegram' : `Code sent to ${email}`}
                   </div>
                   <div style={{ marginBottom:16 }}>
-                    <label style={{ display:'block', fontSize:13, fontWeight:600, color:'#374151', marginBottom:7 }}>Enter OTP</label>
+                    <label style={{ display:'block', fontSize:13, fontWeight:600, color:'#374151', marginBottom:7 }}>Enter code</label>
                     <input className="auth-inp" style={{ ...inp, letterSpacing:'0.3em', fontSize:20, textAlign:'center', fontWeight:700 }} type="text" placeholder="· · · · · ·" maxLength={6} value={otp} onChange={e=>setOtp(e.target.value.replace(/\D/g,''))} />
                   </div>
-                  <button style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,#1D4ED8,#2563EB)', color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer', marginBottom:16, fontFamily:'inherit' }}>
-                    Verify OTP →
+                  <button onClick={handleVerifyOTP} disabled={otpLoading || otp.length !== 6} style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background: otpLoading || otp.length !== 6 ? '#93C5FD' : 'linear-gradient(135deg,#1D4ED8,#2563EB)', color:'#fff', fontSize:15, fontWeight:700, cursor: otpLoading || otp.length !== 6 ? 'not-allowed' : 'pointer', marginBottom:10, fontFamily:'inherit' }}>
+                    {otpLoading ? 'Verifying…' : 'Verify & Sign In →'}
+                  </button>
+                  <button onClick={() => { setOtpSent(false); setOtp(''); }} style={{ width:'100%', padding:'10px', borderRadius:10, border:'none', background:'none', color:'#64748B', fontSize:12.5, fontWeight:600, cursor:'pointer', marginBottom:8, fontFamily:'inherit' }}>
+                    Didn&apos;t get it? Send a new code
                   </button>
                 </>
               )}
-              <p style={{ fontSize:12, color:'#94A3B8', textAlign:'center' as const }}>OTP feature coming soon.</p>
+              <p style={{ fontSize:12, color:'#94A3B8', textAlign:'center' as const }}>
+                Codes are delivered to your connected Telegram, or email otherwise.
+              </p>
             </div>
           )}
 

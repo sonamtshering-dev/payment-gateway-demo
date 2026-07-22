@@ -2,18 +2,35 @@
 import React, { useEffect, useState } from 'react';
 import { Users, Copy, CheckCircle2, TrendingUp, Gift, Tag, UserCheck, DollarSign, Clock, Star, Share2, MessageCircle, Send } from 'lucide-react';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-const CHART_DATA = [1240, 1680, 2100, 1850, 2540, 3200];
+// Build last-6-months referral counts from the real referral list.
+function monthlySeries(referrals: any[]): { labels: string[]; data: number[] } {
+  const now = new Date();
+  const labels: string[] = [];
+  const keys: string[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    labels.push(d.toLocaleString('en-IN', { month: 'short' }));
+    keys.push(`${d.getFullYear()}-${d.getMonth()}`);
+  }
+  const counts = new Array(6).fill(0);
+  for (const r of referrals) {
+    const dt = new Date(r.created_at);
+    const idx = keys.indexOf(`${dt.getFullYear()}-${dt.getMonth()}`);
+    if (idx >= 0) counts[idx]++;
+  }
+  return { labels, data: counts };
+}
 
-function LineChart({ data }: { data: number[] }) {
-  const W = 500, H = 130, pad = { t: 10, r: 10, b: 30, l: 40 };
+function LineChart({ labels, data }: { labels: string[]; data: number[] }) {
+  const W = 500, H = 130, pad = { t: 10, r: 10, b: 30, l: 34 };
   const iW = W - pad.l - pad.r, iH = H - pad.t - pad.b;
-  const max = Math.max(...data), min = Math.min(...data) * 0.8;
+  const max = Math.max(4, ...data);
   const xOf = (i: number) => pad.l + (i / (data.length - 1)) * iW;
-  const yOf = (v: number) => pad.t + iH - ((v - min) / (max - min)) * iH;
+  const yOf = (v: number) => pad.t + iH - (v / max) * iH;
   const pts = data.map((v, i) => `${xOf(i)},${yOf(v)}`).join(' ');
   const area = `M${xOf(0)},${H - pad.b} L${data.map((v, i) => `${xOf(i)},${yOf(v)}`).join(' L')} L${xOf(data.length - 1)},${H - pad.b} Z`;
-  const yTicks = [0, 1000, 2000, 3000, 4000];
+  const step = Math.max(1, Math.ceil(max / 4));
+  const yTicks = [0, step, step * 2, step * 3, step * 4].filter(t => t <= max);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: '100%' }}>
       <defs>
@@ -25,7 +42,7 @@ function LineChart({ data }: { data: number[] }) {
       {yTicks.map(t => (
         <g key={t}>
           <line x1={pad.l} y1={yOf(t)} x2={W - pad.r} y2={yOf(t)} stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3,3"/>
-          <text x={pad.l - 6} y={yOf(t) + 4} textAnchor="end" fontSize="9" fill="#94A3B8">₹{t/1000}K</text>
+          <text x={pad.l - 6} y={yOf(t) + 4} textAnchor="end" fontSize="9" fill="#94A3B8">{t}</text>
         </g>
       ))}
       <path d={area} fill="url(#cg)"/>
@@ -33,18 +50,12 @@ function LineChart({ data }: { data: number[] }) {
       {data.map((v, i) => (
         <circle key={i} cx={xOf(i)} cy={yOf(v)} r="4" fill="#2563EB" stroke="#fff" strokeWidth="2"/>
       ))}
-      {MONTHS.map((m, i) => (
-        <text key={m} x={xOf(i)} y={H - 6} textAnchor="middle" fontSize="10" fill="#94A3B8">{m}</text>
+      {labels.map((m, i) => (
+        <text key={m + i} x={xOf(i)} y={H - 6} textAnchor="middle" fontSize="10" fill="#94A3B8">{m}</text>
       ))}
     </svg>
   );
 }
-
-const TOP_REFERRERS = [
-  { rank: 1, name: 'Aman Verma',   earnings: 45230, color: '#D97706', bg: '#FFFBEB' },
-  { rank: 2, name: 'Priya Sharma', earnings: 32450, color: '#64748B', bg: '#F1F5F9' },
-  { rank: 3, name: 'Rohit Singh',  earnings: 18760, color: '#B45309', bg: '#FEF3C7' },
-];
 
 export default function ReferralPage() {
   const [stats, setStats]               = useState<any>(null);
@@ -207,26 +218,44 @@ export default function ReferralPage() {
             ))}
           </div>
 
-          {/* Earnings chart */}
+          {/* Referrals over time (real data) */}
           <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 14, padding: '20px', marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' as const, gap: 8 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Earnings Overview</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Referrals Overview</div>
+              <div style={{ fontSize: 12, color: '#94A3B8' }}>Last 6 months</div>
             </div>
             <div className="ref-chart-inner">
-              <div className="ref-chart-box"><LineChart data={CHART_DATA} /></div>
-              <div className="ref-chart-aside">
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', marginBottom: 12 }}>Earnings Breakup</div>
-                {[
-                  ['This Month', '₹0.00'],
-                  ['Last Month', '₹0.00'],
-                  ['Total Paid', fmt(totalEarnings)],
-                  ['Pending',    fmt(pendingEarnings)],
-                ].map(([k, v]) => (
-                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 10 }}>
-                    <span style={{ color: '#64748B' }}>{k}</span>
-                    <span style={{ fontWeight: 600, color: '#0F172A' }}>{v}</span>
+              <div className="ref-chart-box">
+                {realReferrals.length > 0 ? (
+                  <LineChart {...monthlySeries(realReferrals)} />
+                ) : (
+                  <div style={{ height: '100%', minHeight: 110, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Users size={22} color="#CBD5E1" />
+                    <div style={{ fontSize: 12.5, color: '#94A3B8' }}>No referrals yet — share your link to get started</div>
                   </div>
-                ))}
+                )}
+              </div>
+              <div className="ref-chart-aside">
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', marginBottom: 12 }}>Breakdown</div>
+                {(() => {
+                  const now = new Date();
+                  const inMonth = (r: any, offset: number) => {
+                    const d = new Date(r.created_at);
+                    const m = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+                    return d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth();
+                  };
+                  return ([
+                    ['This Month', String(realReferrals.filter(r => inMonth(r, 0)).length)],
+                    ['Last Month', String(realReferrals.filter(r => inMonth(r, 1)).length)],
+                    ['Total Referrals', String(totalReferrals)],
+                    ['Rewarded', String(activeReferrals)],
+                  ] as const).map(([k, v]) => (
+                    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 10 }}>
+                      <span style={{ color: '#64748B' }}>{k}</span>
+                      <span style={{ fontWeight: 600, color: '#0F172A' }}>{v}</span>
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
           </div>
@@ -477,17 +506,25 @@ export default function ReferralPage() {
             ))}
           </div>
 
-          {/* ── Top Referrers ── */}
+          {/* ── Recent Referrals (real data) ── */}
           <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 14, padding: '20px' }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 14 }}>Top Referrers</div>
-            {TOP_REFERRERS.map(r => (
-              <div key={r.rank} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <div style={{ width: 22, height: 22, borderRadius: 6, background: r.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: r.color, flexShrink: 0 }}>{r.rank}</div>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#2563EB', flexShrink: 0 }}>{r.name.charAt(0)}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{r.name}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 14 }}>Recent Referrals</div>
+            {realReferrals.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '14px 0' }}>
+                <div style={{ fontSize: 12.5, color: '#94A3B8', lineHeight: 1.6 }}>No one has signed up with your link yet.<br/>Share it to start earning rewards.</div>
+              </div>
+            ) : realReferrals.slice(0, 5).map((r: any, i: number) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#2563EB', flexShrink: 0 }}>{(r.name || '?').charAt(0).toUpperCase()}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
+                  <div style={{ fontSize: 11, color: '#94A3B8' }}>{new Date(r.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div>
                 </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>₹{r.earnings.toLocaleString('en-IN')}</div>
+                <span style={{
+                  fontSize: 10.5, fontWeight: 700, borderRadius: 20, padding: '3px 9px', flexShrink: 0,
+                  background: r.reward_applied ? '#F0FDF4' : '#FFFBEB',
+                  color: r.reward_applied ? '#059669' : '#D97706',
+                }}>{r.reward_applied ? 'Rewarded' : 'Pending'}</span>
               </div>
             ))}
           </div>

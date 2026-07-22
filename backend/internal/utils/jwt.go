@@ -11,14 +11,16 @@ type Claims struct {
 	MerchantID uuid.UUID `json:"merchant_id"`
 	Email      string    `json:"email"`
 	IsAdmin    bool      `json:"is_admin"`
+	Role       string    `json:"role,omitempty"` // owner | admin | viewer (empty = owner, pre-team tokens)
 	jwt.RegisteredClaims
 }
 
-func GenerateAccessToken(merchantID uuid.UUID, email string, isAdmin bool, secret string, expiry time.Duration) (string, error) {
+func GenerateAccessToken(merchantID uuid.UUID, email string, isAdmin bool, role string, secret string, expiry time.Duration) (string, error) {
 	claims := &Claims{
 		MerchantID: merchantID,
 		Email:      email,
 		IsAdmin:    isAdmin,
+		Role:       role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

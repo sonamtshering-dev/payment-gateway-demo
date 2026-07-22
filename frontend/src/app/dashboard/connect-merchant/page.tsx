@@ -209,13 +209,17 @@ export default function ConnectMerchantPage() {
 
         .cm-account-grid {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 14px;
         }
+        .cm-account-grid > div { min-width: 0; overflow-wrap: break-word; }
         .cm-payment-grid {
           display: grid;
-          grid-template-columns: repeat(8, 1fr);
+          grid-template-columns: repeat(8, minmax(0, 1fr));
           gap: 10px;
+        }
+        @media (max-width: 1150px) {
+          .cm-account-grid { grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); }
         }
         .cm-sec-banner {
           background: #FFFFFF;

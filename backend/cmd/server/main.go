@@ -154,6 +154,9 @@ func main() {
 			auth.POST("/refresh", h.RefreshToken)
 			auth.POST("/forgot-password", h.ForgotPassword)
 			auth.POST("/reset-password", h.ResetPassword)
+			auth.POST("/accept-invite", h.AcceptTeamInvite)
+			auth.POST("/otp/request", h.RequestLoginOTP)
+			auth.POST("/otp/verify", h.VerifyLoginOTP)
 		}
 
 		// ---- PAYMENT API (API-key + signature authenticated) ----
@@ -170,47 +173,58 @@ func main() {
 		// ---- MERCHANT DASHBOARD (JWT authenticated) ----
 		dashboard := v1.Group("/dashboard")
 		dashboard.Use(middleware.JWTAuth(cfg))
+		// adm guards mutating settings routes: owner + admin roles only (viewers are read-only)
+		adm := middleware.RequireRole("owner", "admin")
 		{
 			dashboard.GET("/stats", h.GetDashboardStats)
 			dashboard.GET("/transactions", h.GetTransactions)
 			dashboard.GET("/profile", h.GetProfile)
 
 			// UPI management
-			dashboard.POST("/upi", h.AddUPI)
+			dashboard.POST("/upi", adm, h.AddUPI)
 			dashboard.GET("/upi", h.ListUPIs)
-			dashboard.DELETE("/upi/:upi_id", h.DeleteUPI)
+			dashboard.DELETE("/upi/:upi_id", adm, h.DeleteUPI)
 
 			// Webhook settings
 			dashboard.GET("/webhook", h.GetWebhook)
-			dashboard.PUT("/webhook", h.UpdateWebhook)
+			dashboard.PUT("/webhook", adm, h.UpdateWebhook)
 			dashboard.GET("/webhook-secret", h.GetWebhookSecret)
 			dashboard.GET("/api-secret", h.GetAPISecret)
 
 			// IP whitelist management
 			dashboard.GET("/ip-whitelist", h.GetIPWhitelist)
-			dashboard.POST("/ip-whitelist", h.AddIPWhitelist)
-			dashboard.DELETE("/ip-whitelist/:id", h.DeleteIPWhitelist)
+			dashboard.POST("/ip-whitelist", adm, h.AddIPWhitelist)
+			dashboard.DELETE("/ip-whitelist/:id", adm, h.DeleteIPWhitelist)
 
-			// Security
-			dashboard.POST("/rotate-keys", h.RotateAPIKeys)
-			dashboard.POST("/change-password", h.ChangePassword)
+			// Security (owner only)
+			dashboard.POST("/rotate-keys", middleware.RequireRole("owner"), h.RotateAPIKeys)
+			dashboard.POST("/change-password", middleware.RequireRole("owner"), h.ChangePassword)
+
+			// Team management (owner only)
+			team := dashboard.Group("/team", middleware.RequireRole("owner"))
+			{
+				team.GET("", h.ListTeamMembers)
+				team.POST("/invite", h.InviteTeamMember)
+				team.PUT("/:id", h.UpdateTeamMember)
+				team.DELETE("/:id", h.RemoveTeamMember)
+			}
 
 			// Provider connections
 			dashboard.GET("/providers",        h.GetProviders)
-			dashboard.POST("/providers",       h.ConnectProvider)
-			dashboard.PUT("/providers/:id",    h.UpdateProvider)
-			dashboard.DELETE("/providers/:id", h.DeleteProvider)
+			dashboard.POST("/providers", adm, h.ConnectProvider)
+			dashboard.PUT("/providers/:id", adm, h.UpdateProvider)
+			dashboard.DELETE("/providers/:id", adm, h.DeleteProvider)
 					dashboard.GET("/subscription", h.GetSubscription)
 					dashboard.POST("/subscription", h.CreateSubscription)
 					dashboard.DELETE("/subscription", h.CancelSubscription)
 					dashboard.GET("/subscription/detail", h.GetSubscriptionWithPlan)
 					dashboard.POST("/subscription/pay", h.InitiateSubscriptionPayment)
-					dashboard.POST("/logo", h.UploadMerchantLogo)
-					dashboard.DELETE("/logo", h.DeleteMerchantLogo)
-					dashboard.PUT("/business-name", h.UpdateBusinessName)
+					dashboard.POST("/logo", adm, h.UploadMerchantLogo)
+					dashboard.DELETE("/logo", adm, h.DeleteMerchantLogo)
+					dashboard.PUT("/business-name", adm, h.UpdateBusinessName)
 					dashboard.GET("/referral", h.GetReferralStats)
 					dashboard.POST("/referral/apply", h.ApplyReferralCode)
-					dashboard.POST("/paytm-mid", h.SavePaytmMID)
+					dashboard.POST("/paytm-mid", adm, h.SavePaytmMID)
 				dashboard.GET("/kyc", h.GetKYC)
 					dashboard.POST("/kyc", h.SubmitKYC)
 					dashboard.POST("/payments/create", h.CreatePayment)
@@ -218,15 +232,15 @@ func main() {
 				// Telegram notifications
 				// Crypto / USDT settings
 			dashboard.GET("/crypto", h.GetCryptoSettings)
-			dashboard.PUT("/crypto/config", h.UpdateCryptoConfig)
-			dashboard.POST("/crypto/wallet", h.SaveCryptoWallet)
-			dashboard.DELETE("/crypto/wallet/:network", h.DeleteCryptoWallet)
+			dashboard.PUT("/crypto/config", adm, h.UpdateCryptoConfig)
+			dashboard.POST("/crypto/wallet", adm, h.SaveCryptoWallet)
+			dashboard.DELETE("/crypto/wallet/:network", adm, h.DeleteCryptoWallet)
 
 			dashboard.GET("/telegram", h.GetTelegramStatus)
 				dashboard.POST("/telegram/connect", h.GenerateTelegramCode)
-				dashboard.PUT("/telegram/settings", h.UpdateTelegramSettings)
+				dashboard.PUT("/telegram/settings", adm, h.UpdateTelegramSettings)
 				dashboard.POST("/telegram/test", h.SendTelegramTest)
-				dashboard.DELETE("/telegram", h.DisconnectTelegram)
+				dashboard.DELETE("/telegram", adm, h.DisconnectTelegram)
 				dashboard.GET("/telegram/history", h.GetTelegramHistory)
 		}
 

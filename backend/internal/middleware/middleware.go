@@ -48,7 +48,35 @@ func JWTAuth(cfg *config.Config) gin.HandlerFunc {
 		c.Set("merchant_id", claims.MerchantID)
 		c.Set("merchant_email", claims.Email)
 		c.Set("is_admin", claims.IsAdmin)
+		role := claims.Role
+		if role == "" {
+			role = "owner" // tokens issued before team support
+		}
+		c.Set("role", role)
 		c.Next()
+	}
+}
+
+// RequireRole allows the request only for the given team roles.
+// "owner" is the merchant account itself; "admin"/"viewer" are team members.
+func RequireRole(roles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, _ := c.Get("role")
+		roleStr, _ := role.(string)
+		if roleStr == "" {
+			roleStr = "owner"
+		}
+		for _, r := range roles {
+			if roleStr == r {
+				c.Next()
+				return
+			}
+		}
+		c.JSON(http.StatusForbidden, models.ErrorResponse{
+			Error: "your team role does not allow this action",
+			Code:  "FORBIDDEN_ROLE",
+		})
+		c.Abort()
 	}
 }
 

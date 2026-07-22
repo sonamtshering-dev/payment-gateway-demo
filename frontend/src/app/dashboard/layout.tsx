@@ -8,7 +8,7 @@ import {
   FileCode2, Shield, Home, LogOut, Bell, Menu, X,
   BarChart2, Palette, CreditCard, Users,
   ShieldCheck, AlertTriangle, PackagePlus, ChevronDown,
-  ChevronLeft, ChevronRight, Settings, Send, Coins,
+  ChevronLeft, ChevronRight, Settings, Send, Coins, UserCircle,
 } from 'lucide-react';
 
 // ── Navigation structure ─────────────────────────────────────────
@@ -64,6 +64,8 @@ const NAV_GROUPS = [
     label: 'Settings',
     icon: Settings,
     items: [
+      { label: 'Profile',         href: '/dashboard/profile',  icon: UserCircle },
+      { label: 'Team Management', href: '/dashboard/team',     icon: Users },
       { label: 'Telegram Alerts', href: '/dashboard/telegram', icon: Send },
     ],
   },
@@ -84,6 +86,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/dashboard/branding':            'Branding',
   '/dashboard/telegram':            'Telegram Alerts',
   '/dashboard/crypto':              'Crypto Payments',
+  '/dashboard/profile':             'Profile',
+  '/dashboard/team':                'Team Management',
 };
 
 const STYLES = `
