@@ -1,197 +1,144 @@
 'use client';
-import React, { useEffect, useState } from 'react';
-import { BookOpen, Search, ChevronRight, Copy, Check, Eye, EyeOff, RefreshCw, Plus, Trash2, Shield, Zap, Globe } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nova-pay.in';
 
-// ── Code snippets ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// CODE SAMPLES — these mirror the backend contract exactly:
+//   headers  X-API-KEY, X-TIMESTAMP (unix seconds, ±5 min), X-SIGNATURE
+//   signature = hex( HMAC_SHA256( api_secret, `${timestamp}.${rawBody}` ) )
+//   webhooks  X-Webhook-Signature = hex( HMAC_SHA256( webhook_secret, rawBody ) )
+// ════════════════════════════════════════════════════════════════════════════
 
-const CREATE_PAYMENT_CURL = `curl -X POST ${BASE_URL}/api/v1/payments/create \\
-  -H "X-API-Key: YOUR_API_KEY" \\
-  -H "X-Timestamp: $(date +%s)" \\
-  -H "X-Signature: HMAC_SHA256_SIG" \\
+const QUICKSTART_CURL = `# 1. Compute the signature (timestamp.body, HMAC-SHA256, hex)
+TIMESTAMP=$(date +%s)
+BODY='{"order_id":"ORD-1001","amount":49900,"currency":"INR"}'
+SIGNATURE=$(printf '%s.%s' "$TIMESTAMP" "$BODY" | \\
+  openssl dgst -sha256 -hmac "$NOVAPAY_API_SECRET" -hex | awk '{print $2}')
+
+# 2. Create the payment
+curl -X POST ${BASE_URL}/api/v1/payments/create \\
   -H "Content-Type: application/json" \\
-  -d '{
-    "order_id": "ORD-2026-001",
+  -H "X-API-KEY: $NOVAPAY_API_KEY" \\
+  -H "X-TIMESTAMP: $TIMESTAMP" \\
+  -H "X-SIGNATURE: $SIGNATURE" \\
+  -d "$BODY"`;
+
+const QUICKSTART_NODE = `const NovaPay = require('./novapay');            // SDK below — zero dependencies
+const novapay = new NovaPay(API_KEY, API_SECRET);
+
+const payment = await novapay.createPayment({
+  order_id: 'ORD-1001',
+  amount: 49900,                                  // paise — ₹499.00
+  currency: 'INR',
+  redirect_url: 'https://yourstore.com/thanks',
+});
+
+// Send the customer to the hosted checkout:
+res.redirect(novapay.checkoutUrl(payment.payment_id));`;
+
+const QUICKSTART_PHP = `require 'NovaPay.php';                           // SDK below — zero dependencies
+$novapay = new NovaPay($apiKey, $apiSecret);
+
+$payment = $novapay->createPayment([
+    'order_id' => 'ORD-1001',
+    'amount'   => 49900,                          // paise — ₹499.00
+    'currency' => 'INR',
+    'redirect_url' => 'https://yourstore.com/thanks',
+]);
+
+header('Location: ' . $novapay->checkoutUrl($payment['payment_id']));`;
+
+const SIG_NODE = `const crypto = require('crypto');
+
+const timestamp = String(Math.floor(Date.now() / 1000));
+const body = JSON.stringify({ order_id: 'ORD-1001', amount: 49900, currency: 'INR' });
+
+const signature = crypto
+  .createHmac('sha256', process.env.NOVAPAY_API_SECRET)
+  .update(\`\${timestamp}.\${body}\`)              // timestamp DOT body
+  .digest('hex');
+
+// headers: { 'X-API-KEY': key, 'X-TIMESTAMP': timestamp, 'X-SIGNATURE': signature }`;
+
+const SIG_PHP = `$timestamp = (string) time();
+$body      = json_encode(['order_id' => 'ORD-1001', 'amount' => 49900, 'currency' => 'INR']);
+
+$signature = hash_hmac('sha256', $timestamp . '.' . $body, $apiSecret);
+
+// headers: X-API-KEY, X-TIMESTAMP: $timestamp, X-SIGNATURE: $signature`;
+
+const SIG_PY = `import hmac, hashlib, time, json, os
+
+timestamp = str(int(time.time()))
+body = json.dumps({"order_id": "ORD-1001", "amount": 49900, "currency": "INR"},
+                  separators=(",", ":"))
+
+signature = hmac.new(
+    os.environ["NOVAPAY_API_SECRET"].encode(),
+    f"{timestamp}.{body}".encode(),               # timestamp DOT body
+    hashlib.sha256,
+).hexdigest()
+
+# headers: X-API-KEY, X-TIMESTAMP, X-SIGNATURE`;
+
+const CREATE_RESPONSE = `{
+  "success": true,
+  "data": {
+    "payment_id": "3b1e7a9c-…",
+    "qr_code_base64": "data:image/png;base64,…",
+    "upi_intent_link": "upi://pay?pa=…&am=499.00&cu=INR",
     "amount": 49900,
     "currency": "INR",
-    "redirect_url": "https://yoursite.com/success"
-  }'`;
+    "expires_at": "2026-07-23T12:30:00Z",
+    "status": "pending"
+  }
+}
 
-const CREATE_PAYMENT_RESPONSE = `{
+Hosted checkout page:  ${BASE_URL}/pay/{payment_id}`;
+
+const STATUS_RESPONSE = `{
   "success": true,
   "data": {
-    "payment_id": "019d0aa1-af3a-79ce-aa49-336dfa67e48b",
-    "order_id":   "ORD-2026-001",
-    "upi_intent_link": "upi://pay?pa=merchant@oksbi&pn=Store&am=499.00",
-    "qr_code_base64": "data:image/png;base64,iVBOR...",
-    "pay_url": "${BASE_URL}/pay/019d0aa1-af3a-79ce-aa49-336dfa67e48b",
-    "amount":  49900,
-    "status":  "pending",
-    "expires_at": "2026-03-20T09:10:38Z"
+    "payment_id": "3b1e7a9c-…",
+    "order_id": "ORD-1001",
+    "amount": 49900,
+    "currency": "INR",
+    "status": "paid",                // pending | paid | failed | expired
+    "utr": "417822334455",
+    "paid_at": "2026-07-23T12:04:11Z",
+    "expires_at": "2026-07-23T12:30:00Z",
+    "usdt_enabled": true,
+    "crypto_networks": [{ "id": "trc20", "label": "USDT · TRC20 (Tron)" }]
   }
 }`;
 
-const GET_STATUS_RESPONSE = `{
-  "success": true,
-  "data": {
-    "payment_id": "019d0aa1-af3a-79ce-aa49-336dfa67e48b",
-    "order_id":   "ORD-2026-001",
-    "amount":     49900,
-    "status":     "paid",
-    "paid_at":    "2026-03-20T09:15:10Z",
-    "utr":        "607931415985"
-  }
-}`;
-
-const WEBHOOK_PAYLOAD = `{
-  "event":      "payment.success",
-  "payment_id": "019d0aa1-af3a-79ce-aa49-336dfa67e48b",
-  "order_id":   "ORD-2026-001",
-  "amount":     49900,
-  "status":     "paid",
-  "utr":        "607931415985",
-  "paid_at":    "2026-03-20T09:15:10Z"
-}`;
-
-const SIGNATURE_JS = `const crypto = require('crypto');
-const timestamp = Math.floor(Date.now() / 1000).toString();
-const body = JSON.stringify({ order_id: 'ORD-001', amount: 49900 });
-const sig = crypto.createHmac('sha256', process.env.NOVAPAY_API_SECRET)
-  .update(\`\${timestamp}.\${body}\`).digest('hex');
-// Headers: X-API-Key, X-Timestamp, X-Signature`;
-
-const SIGNATURE_PY = `import hmac, hashlib, time, json, os
-timestamp = str(int(time.time()))
-body = json.dumps(payload, separators=(',', ':'))
-sig = hmac.new(os.environ['API_SECRET'].encode(),
-  f"{timestamp}.{body}".encode(), hashlib.sha256).hexdigest()
-# Headers: X-API-Key, X-Timestamp, X-Signature`;
-
-// ── Endpoint definitions ─────────────────────────────────────────────────────
-
-const ENDPOINT_CATEGORIES = [
-  {
-    name: 'Payments',
-    color: '#2563EB',
-    bg: '#EFF6FF',
-    endpoints: [
-      { method: 'POST', path: '/api/v1/payments/create',    title: 'Create Payment',    desc: 'Generate QR / UPI link for a new payment' },
-      { method: 'GET',  path: '/api/v1/public/payment/:id', title: 'Get Payment Status', desc: 'Fetch payment status (no auth required)' },
-      { method: 'GET',  path: '/api/v1/dashboard/payments', title: 'List Payments',      desc: 'List all payments with filters' },
-      { method: 'POST', path: '/api/v1/payments/refund',    title: 'Refund Payment',     desc: 'Initiate a refund for a paid transaction' },
-    ],
-  },
-  {
-    name: 'QR Codes',
-    color: '#7C3AED',
-    bg: '#F5F3FF',
-    endpoints: [
-      { method: 'POST', path: '/api/v1/qr/static',  title: 'Create Static QR',  desc: 'Generate a reusable static QR code' },
-      { method: 'GET',  path: '/api/v1/qr/:id',     title: 'Get QR Details',     desc: 'Fetch details of a QR code' },
-      { method: 'GET',  path: '/api/v1/qr',         title: 'List QR Codes',      desc: 'List all your QR codes' },
-    ],
-  },
-  {
-    name: 'Settlements',
-    color: '#059669',
-    bg: '#ECFDF5',
-    endpoints: [
-      { method: 'GET', path: '/api/v1/dashboard/settlements',      title: 'List Settlements',  desc: 'Paginated list of settlement batches' },
-      { method: 'GET', path: '/api/v1/dashboard/settlements/:id',  title: 'Settlement Detail', desc: 'Transactions in a settlement batch' },
-    ],
-  },
-  {
-    name: 'Webhooks',
-    color: '#D97706',
-    bg: '#FFFBEB',
-    endpoints: [
-      { method: 'PUT', path: '/api/v1/dashboard/webhook',        title: 'Update Webhook URL',    desc: 'Set the endpoint to receive events' },
-      { method: 'GET', path: '/api/v1/dashboard/webhook-secret', title: 'Get Webhook Secret',    desc: 'Retrieve your HMAC signing secret' },
-    ],
-  },
-  {
-    name: 'Crypto (USDT)',
-    color: '#26A17B',
-    bg: '#F0FDF9',
-    endpoints: [
-      { method: 'POST', path: '/api/v1/public/payment/:id/crypto/init', title: 'Init USDT Payment',   desc: 'Lock rate and get wallet + exact USDT amount for an order' },
-      { method: 'POST', path: '/api/v1/public/crypto/verify',           title: 'Verify Transaction',  desc: 'Verify a customer-submitted transaction hash on-chain' },
-      { method: 'GET',  path: '/api/v1/dashboard/crypto',               title: 'Get Crypto Settings', desc: 'Your USDT config, wallets and supported networks' },
-      { method: 'PUT',  path: '/api/v1/dashboard/crypto/config',        title: 'Update Crypto Config', desc: 'Enable USDT, pricing mode, confirmations, timeout' },
-      { method: 'POST', path: '/api/v1/dashboard/crypto/wallet',        title: 'Save Wallet Address', desc: 'Set your receiving wallet for a network' },
-    ],
-  },
-  {
-    name: 'Merchants',
-    color: '#0891B2',
-    bg: '#F0F9FF',
-    endpoints: [
-      { method: 'GET',  path: '/api/v1/dashboard/profile',   title: 'Get Profile',      desc: 'Retrieve your merchant profile' },
-      { method: 'PUT',  path: '/api/v1/dashboard/profile',   title: 'Update Profile',   desc: 'Update business name or details' },
-      { method: 'POST', path: '/api/v1/dashboard/logo',      title: 'Upload Logo',      desc: 'Upload your business logo (multipart)' },
-    ],
-  },
-];
-
-// endpoint detail content
-const ENDPOINT_DETAILS: Record<string, { body?: string; response?: string; params?: { name: string; type: string; required: boolean; desc: string }[] }> = {
-  '/api/v1/payments/create': {
-    params: [
-      { name: 'order_id',           type: 'string',  required: true,  desc: 'Your unique order ID (max 64 chars)' },
-      { name: 'amount',             type: 'integer', required: true,  desc: 'Amount in smallest currency unit (paise for INR)' },
-      { name: 'currency',           type: 'string',  required: false, desc: 'Currency code. Default: INR' },
-      { name: 'customer_reference', type: 'string',  required: false, desc: 'Customer name or reference shown on UPI screen' },
-      { name: 'redirect_url',       type: 'string',  required: false, desc: 'URL to redirect after payment completes' },
-    ],
-    body:     CREATE_PAYMENT_CURL,
-    response: CREATE_PAYMENT_RESPONSE,
-  },
-  '/api/v1/public/payment/:id': {
-    params: [{ name: 'id', type: 'string', required: true, desc: 'payment_id returned from Create Payment' }],
-    response: GET_STATUS_RESPONSE,
-  },
-  '/api/v1/dashboard/webhook': {
-    params: [{ name: 'webhook_url', type: 'string', required: true, desc: 'HTTPS endpoint to receive payment events' }],
-    response: `{ "success": true, "message": "Webhook URL updated" }`,
-  },
-  '/api/v1/public/payment/:id/crypto/init': {
-    params: [
-      { name: 'id',      type: 'string', required: true, desc: 'payment_id of a pending order' },
-      { name: 'network', type: 'string', required: true, desc: 'One of: trc20, bep20, erc20' },
-    ],
-    body: `curl -X POST ${BASE_URL}/api/v1/public/payment/PAYMENT_ID/crypto/init \\
+const CRYPTO_INIT_BODY = `curl -X POST ${BASE_URL}/api/v1/public/payment/PAYMENT_ID/crypto/init \\
   -H "Content-Type: application/json" \\
-  -d '{ "network": "trc20" }'`,
-    response: `{
+  -d '{ "network": "trc20" }'`;
+
+const CRYPTO_INIT_RESPONSE = `{
   "success": true,
   "data": {
     "crypto_payment_id": "8f2c…",
     "network": "trc20",
     "network_label": "USDT · TRC20 (Tron)",
     "merchant_wallet": "TXYZaBc…",
-    "expected_usdt": "11.340072",
-    "exchange_rate": 88.18,
+    "expected_usdt": "11.340072",     // customer must send EXACTLY this
+    "exchange_rate": 88.18,           // locked for this order
     "inr_amount": 100000,
     "qr_code_base64": "data:image/png;base64,…",
-    "expires_at": "2026-07-22T19:30:00Z",
+    "expires_at": "2026-07-23T12:30:00Z",
     "status": "pending"
   }
-}
+}`;
 
-// The customer MUST send exactly expected_usdt — the unique
-// decimal tail binds their transfer to this specific order.
-// The exchange rate is locked and never changes for this order.`,
-  },
-  '/api/v1/public/crypto/verify': {
-    params: [
-      { name: 'crypto_payment_id', type: 'string', required: true, desc: 'From the init response' },
-      { name: 'tx_hash',           type: 'string', required: true, desc: 'Transaction hash the customer received after sending' },
-    ],
-    body: `curl -X POST ${BASE_URL}/api/v1/public/crypto/verify \\
+const CRYPTO_VERIFY_BODY = `curl -X POST ${BASE_URL}/api/v1/public/crypto/verify \\
   -H "Content-Type: application/json" \\
-  -d '{ "crypto_payment_id": "8f2c…", "tx_hash": "0xabc…" }'`,
-    response: `{
+  -d '{ "crypto_payment_id": "8f2c…", "tx_hash": "0xabc…" }'`;
+
+const CRYPTO_VERIFY_RESPONSE = `{
   "success": true,
   "data": {
     "status": "paid",
@@ -202,132 +149,282 @@ const ENDPOINT_DETAILS: Record<string, { body?: string; response?: string; param
   }
 }
 
-// Verification checks on-chain: recipient wallet, official USDT
-// contract, exact amount, confirmations, expiry window, and that
-// the hash was never used before. Idempotent — safe to retry.
-// On success your webhook fires with the standard paid payload.`,
-  },
-  '/api/v1/dashboard/crypto/config': {
-    params: [
-      { name: 'usdt_enabled',           type: 'boolean', required: true,  desc: 'Master switch for USDT at checkout' },
-      { name: 'pricing_mode',           type: 'string',  required: true,  desc: 'live | fixed | live_adjustment' },
-      { name: 'fixed_rate',             type: 'number',  required: false, desc: 'INR per 1 USDT (fixed mode)' },
-      { name: 'adjustment_pct',         type: 'number',  required: false, desc: 'Percent applied to live rate (live_adjustment mode)' },
-      { name: 'required_confirmations', type: 'integer', required: false, desc: 'Extra confirmations beyond the per-network safe minimum' },
-      { name: 'payment_timeout_min',    type: 'integer', required: false, desc: 'USDT payment window in minutes (5–180)' },
-    ],
-    response: `{ "success": true, "message": "Crypto settings updated" }`,
-  },
-  '/api/v1/dashboard/crypto/wallet': {
-    params: [
-      { name: 'network', type: 'string', required: true, desc: 'trc20 | bep20 | erc20' },
-      { name: 'address', type: 'string', required: true, desc: 'Your receiving wallet address on that network. Exchange deposit addresses (e.g. Binance) work too.' },
-    ],
-    response: `{ "success": true, "message": "Wallet saved" }`,
-  },
-};
+// Checks performed on-chain: recipient = merchant wallet, official USDT
+// contract, exact amount, confirmations, expiry window, hash never used
+// before. Idempotent — retrying a confirmed payment returns "paid" again.`;
 
-// ── Helper components ────────────────────────────────────────────────────────
+const WEBHOOK_PAYLOAD = `POST {your webhook URL}
+X-Webhook-Signature: 6e8b1a…            // hex HMAC-SHA256 of the raw body
+X-Webhook-Timestamp: 1784747099
+Content-Type: application/json
+
+{
+  "payment_id": "3b1e7a9c-…",
+  "order_id": "ORD-1001",
+  "amount": 49900,
+  "currency": "INR",
+  "status": "paid",
+  "utr": "417822334455",              // UPI UTR, or crypto tx hash for USDT
+  "timestamp": 1784747099,
+  "signature": "6e8b1a…"
+}`;
+
+const WEBHOOK_VERIFY_NODE = `// Express — use the RAW body, not the parsed object
+app.post('/webhooks/novapay', express.raw({ type: '*/*' }), (req, res) => {
+  const raw = req.body.toString();
+  const expected = crypto.createHmac('sha256', WEBHOOK_SECRET).update(raw).digest('hex');
+
+  if (expected !== req.headers['x-webhook-signature']) return res.status(401).end();
+
+  const event = JSON.parse(raw);
+  if (event.status === 'paid') {
+    // fulfil event.order_id — payment reference in event.utr
+  }
+  res.status(200).end();                // respond 2xx fast; we retry otherwise
+});`;
+
+const WEBHOOK_VERIFY_PHP = `$raw       = file_get_contents('php://input');
+$signature = $_SERVER['HTTP_X_WEBHOOK_SIGNATURE'] ?? '';
+$expected  = hash_hmac('sha256', $raw, $webhookSecret);
+
+if (!hash_equals($expected, $signature)) {
+    http_response_code(401);
+    exit;
+}
+
+$event = json_decode($raw, true);
+if (($event['status'] ?? '') === 'paid') {
+    // fulfil $event['order_id'] — payment reference in $event['utr']
+}
+http_response_code(200);`;
+
+// ════════════════════════════════════════════════════════════════════════════
+// ENDPOINT REFERENCE — only endpoints that actually exist on the gateway
+// ════════════════════════════════════════════════════════════════════════════
+
+interface Endpoint {
+  method: string;
+  path: string;
+  title: string;
+  desc: string;
+  auth: 'HMAC' | 'None' | 'JWT';
+  params?: { name: string; type: string; required: boolean; desc: string }[];
+  body?: string;
+  response?: string;
+}
+
+const ENDPOINT_GROUPS: { name: string; color: string; note?: string; endpoints: Endpoint[] }[] = [
+  {
+    name: 'Payments API',
+    color: '#2563EB',
+    note: 'Server-to-server. Signed with your API key + secret (see Authentication). Optional Idempotency-Key header on POSTs — same key returns the cached response for 24h.',
+    endpoints: [
+      {
+        method: 'POST', path: '/api/v1/payments/create', title: 'Create Payment', auth: 'HMAC',
+        desc: 'Create an order and get the QR, UPI intent link and hosted checkout page.',
+        params: [
+          { name: 'order_id', type: 'string', required: true, desc: 'Your unique order ID (1–64 chars). Reusing an active one fails.' },
+          { name: 'amount', type: 'integer', required: true, desc: 'Amount in paise. Min 100 (₹1.00).' },
+          { name: 'currency', type: 'string', required: true, desc: 'Must be "INR". USDT conversion happens at checkout.' },
+          { name: 'customer_reference', type: 'string', required: false, desc: 'Shown on the checkout page (max 128).' },
+          { name: 'redirect_url', type: 'string', required: false, desc: 'Where the customer returns after paying.' },
+          { name: 'expires_in_hours', type: 'integer', required: false, desc: 'Payment window. Default: 15 minutes.' },
+          { name: 'notify_on_paid', type: 'boolean', required: false, desc: 'Email you when this payment completes.' },
+          { name: 'collect_customer_details', type: 'boolean', required: false, desc: 'Ask the customer for name/email/phone at checkout.' },
+        ],
+        body: QUICKSTART_CURL,
+        response: CREATE_RESPONSE,
+      },
+      {
+        method: 'GET', path: '/api/v1/payments/status/:payment_id', title: 'Get Payment (authenticated)', auth: 'HMAC',
+        desc: 'Fetch a payment with full details. Sign with an empty body.',
+        response: STATUS_RESPONSE,
+      },
+      {
+        method: 'POST', path: '/api/v1/payments/verify', title: 'Manual Verify (UPI)', auth: 'HMAC',
+        desc: 'Mark a pending payment paid with a UTR you have confirmed yourself. Most integrations never need this — auto-verification and webhooks handle it.',
+        params: [
+          { name: 'payment_id', type: 'string', required: true, desc: 'Payment to verify' },
+          { name: 'utr', type: 'string', required: true, desc: 'Bank UTR (6–32 chars)' },
+          { name: 'amount', type: 'integer', required: true, desc: 'Must equal the order amount (paise)' },
+        ],
+        response: `{ "success": true, "message": "payment verified" }`,
+      },
+    ],
+  },
+  {
+    name: 'Checkout (public)',
+    color: '#7C3AED',
+    note: 'No authentication — safe to call from your frontend or the customer’s browser.',
+    endpoints: [
+      {
+        method: 'GET', path: '/api/v1/public/payment/:payment_id', title: 'Get Payment Status', auth: 'None',
+        desc: 'Poll payment status from the browser. Includes USDT availability for the merchant.',
+        response: STATUS_RESPONSE,
+      },
+    ],
+  },
+  {
+    name: 'Crypto — USDT',
+    color: '#26A17B',
+    note: 'Customer pays USDT directly to the merchant wallet (TRC20 / BEP20 / ERC20); NovaPay verifies the transaction on-chain. Enable it in Merchants → Crypto Payments.',
+    endpoints: [
+      {
+        method: 'POST', path: '/api/v1/public/payment/:payment_id/crypto/init', title: 'Init USDT Payment', auth: 'None',
+        desc: 'Lock the exchange rate and get the wallet + exact USDT amount for an order.',
+        params: [{ name: 'network', type: 'string', required: true, desc: 'trc20 | bep20 | erc20' }],
+        body: CRYPTO_INIT_BODY,
+        response: CRYPTO_INIT_RESPONSE,
+      },
+      {
+        method: 'POST', path: '/api/v1/public/crypto/verify', title: 'Verify Transaction Hash', auth: 'None',
+        desc: 'Verify the customer-submitted TxID on-chain and settle the order. Rate-limited per IP.',
+        params: [
+          { name: 'crypto_payment_id', type: 'string', required: true, desc: 'From the init response' },
+          { name: 'tx_hash', type: 'string', required: true, desc: 'Transaction hash of the USDT transfer' },
+        ],
+        body: CRYPTO_VERIFY_BODY,
+        response: CRYPTO_VERIFY_RESPONSE,
+      },
+    ],
+  },
+];
+
+const ERRORS = [
+  { status: '401', code: 'MISSING_HEADERS', desc: 'X-API-KEY, X-SIGNATURE or X-TIMESTAMP header missing' },
+  { status: '401', code: 'INVALID_API_KEY', desc: 'API key not recognised (rotated or wrong environment?)' },
+  { status: '401', code: 'INVALID_TIMESTAMP', desc: 'Timestamp outside the ±5 minute window — check server clock' },
+  { status: '401', code: 'INVALID_SIGNATURE', desc: 'HMAC mismatch — sign the exact raw body you send, as timestamp.body' },
+  { status: '400', code: '—', desc: 'Validation error — the message says which field' },
+  { status: '429', code: 'RATE_LIMIT_EXCEEDED', desc: 'Over 100 requests/min per merchant — back off and retry' },
+  { status: '500', code: '—', desc: 'Gateway error — safe to retry with the same Idempotency-Key' },
+];
+
+const SDKS = [
+  {
+    name: 'PHP SDK', file: '/downloads/novapay-php-sdk.zip',
+    desc: 'Single-file client: create payments, poll status, verify webhooks, USDT helpers. PHP 8+, no dependencies.',
+    icon: 'PHP', color: '#777BB3',
+  },
+  {
+    name: 'Node.js SDK', file: '/downloads/novapay-node-sdk.zip',
+    desc: 'Zero-dependency client for Node 18+. Same coverage as PHP, with timing-safe webhook verification.',
+    icon: 'JS', color: '#F7DF1E',
+  },
+  {
+    name: 'WooCommerce Plugin', file: '/downloads/novapay-woocommerce.zip',
+    desc: 'Drop-in WordPress plugin: hosted checkout at cart, signed webhooks auto-complete orders. No coding.',
+    icon: 'WP', color: '#21759B',
+  },
+];
+
+// ════════════════════════════════════════════════════════════════════════════
+// UI helpers
+// ════════════════════════════════════════════════════════════════════════════
 
 function CodeBlock({ code, label }: { code: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   const doCopy = () => {
     try { navigator.clipboard.writeText(code); } catch {
       const el = document.createElement('textarea'); el.value = code;
-      document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+      document.body.appendChild(el); el.select(); document.execCommand('copy'); el.remove();
     }
-    setCopied(true); setTimeout(() => setCopied(false), 2000);
+    setCopied(true); setTimeout(() => setCopied(false), 1800);
   };
   return (
-    <div style={{ marginBottom: 12 }}>
-      {label && <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>{label}</div>}
-      <div style={{ background: '#0F172A', borderRadius: 10, overflow: 'hidden', border: '1px solid #E2E8F0' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <div style={{ display: 'flex', gap: 5 }}>
-            {['#ef4444','#f59e0b','#3b82f6'].map(c => <div key={c} style={{ width: 8, height: 8, borderRadius: '50%', background: c }} />)}
-          </div>
-          <button onClick={doCopy} style={{ background: 'none', border: 'none', color: copied ? '#60A5FA' : '#64748B', fontSize: 11, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 4 }}>
-            {copied ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy</>}
-          </button>
-        </div>
-        <pre style={{ margin: 0, padding: '12px 14px', fontSize: 11.5, color: '#93C5FD', fontFamily: 'monospace', lineHeight: 1.7, overflowX: 'auto' }}>{code}</pre>
+    <div style={{ position: 'relative', background: '#0F172A', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', borderBottom: '1px solid #1E293B' }}>
+        <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, letterSpacing: '.05em', textTransform: 'uppercase' }}>{label || 'code'}</span>
+        <button onClick={doCopy} style={{ background: copied ? '#14532D' : '#1E293B', border: 'none', borderRadius: 6, padding: '4px 10px', color: copied ? '#4ADE80' : '#94A3B8', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {copied ? 'Copied' : 'Copy'}
+        </button>
       </div>
+      <pre style={{ margin: 0, padding: '14px 16px', overflowX: 'auto', fontSize: 12, lineHeight: 1.65, color: '#E2E8F0', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{code}</pre>
     </div>
   );
 }
 
 function MethodBadge({ method }: { method: string }) {
-  const styles: Record<string, { bg: string; color: string; border: string }> = {
-    POST:   { bg: '#EFF6FF', color: '#2563EB', border: '#DBEAFE' },
-    GET:    { bg: '#ECFDF5', color: '#059669', border: '#A7F3D0' },
-    PUT:    { bg: '#FFFBEB', color: '#D97706', border: '#FDE68A' },
-    DELETE: { bg: '#FEF2F2', color: '#DC2626', border: '#FECACA' },
+  const styles: Record<string, { bg: string; color: string }> = {
+    GET:    { bg: '#EFF6FF', color: '#2563EB' },
+    POST:   { bg: '#F0FDF4', color: '#059669' },
+    PUT:    { bg: '#FFFBEB', color: '#D97706' },
+    DELETE: { bg: '#FEF2F2', color: '#DC2626' },
   };
   const s = styles[method] || styles.GET;
   return (
-    <span style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}`, fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 5, fontFamily: 'monospace', letterSpacing: '0.05em', flexShrink: 0 }}>
-      {method}
-    </span>
+    <span style={{ background: s.bg, color: s.color, fontSize: 10.5, fontWeight: 800, borderRadius: 6, padding: '3px 8px', letterSpacing: '.03em', flexShrink: 0 }}>{method}</span>
   );
 }
 
-// ── State types ──────────────────────────────────────────────────────────────
+function AuthBadge({ auth }: { auth: string }) {
+  if (auth === 'None') return <span style={{ fontSize: 10.5, fontWeight: 700, color: '#059669', background: '#F0FDF4', borderRadius: 6, padding: '3px 8px' }}>Public</span>;
+  return <span style={{ fontSize: 10.5, fontWeight: 700, color: '#D97706', background: '#FFFBEB', borderRadius: 6, padding: '3px 8px' }}>Signed</span>;
+}
+
+function Tabs({ tabs, children }: { tabs: string[]; children: React.ReactNode[] }) {
+  const [active, setActive] = useState(0);
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+        {tabs.map((t, i) => (
+          <button key={t} onClick={() => setActive(i)}
+            style={{ padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 700, background: active === i ? '#0F172A' : '#F1F5F9', color: active === i ? '#fff' : '#64748B', transition: 'all .12s' }}>
+            {t}
+          </button>
+        ))}
+      </div>
+      {children[active]}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 
 interface IPEntry { id: string; ip_cidr: string; label: string; created_at: string; }
 
-// ── Main page ────────────────────────────────────────────────────────────────
+export default function ApiDocsPage() {
+  const [openEndpoint, setOpenEndpoint] = useState<string | null>(null);
 
-export default function APIDocsPage() {
-  const [profile, setProfile]             = useState<any>(null);
-  const [webhook, setWebhook]             = useState('');
-  const [loading, setLoading]             = useState(true);
-  const [rotating, setRotating]           = useState(false);
-  const [saving, setSaving]               = useState(false);
-  const [copied, setCopied]               = useState('');
-  const [showKey, setShowKey]             = useState(false);
-  const [showSecret, setShowSecret]       = useState(false);
-  const [apiSecret, setApiSecret]         = useState('');
+  // ── Credentials & settings state (live data) ──
+  const [profile, setProfile] = useState<any>(null);
+  const [apiSecret, setApiSecret] = useState('');
+  const [webhook, setWebhook] = useState('');
   const [webhookSecret, setWebhookSecret] = useState('');
-  const [rotatedKeys, setRotatedKeys]     = useState<{ api_key: string; api_secret: string } | null>(null);
-  const [ipList, setIPList]               = useState<IPEntry[]>([]);
-  const [newIP, setNewIP]                 = useState('');
-  const [newIPLabel, setNewIPLabel]       = useState('');
-  const [addingIP, setAddingIP]           = useState(false);
-  const [success, setSuccess]             = useState('');
-  const [error, setError]                 = useState('');
-  const [sigLang, setSigLang]             = useState('js');
-  const [endpointSearch, setEndpointSearch] = useState('');
-  const [selectedEndpoint, setSelectedEndpoint] = useState<{ method: string; path: string; title: string; desc: string } | null>(
-    ENDPOINT_CATEGORIES[0].endpoints[0]
-  );
-  const [detailTab, setDetailTab] = useState<'params' | 'body' | 'response'>('params');
+  const [showKey, setShowKey] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
+  const [showWHSecret, setShowWHSecret] = useState(false);
+  const [copied, setCopied] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const [rotatedKeys, setRotatedKeys] = useState<{ api_key: string; api_secret: string } | null>(null);
+  const [ipList, setIPList] = useState<IPEntry[]>([]);
+  const [newIP, setNewIP] = useState('');
+  const [newIPLabel, setNewIPLabel] = useState('');
+  const [flashMsg, setFlashMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('upay_access_token') : '';
   const hdrs = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
-  const flash = (msg: string, isErr = false) => {
-    if (isErr) { setError(msg); setTimeout(() => setError(''), 4000); }
-    else { setSuccess(msg); setTimeout(() => setSuccess(''), 4000); }
-  };
+  const flash = (text: string, ok = true) => { setFlashMsg({ ok, text }); setTimeout(() => setFlashMsg(null), 4000); };
 
   const fetchIPList = () =>
     fetch('/api/v1/dashboard/ip-whitelist', { headers: hdrs }).then(r => r.json())
       .then(d => { if (d.success) setIPList(d.data || []); });
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/v1/dashboard/profile', { headers: hdrs }).then(r => r.json()).then(d => { if (d.success) setProfile(d.data); }),
-      fetch('/api/v1/dashboard/webhook', { headers: hdrs }).then(r => r.json()).then(d => { if (d.success) setWebhook(d.data?.webhook_url || ''); }),
-      fetch('/api/v1/dashboard/webhook-secret', { headers: hdrs }).then(r => r.json()).then(d => { if (d.success) setWebhookSecret(d.data?.webhook_secret || ''); }),
-      fetch('/api/v1/dashboard/api-secret', { headers: hdrs }).then(r => r.json()).then(d => { if (d.success) setApiSecret(d.data?.api_secret || ''); }),
-      fetchIPList(),
-    ]).finally(() => setLoading(false));
+    fetch('/api/v1/dashboard/profile', { headers: hdrs }).then(r => r.json()).then(d => { if (d.success) setProfile(d.data); });
+    fetch('/api/v1/dashboard/webhook', { headers: hdrs }).then(r => r.json()).then(d => { if (d.success) setWebhook(d.data?.webhook_url || ''); });
+    fetch('/api/v1/dashboard/webhook-secret', { headers: hdrs }).then(r => r.json()).then(d => { if (d.success) setWebhookSecret(d.data?.webhook_secret || ''); });
+    fetch('/api/v1/dashboard/api-secret', { headers: hdrs }).then(r => r.json()).then(d => { if (d.success) setApiSecret(d.data?.api_secret || ''); });
+    fetchIPList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const copy = (text: string, key: string) => {
     try { navigator.clipboard.writeText(text); } catch {
       const el = document.createElement('textarea'); el.value = text;
-      document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+      document.body.appendChild(el); el.select(); document.execCommand('copy'); el.remove();
     }
     setCopied(key); setTimeout(() => setCopied(''), 2000);
   };
@@ -338,11 +435,11 @@ export default function APIDocsPage() {
     try {
       const r = await fetch('/api/v1/dashboard/rotate-keys', { method: 'POST', headers: hdrs });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Failed');
+      if (!r.ok) throw new Error(d.error || 'Failed to rotate keys');
       setProfile((p: any) => ({ ...p, api_key: d.data.api_key }));
       setApiSecret(d.data.api_secret);
       setRotatedKeys({ api_key: d.data.api_key, api_secret: d.data.api_secret });
-    } catch (e: any) { flash(e.message, true); }
+    } catch (e: any) { flash(e.message, false); }
     finally { setRotating(false); }
   };
 
@@ -351,441 +448,361 @@ export default function APIDocsPage() {
     try {
       const r = await fetch('/api/v1/dashboard/webhook', { method: 'PUT', headers: hdrs, body: JSON.stringify({ webhook_url: webhook }) });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Failed');
-      flash('Webhook URL saved!');
-    } catch (e: any) { flash(e.message, true); }
+      if (!r.ok) throw new Error(d.error || 'Failed to save');
+      flash('Webhook URL saved');
+    } catch (e: any) { flash(e.message, false); }
     finally { setSaving(false); }
   };
 
   const handleAddIP = async () => {
     if (!newIP.trim()) return;
-    setAddingIP(true);
     try {
       const r = await fetch('/api/v1/dashboard/ip-whitelist', { method: 'POST', headers: hdrs, body: JSON.stringify({ ip_cidr: newIP.trim(), label: newIPLabel.trim() }) });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Failed');
+      if (!r.ok) throw new Error(d.error || 'Failed to add IP');
       setNewIP(''); setNewIPLabel('');
-      await fetchIPList();
-      flash('IP added to whitelist');
-    } catch (e: any) { flash(e.message, true); }
-    finally { setAddingIP(false); }
+      await fetchIPList(); flash('IP added to whitelist');
+    } catch (e: any) { flash(e.message, false); }
   };
 
   const handleDeleteIP = async (id: string) => {
     try {
-      const r = await fetch(`/api/v1/dashboard/ip-whitelist/${id}`, { method: 'DELETE', headers: hdrs });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Failed');
+      await fetch(`/api/v1/dashboard/ip-whitelist/${id}`, { method: 'DELETE', headers: hdrs });
       await fetchIPList(); flash('IP removed');
-    } catch (e: any) { flash(e.message, true); }
+    } catch { flash('Failed to remove IP', false); }
   };
 
-  const inp: React.CSSProperties = { width: '100%', background: '#FAFAFA', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 11px', color: '#0F172A', fontSize: 12, fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box' };
-  const sectionHead: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 };
+  const mask = (v: string) => (v ? v.slice(0, 6) + '••••••••••••' + v.slice(-4) : '—');
+  const credInp: React.CSSProperties = { flex: 1, minWidth: 0, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 11px', color: '#0F172A', fontSize: 12, fontFamily: 'ui-monospace, monospace', outline: 'none' };
+  const credBtn: React.CSSProperties = { background: '#F1F5F9', border: 'none', borderRadius: 7, padding: '8px 12px', color: '#475569', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 };
 
-  const filteredCategories = ENDPOINT_CATEGORIES.map(cat => ({
-    ...cat,
-    endpoints: cat.endpoints.filter(e =>
-      !endpointSearch ||
-      e.title.toLowerCase().includes(endpointSearch.toLowerCase()) ||
-      e.path.toLowerCase().includes(endpointSearch.toLowerCase())
-    ),
-  })).filter(cat => cat.endpoints.length > 0);
+  const sections = [
+    { id: 'credentials', label: 'Credentials' },
+    { id: 'quickstart', label: 'Quick Start' },
+    { id: 'auth', label: 'Authentication' },
+    { id: 'endpoints', label: 'Endpoints' },
+    { id: 'webhooks', label: 'Webhooks' },
+    { id: 'errors', label: 'Errors' },
+    { id: 'sdks', label: 'SDKs & Plugins' },
+  ];
 
-  const detail = selectedEndpoint ? ENDPOINT_DETAILS[selectedEndpoint.path] : null;
-
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300 }}>
-      <div style={{ width: 28, height: 28, border: '2px solid #E2E8F0', borderTopColor: '#2563EB', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
+  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   return (
-    <div style={{ color: '#0F172A', fontFamily: 'DM Sans, sans-serif' }}>
+    <div style={{ maxWidth: 860, fontFamily: 'inherit' }}>
       <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .ad-layout { display: flex; align-items: flex-start; border: 1px solid #E2E8F0; border-radius: 16px; overflow: hidden; background: #FFFFFF; }
-        .ad-left { width: 240px; flex-shrink: 0; border-right: 1px solid #E2E8F0; background: #F8FAFC; overflow-y: auto; max-height: calc(100vh - 160px); overflow-x: hidden; }
-        .ad-mid { width: 240px; flex-shrink: 0; border-right: 1px solid #E2E8F0; overflow-y: auto; max-height: calc(100vh - 160px); overflow-x: hidden; }
-        .ad-right { flex: 1; min-width: 0; overflow-y: auto; max-height: calc(100vh - 160px); overflow-x: hidden; }
-        .ep-item { display: flex; align-items: flex-start; gap: 8px; padding: 9px 14px; cursor: pointer; border-bottom: 1px solid #F1F5F9; transition: background 0.15s; }
-        .ep-item:hover { background: #F8FAFC; }
-        .ep-item.active { background: #EFF6FF; }
-        .ad-left::-webkit-scrollbar, .ad-mid::-webkit-scrollbar, .ad-right::-webkit-scrollbar { width: 4px; }
-        .ad-left::-webkit-scrollbar-thumb, .ad-mid::-webkit-scrollbar-thumb, .ad-right::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 4px; }
-        @media (max-width: 1100px) { .ad-left { width: 200px; } .ad-mid { width: 200px; } }
-        @media (max-width: 850px) {
-          .ad-layout { flex-direction: column; align-items: stretch; border: none; overflow: visible; }
-          .ad-left { width: 100%; max-height: none; border-right: none; border-bottom: 1px solid #E2E8F0; border-radius: 14px; margin-bottom: 12px; border: 1px solid #E2E8F0; overflow-x: hidden; }
-          .ad-mid { width: 100%; max-height: none; border-right: none; border-radius: 14px; margin-bottom: 12px; border: 1px solid #E2E8F0; overflow-x: hidden; }
-          .ad-right { width: 100%; max-height: none; border-radius: 14px; border: 1px solid #E2E8F0; }
-        }
+        .doc-card { background:#fff; border:1px solid #E2E8F0; border-radius:16px; padding:22px 24px; margin-bottom:16px; scroll-margin-top: 20px; }
+        .doc-h2 { font-size:17px; font-weight:800; color:#0F172A; letter-spacing:-.02em; margin:0 0 4px; }
+        .doc-sub { font-size:13px; color:#64748B; margin:0 0 16px; line-height:1.65; }
+        .doc-ep:hover { background:#F8FAFC; }
+        .doc-table th { text-align:left; font-size:11px; font-weight:700; color:#94A3B8; text-transform:uppercase; letter-spacing:.07em; padding:8px 12px; }
+        .doc-table td { font-size:12.5px; color:#334155; padding:9px 12px; border-top:1px solid #F1F5F9; vertical-align:top; }
+        .doc-chip:hover { background:#E2E8F0 !important; }
       `}</style>
 
-      {/* Toast notifications */}
-      {error   && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '11px 16px', color: '#DC2626', fontSize: 13, marginBottom: 16 }}>{error}</div>}
-      {success && <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 10, padding: '11px 16px', color: '#059669', fontSize: 13, marginBottom: 16 }}>{success}</div>}
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 22 }}>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-.03em' }}>API Documentation</h1>
+        <p style={{ margin: '6px 0 0', fontSize: 13.5, color: '#64748B', lineHeight: 1.6 }}>
+          Everything you need to accept UPI and USDT payments through NovaPay. Base URL:{' '}
+          <code style={{ background: '#F1F5F9', borderRadius: 5, padding: '2px 7px', fontSize: 12.5, color: '#0F172A' }}>{BASE_URL}</code>
+        </p>
+      </div>
 
-      {/* Rotated keys modal */}
+      {/* ── Section nav ── */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
+        {sections.map(s => (
+          <button key={s.id} onClick={() => jump(s.id)} className="doc-chip"
+            style={{ padding: '7px 14px', borderRadius: 20, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#334155', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'background .12s' }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Toast ── */}
+      {flashMsg && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 900, background: flashMsg.ok ? '#ECFDF5' : '#FEF2F2', border: `1px solid ${flashMsg.ok ? '#A7F3D0' : '#FECACA'}`, borderRadius: 10, padding: '11px 16px', color: flashMsg.ok ? '#059669' : '#DC2626', fontSize: 13, fontWeight: 600, boxShadow: '0 8px 24px rgba(0,0,0,.08)' }}>
+          {flashMsg.text}
+        </div>
+      )}
+
+      {/* ── Rotated keys modal ── */}
       {rotatedKeys && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: '#FFFFFF', border: '2px solid #FDE68A', borderRadius: 20, padding: '28px 32px', maxWidth: 540, width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 22 }}>⚠️</span>
-              <div style={{ fontSize: 17, fontWeight: 800, color: '#D97706' }}>Save your new credentials NOW</div>
-            </div>
-            <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
+          <div style={{ background: '#fff', border: '2px solid #FDE68A', borderRadius: 20, padding: '28px 32px', maxWidth: 540, width: '100%' }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#D97706', marginBottom: 8 }}>Save your new credentials now</div>
+            <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20, lineHeight: 1.6 }}>
               Your API Secret is shown <strong style={{ color: '#D97706' }}>only here</strong>. Once you close this dialog it cannot be retrieved — only rotated again.
             </p>
-            {[['New API Key', rotatedKeys.api_key, 'rot-key'], ['New API Secret', rotatedKeys.api_secret, 'rot-sec']].map(([label, val, key]) => (
+            {([['New API Key', rotatedKeys.api_key, 'rot-key'], ['New API Secret', rotatedKeys.api_secret, 'rot-sec']] as const).map(([label, val, key]) => (
               <div key={key} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>{label}</div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input readOnly value={val} style={{ ...inp, flex: 1, fontSize: 12 }} />
-                  <button onClick={() => copy(val, key)} style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '0 14px', color: '#D97706', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'DM Sans, sans-serif', whiteSpace: 'nowrap' }}>
-                    {copied === key ? '✓ Copied' : 'Copy'}
+                  <input readOnly value={val} style={credInp} />
+                  <button onClick={() => copy(val, key)} style={{ ...credBtn, background: '#FFFBEB', border: '1px solid #FDE68A', color: '#D97706' }}>
+                    {copied === key ? 'Copied' : 'Copy'}
                   </button>
                 </div>
               </div>
             ))}
-            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-              <button onClick={() => copy(rotatedKeys.api_key + '\n' + rotatedKeys.api_secret, 'rot-both')}
-                style={{ flex: 1, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 0', color: '#D97706', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'DM Sans, sans-serif' }}>
-                {copied === 'rot-both' ? '✓ Copied both' : 'Copy both'}
-              </button>
-              <button onClick={() => setRotatedKeys(null)}
-                style={{ flex: 1, background: '#2563EB', border: 'none', borderRadius: 10, padding: '10px 0', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'DM Sans, sans-serif' }}>
-                I've saved them — Close
-              </button>
-            </div>
+            <button onClick={() => setRotatedKeys(null)}
+              style={{ width: '100%', marginTop: 8, background: '#2563EB', border: 'none', borderRadius: 10, padding: '11px 0', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+              I&apos;ve saved them — Close
+            </button>
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <BookOpen size={18} color="#2563EB" />
-        </div>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: 0 }}>API Documentation</h1>
-          <p style={{ fontSize: 13, color: '#64748B', margin: 0 }}>Integrate NovaPay payments into your application</p>
-        </div>
-      </div>
+      {/* ── Credentials & setup ── */}
+      <div className="doc-card" id="credentials">
+        <h2 className="doc-h2">Credentials &amp; Setup</h2>
+        <p className="doc-sub">Your live keys and webhook configuration. The API secret signs every request — keep it server-side only.</p>
 
-      {/* 3-panel layout */}
-      <div className="ad-layout" style={{ border: '1px solid #E2E8F0', borderRadius: 16, overflow: 'hidden' }}>
-
-        {/* LEFT: Credentials + Webhooks + IP + Rate limits */}
-        <div className="ad-left">
-          <div style={{ padding: '16px 14px' }}>
-
-            {/* API Credentials */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={sectionHead}>API Credentials</div>
-
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, color: '#64748B', marginBottom: 5 }}>API Key</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input readOnly style={{ ...inp, flex: 1, fontSize: 10 }} value={showKey ? (profile?.api_key || '') : '••••••••••••••••••'} />
-                  <button onClick={() => setShowKey(s => !s)} style={{ background: 'none', border: '1px solid #E2E8F0', borderRadius: 7, padding: '0 8px', color: '#64748B', cursor: 'pointer' }}>
-                    {showKey ? <EyeOff size={12} /> : <Eye size={12} />}
-                  </button>
-                  <button onClick={() => copy(profile?.api_key || '', 'key')} style={{ background: 'none', border: '1px solid #E2E8F0', borderRadius: 7, padding: '0 8px', color: copied === 'key' ? '#2563EB' : '#64748B', cursor: 'pointer' }}>
-                    {copied === 'key' ? <Check size={12} /> : <Copy size={12} />}
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, color: '#64748B', marginBottom: 5 }}>API Secret</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input readOnly style={{ ...inp, flex: 1, fontSize: 10 }} value={showSecret ? apiSecret : '••••••••••••••••••'} />
-                  <button onClick={() => setShowSecret(s => !s)} style={{ background: 'none', border: '1px solid #E2E8F0', borderRadius: 7, padding: '0 8px', color: '#64748B', cursor: 'pointer' }}>
-                    {showSecret ? <EyeOff size={12} /> : <Eye size={12} />}
-                  </button>
-                  <button onClick={() => copy(apiSecret, 'secret')} style={{ background: 'none', border: '1px solid #E2E8F0', borderRadius: 7, padding: '0 8px', color: copied === 'secret' ? '#2563EB' : '#64748B', cursor: 'pointer' }}>
-                    {copied === 'secret' ? <Check size={12} /> : <Copy size={12} />}
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, color: '#64748B', marginBottom: 5 }}>Environment</div>
-                <div style={{ display: 'flex', gap: 5 }}>
-                  <span style={{ flex: 1, padding: '7px 10px', background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 7, fontSize: 10, fontWeight: 700, color: '#059669', textAlign: 'center' }}>● LIVE</span>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={handleRotate} disabled={rotating} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 0', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: rotating ? '#94A3B8' : '#DC2626', fontFamily: 'DM Sans, sans-serif', fontWeight: 600, fontSize: 11, cursor: rotating ? 'wait' : 'pointer' }}>
-                  <RefreshCw size={11} /> {rotating ? 'Rotating…' : 'Regenerate'}
-                </button>
-                <button style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid #DBEAFE', background: '#EFF6FF', color: '#2563EB', fontFamily: 'DM Sans, sans-serif', fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>
-                  View Usage
-                </button>
-              </div>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>API Key</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input readOnly value={showKey ? (profile?.api_key || '') : mask(profile?.api_key || '')} style={credInp} />
+              <button style={credBtn} onClick={() => setShowKey(s => !s)}>{showKey ? 'Hide' : 'Show'}</button>
+              <button style={credBtn} onClick={() => copy(profile?.api_key || '', 'k')}>{copied === 'k' ? 'Copied' : 'Copy'}</button>
             </div>
-
-            <div style={{ height: 1, background: '#E2E8F0', marginBottom: 16 }} />
-
-            {/* Webhooks */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={sectionHead}>Webhook</div>
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: '#64748B', marginBottom: 5 }}>Endpoint URL</div>
-                <input style={inp} value={webhook} onChange={e => setWebhook(e.target.value)} placeholder="https://yoursite.com/webhook" />
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: '#64748B', marginBottom: 5 }}>Events</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {['payment.success', 'payment.failed', 'refund.created'].map(ev => (
-                    <span key={ev} style={{ fontSize: 9, padding: '3px 7px', borderRadius: 5, background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0', fontFamily: 'monospace' }}>{ev}</span>
-                  ))}
-                </div>
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, color: '#64748B', marginBottom: 5 }}>Signing Secret</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input readOnly style={{ ...inp, flex: 1, fontSize: 10 }} value={webhookSecret ? '••••••••••••••••' : '—'} />
-                  <button onClick={() => copy(webhookSecret, 'whsec')} style={{ background: 'none', border: '1px solid #E2E8F0', borderRadius: 7, padding: '0 8px', color: copied === 'whsec' ? '#2563EB' : '#64748B', cursor: 'pointer' }}>
-                    {copied === 'whsec' ? <Check size={12} /> : <Copy size={12} />}
-                  </button>
-                </div>
-              </div>
-              <button onClick={handleSaveWebhook} disabled={saving} style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: 'none', background: saving ? '#E2E8F0' : '#2563EB', color: saving ? '#94A3B8' : '#fff', fontFamily: 'DM Sans, sans-serif', fontWeight: 600, fontSize: 12, cursor: saving ? 'wait' : 'pointer' }}>
-                {saving ? 'Saving…' : 'Save Webhook'}
-              </button>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>API Secret</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input readOnly value={showSecret ? apiSecret : mask(apiSecret)} style={credInp} />
+              <button style={credBtn} onClick={() => setShowSecret(s => !s)}>{showSecret ? 'Hide' : 'Show'}</button>
+              <button style={credBtn} onClick={() => copy(apiSecret, 's')}>{copied === 's' ? 'Copied' : 'Copy'}</button>
             </div>
-
-            <div style={{ height: 1, background: '#E2E8F0', marginBottom: 16 }} />
-
-            {/* IP Whitelist */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={sectionHead}>IP Whitelist</div>
-              {ipList.length > 0 ? (
-                <div style={{ marginBottom: 8 }}>
-                  {ipList.map(ip => (
-                    <div key={ip.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 7, marginBottom: 5 }}>
-                      <div>
-                        <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#0F172A' }}>{ip.ip_cidr}</div>
-                        {ip.label && <div style={{ fontSize: 10, color: '#94A3B8' }}>{ip.label}</div>}
-                      </div>
-                      <button onClick={() => handleDeleteIP(ip.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', padding: 4 }}>
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 8, fontStyle: 'italic' }}>No IPs whitelisted — all IPs allowed</div>
-              )}
-              <div style={{ marginBottom: 6 }}>
-                <input style={{ ...inp, marginBottom: 5 }} value={newIP} onChange={e => setNewIP(e.target.value)} placeholder="192.168.1.0/24" />
-                <input style={inp} value={newIPLabel} onChange={e => setNewIPLabel(e.target.value)} placeholder="Label (optional)" />
-              </div>
-              <button onClick={handleAddIP} disabled={addingIP || !newIP.trim()} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 0', borderRadius: 8, border: '1px solid #DBEAFE', background: '#EFF6FF', color: '#2563EB', fontFamily: 'DM Sans, sans-serif', fontWeight: 600, fontSize: 12, cursor: addingIP || !newIP.trim() ? 'not-allowed' : 'pointer', opacity: !newIP.trim() ? 0.6 : 1 }}>
-                <Plus size={12} /> {addingIP ? 'Adding…' : 'Add IP'}
-              </button>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>Webhook URL</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={webhook} onChange={e => setWebhook(e.target.value)} placeholder="https://yourserver.com/webhooks/novapay" style={credInp} />
+              <button onClick={handleSaveWebhook} disabled={saving}
+                style={{ ...credBtn, background: '#2563EB', color: '#fff' }}>{saving ? 'Saving…' : 'Save'}</button>
             </div>
-
-            <div style={{ height: 1, background: '#E2E8F0', marginBottom: 16 }} />
-
-            {/* Rate Limits */}
-            <div>
-              <div style={sectionHead}>Rate Limits</div>
-              {[['Per Minute', '120 req', '#2563EB', '#EFF6FF'], ['Per Hour', '6,000 req', '#7C3AED', '#F5F3FF'], ['Per Day', '100K req', '#059669', '#ECFDF5']].map(([label, val, color, bg]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: bg as string, borderRadius: 8, marginBottom: 6, border: `1px solid ${(color as string) + '30'}` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Zap size={11} color={color as string} />
-                    <span style={{ fontSize: 11, color: '#64748B' }}>{label}</span>
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: color as string, fontFamily: 'monospace' }}>{val}</span>
-                </div>
-              ))}
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>Webhook Secret</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input readOnly value={showWHSecret ? webhookSecret : mask(webhookSecret)} style={credInp} />
+              <button style={credBtn} onClick={() => setShowWHSecret(s => !s)}>{showWHSecret ? 'Hide' : 'Show'}</button>
+              <button style={credBtn} onClick={() => copy(webhookSecret, 'w')}>{copied === 'w' ? 'Copied' : 'Copy'}</button>
             </div>
           </div>
         </div>
 
-        {/* MIDDLE: Endpoint list */}
-        <div className="ad-mid">
-          <div style={{ padding: '12px 12px 0' }}>
-            <div style={{ position: 'relative', marginBottom: 12 }}>
-              <Search size={13} color="#94A3B8" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
-              <input value={endpointSearch} onChange={e => setEndpointSearch(e.target.value)} placeholder="Search endpoints…"
-                style={{ ...inp, paddingLeft: 30, fontSize: 12 }} />
-            </div>
-          </div>
-          {filteredCategories.map(cat => (
-            <div key={cat.name}>
-              <div style={{ padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: cat.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{cat.name}</span>
-              </div>
-              {cat.endpoints.map(ep => (
-                <div key={ep.path} className={`ep-item${selectedEndpoint?.path === ep.path ? ' active' : ''}`}
-                  onClick={() => { setSelectedEndpoint(ep); setDetailTab('params'); }}
-                  style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '9px 14px', cursor: 'pointer', borderBottom: '1px solid #F1F5F9', background: selectedEndpoint?.path === ep.path ? '#EFF6FF' : undefined }}>
-                  <MethodBadge method={ep.method} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#0F172A', marginBottom: 1, lineHeight: 1.3 }}>{ep.title}</div>
-                    <div style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ep.path}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 16, borderTop: '1px solid #F1F5F9', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ fontSize: 12, color: '#94A3B8' }}>Compromised keys? Rotate immediately — old keys stop working at once.</div>
+          <button onClick={handleRotate} disabled={rotating}
+            style={{ ...credBtn, background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626' }}>
+            {rotating ? 'Rotating…' : 'Rotate API Keys'}
+          </button>
         </div>
 
-        {/* RIGHT: Endpoint detail */}
-        <div className="ad-right">
-          {selectedEndpoint ? (
-            <div style={{ padding: '20px' }}>
-              {/* Endpoint header */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
-                <MethodBadge method={selectedEndpoint.method} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 3 }}>{selectedEndpoint.title}</div>
-                  <code style={{ fontSize: 11, color: '#64748B', fontFamily: 'monospace', background: '#F1F5F9', padding: '2px 8px', borderRadius: 5 }}>{selectedEndpoint.path}</code>
+        {/* IP whitelist */}
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid #F1F5F9' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>IP Whitelist <span style={{ fontWeight: 500, color: '#94A3B8', fontSize: 12 }}>(optional)</span></div>
+          <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 10 }}>When set, Payments API calls are accepted only from these IPs/CIDRs.</div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            <input value={newIP} onChange={e => setNewIP(e.target.value)} placeholder="203.0.113.10 or 203.0.113.0/24" style={{ ...credInp, flex: 2, minWidth: 180 }} />
+            <input value={newIPLabel} onChange={e => setNewIPLabel(e.target.value)} placeholder="Label (e.g. prod server)" style={{ ...credInp, flex: 1, minWidth: 120 }} />
+            <button style={{ ...credBtn, background: '#2563EB', color: '#fff' }} onClick={handleAddIP}>Add</button>
+          </div>
+          {ipList.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {ipList.map(ip => (
+                <div key={ip.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F8FAFC', borderRadius: 8, padding: '8px 12px' }}>
+                  <code style={{ fontSize: 12, color: '#0F172A', fontWeight: 600 }}>{ip.ip_cidr}</code>
+                  <span style={{ fontSize: 12, color: '#94A3B8', flex: 1 }}>{ip.label}</span>
+                  <button onClick={() => handleDeleteIP(ip.id)} style={{ background: 'none', border: 'none', color: '#DC2626', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
                 </div>
-              </div>
-              <p style={{ fontSize: 13, color: '#64748B', marginBottom: 18, lineHeight: 1.6 }}>{selectedEndpoint.desc}</p>
-
-              {/* Detail tabs */}
-              <div style={{ display: 'flex', gap: 2, marginBottom: 16, background: '#F1F5F9', borderRadius: 8, padding: 3 }}>
-                {(['params', 'body', 'response'] as const).map(tab => (
-                  <button key={tab} onClick={() => setDetailTab(tab)}
-                    style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600, fontSize: 12, background: detailTab === tab ? '#FFFFFF' : 'transparent', color: detailTab === tab ? '#2563EB' : '#64748B', boxShadow: detailTab === tab ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', textTransform: 'capitalize' }}>
-                    {tab === 'params' ? 'Parameters' : tab === 'body' ? 'Request' : 'Response'}
-                  </button>
-                ))}
-              </div>
-
-              {detailTab === 'params' && (
-                <div>
-                  {detail?.params ? (
-                    <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, overflowX: 'auto' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.8fr 0.8fr 2fr', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', minWidth: 480 }}>
-                        {['Parameter', 'Type', 'Required', 'Description'].map(h => (
-                          <div key={h} style={{ padding: '9px 12px', fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
-                        ))}
-                      </div>
-                      {detail.params.map((p, i) => (
-                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.8fr 0.8fr 2fr', borderBottom: i < detail.params!.length - 1 ? '1px solid #F1F5F9' : 'none', minWidth: 480 }}>
-                          <div style={{ padding: '10px 12px', fontSize: 12, color: '#2563EB', fontFamily: 'monospace' }}>{p.name}</div>
-                          <div style={{ padding: '10px 12px', fontSize: 12, color: '#D97706', fontFamily: 'monospace' }}>{p.type}</div>
-                          <div style={{ padding: '10px 12px' }}>
-                            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: p.required ? '#FEF2F2' : '#F1F5F9', color: p.required ? '#DC2626' : '#64748B', border: `1px solid ${p.required ? '#FECACA' : '#E2E8F0'}`, fontFamily: 'monospace' }}>
-                              {p.required ? 'required' : 'optional'}
-                            </span>
-                          </div>
-                          <div style={{ padding: '10px 12px', fontSize: 12, color: '#475569', lineHeight: 1.5 }}>{p.desc}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ background: '#F8FAFC', borderRadius: 10, padding: '20px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 13, color: '#94A3B8' }}>No request parameters for this endpoint</div>
-                    </div>
-                  )}
-
-                  {/* Auth headers reminder */}
-                  <div style={{ marginTop: 16, background: '#EFF6FF', border: '1px solid #DBEAFE', borderRadius: 10, padding: '14px 16px' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Shield size={13} /> Required Headers
-                    </div>
-                    {[
-                      ['X-API-Key',        'Your API key'],
-                      ['X-Timestamp',      'Unix timestamp (seconds)'],
-                      ['X-Signature',      'HMAC-SHA256 of timestamp.body'],
-                      ['Content-Type',     'application/json'],
-                    ].map(([k, v]) => (
-                      <div key={k} style={{ display: 'flex', gap: 10, marginBottom: 4, fontSize: 12 }}>
-                        <code style={{ color: '#2563EB', fontFamily: 'monospace', minWidth: 140 }}>{k}</code>
-                        <span style={{ color: '#475569' }}>{v}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Signature code */}
-                  <div style={{ marginTop: 16 }}>
-                    <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 7, padding: 3, marginBottom: 10, width: 'fit-content' }}>
-                      {[['js', 'Node.js'], ['py', 'Python']].map(([k, label]) => (
-                        <button key={k} onClick={() => setSigLang(k)}
-                          style={{ background: sigLang === k ? '#FFFFFF' : 'transparent', border: sigLang === k ? '1px solid #E2E8F0' : 'none', borderRadius: 5, padding: '5px 14px', color: sigLang === k ? '#2563EB' : '#64748B', fontSize: 11, fontWeight: sigLang === k ? 700 : 400, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <CodeBlock code={sigLang === 'js' ? SIGNATURE_JS : SIGNATURE_PY} label="Generate Signature" />
-                  </div>
-                </div>
-              )}
-
-              {detailTab === 'body' && (
-                <div>
-                  {detail?.body ? (
-                    <CodeBlock code={detail.body} label="Example Request (cURL)" />
-                  ) : (
-                    <div style={{ background: '#F8FAFC', borderRadius: 10, padding: '20px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 13, color: '#94A3B8' }}>No request body example available</div>
-                    </div>
-                  )}
-                  <div style={{ marginTop: 12, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 16px' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#D97706', marginBottom: 4 }}>Idempotency</div>
-                    <div style={{ fontSize: 12, color: '#92400E', lineHeight: 1.6 }}>
-                      Send <code style={{ fontFamily: 'monospace', color: '#D97706' }}>X-Idempotency-Key</code> (your <code style={{ fontFamily: 'monospace', color: '#D97706' }}>order_id</code>) to prevent duplicate charges on retries.
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {detailTab === 'response' && (
-                <div>
-                  {detail?.response ? (
-                    <CodeBlock code={detail.response} label="Success Response (200)" />
-                  ) : (
-                    <CodeBlock code={`{ "success": true, "data": { ... } }`} label="Response Shape" />
-                  )}
-                  <CodeBlock code={`{
-  "success": false,
-  "error": "order_id already used",
-  "code": "DUPLICATE_ORDER"
-}`} label="Error Response (4xx)" />
-                  <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 10, padding: '12px 16px' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#059669', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Globe size={13} /> Status Codes
-                    </div>
-                    {[['200', 'Success'], ['400', 'Bad request / validation error'], ['401', 'Invalid API key or signature'], ['409', 'Duplicate order_id'], ['429', 'Rate limit exceeded'], ['500', 'Server error — retry with backoff']].map(([code, desc]) => (
-                      <div key={code} style={{ display: 'flex', gap: 10, marginBottom: 4, fontSize: 12 }}>
-                        <code style={{ fontFamily: 'monospace', color: ['200'].includes(code) ? '#059669' : '#DC2626', minWidth: 36 }}>{code}</code>
-                        <span style={{ color: '#475569' }}>{desc}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Webhook payload reference */}
-              {selectedEndpoint.path.includes('webhook') && (
-                <div style={{ marginTop: 16 }}>
-                  <CodeBlock code={WEBHOOK_PAYLOAD} label="Webhook Event Payload" />
-                  <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 16px' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#D97706', marginBottom: 4 }}>Verify Signatures</div>
-                    <div style={{ fontSize: 12, color: '#92400E', lineHeight: 1.6 }}>
-                      Always verify <code style={{ fontFamily: 'monospace', color: '#D97706' }}>X-Webhook-Signature</code> header using HMAC-SHA256 with your webhook secret before processing events.
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#94A3B8', fontSize: 13 }}>
-              Select an endpoint to view details
+              ))}
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── Quick start ── */}
+      <div className="doc-card" id="quickstart">
+        <h2 className="doc-h2">Quick Start</h2>
+        <p className="doc-sub">From zero to a live payment in four steps.</p>
+
+        {[
+          { n: 1, t: 'Get your keys', d: <>Grab your <strong>API Key</strong> and <strong>API Secret</strong> from this page&apos;s Credentials section (or rotate them under Security). Keep the secret server-side — never in frontend code.</> },
+          { n: 2, t: 'Create a payment', d: <>One signed POST creates the order and returns a <code>payment_id</code>.</> },
+        ].map(step => (
+          <div key={step.n} style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+            <div style={{ width: 24, height: 24, borderRadius: 12, background: '#EFF6FF', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0, marginTop: 1 }}>{step.n}</div>
+            <div style={{ fontSize: 13.5, color: '#334155', lineHeight: 1.65 }}><strong style={{ color: '#0F172A' }}>{step.t}.</strong> {step.d}</div>
+          </div>
+        ))}
+
+        <div style={{ margin: '14px 0 18px' }}>
+          <Tabs tabs={['Node.js', 'PHP', 'curl']}>
+            {[<CodeBlock key="n" code={QUICKSTART_NODE} label="Node.js" />,
+              <CodeBlock key="p" code={QUICKSTART_PHP} label="PHP" />,
+              <CodeBlock key="c" code={QUICKSTART_CURL} label="bash" />]}
+          </Tabs>
+        </div>
+
+        {[
+          { n: 3, t: 'Send the customer to checkout', d: <>Redirect to <code>{BASE_URL}/pay/{'{payment_id}'}</code> — QR, UPI apps, and USDT (if you enabled it) are all handled there. Or render the returned QR yourself.</> },
+          { n: 4, t: 'Get paid', d: <>Payments confirm automatically. Your webhook receives a signed <code>paid</code> event (see Webhooks below) and the customer is returned to your <code>redirect_url</code>.</> },
+        ].map(step => (
+          <div key={step.n} style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+            <div style={{ width: 24, height: 24, borderRadius: 12, background: '#EFF6FF', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0, marginTop: 1 }}>{step.n}</div>
+            <div style={{ fontSize: 13.5, color: '#334155', lineHeight: 1.65 }}><strong style={{ color: '#0F172A' }}>{step.t}.</strong> {step.d}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Authentication ── */}
+      <div className="doc-card" id="auth">
+        <h2 className="doc-h2">Authentication</h2>
+        <p className="doc-sub">
+          Payments API requests are signed with three headers. The signature is an HMAC-SHA256 (hex) of the string{' '}
+          <code style={{ background: '#F1F5F9', borderRadius: 5, padding: '1px 6px' }}>timestamp + &quot;.&quot; + rawBody</code>, keyed with your API secret.
+          For GET requests the body is the empty string. Timestamps must be unix seconds within ±5 minutes.
+        </p>
+
+        <div style={{ overflowX: 'auto', marginBottom: 16 }}>
+          <table className="doc-table" style={{ width: '100%', borderCollapse: 'collapse', background: '#F8FAFC', borderRadius: 10 }}>
+            <thead><tr><th>Header</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td><code>X-API-KEY</code></td><td>Your API key</td></tr>
+              <tr><td><code>X-TIMESTAMP</code></td><td>Unix seconds, e.g. <code>1784747099</code></td></tr>
+              <tr><td><code>X-SIGNATURE</code></td><td><code>hex(HMAC_SHA256(secret, timestamp + &quot;.&quot; + body))</code></td></tr>
+              <tr><td><code>Idempotency-Key</code></td><td>Optional on POSTs — repeats return the cached response for 24h</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <Tabs tabs={['Node.js', 'PHP', 'Python']}>
+          {[<CodeBlock key="n" code={SIG_NODE} label="Node.js" />,
+            <CodeBlock key="p" code={SIG_PHP} label="PHP" />,
+            <CodeBlock key="y" code={SIG_PY} label="Python" />]}
+        </Tabs>
+
+        <div style={{ marginTop: 14, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 14px', fontSize: 12.5, color: '#92400E', lineHeight: 1.6 }}>
+          <strong>Signature mismatches?</strong> Sign the exact bytes you send — serialize the JSON once and reuse that string for both the signature and the request body. A re-serialized body with different key order or spacing will fail.
+        </div>
+      </div>
+
+      {/* ── Endpoints ── */}
+      <div id="endpoints">
+        {ENDPOINT_GROUPS.map(group => (
+          <div className="doc-card" key={group.name} style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '16px 24px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 4, height: 16, borderRadius: 2, background: group.color }} />
+                <h2 className="doc-h2" style={{ margin: 0 }}>{group.name}</h2>
+              </div>
+              {group.note && <p className="doc-sub" style={{ margin: '8px 0 0' }}>{group.note}</p>}
+            </div>
+            {group.endpoints.map(ep => {
+              const key = ep.method + ep.path;
+              const open = openEndpoint === key;
+              return (
+                <div key={key} style={{ borderTop: '1px solid #F1F5F9' }}>
+                  <div className="doc-ep" onClick={() => setOpenEndpoint(open ? null : key)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 24px', cursor: 'pointer', transition: 'background .1s' }}>
+                    <MethodBadge method={ep.method} />
+                    <code style={{ fontSize: 12.5, color: '#0F172A', fontWeight: 600, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{ep.path}</code>
+                    <AuthBadge auth={ep.auth} />
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2.5" strokeLinecap="round"
+                      style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </div>
+                  {open && (
+                    <div style={{ padding: '4px 24px 20px', background: '#FCFDFE' }}>
+                      <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.65, marginBottom: 14 }}>{ep.desc}</div>
+                      {ep.params && (
+                        <div style={{ overflowX: 'auto', marginBottom: 14 }}>
+                          <table className="doc-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                            <tbody>
+                              {ep.params.map(p => (
+                                <tr key={p.name}>
+                                  <td><code style={{ fontSize: 12 }}>{p.name}</code></td>
+                                  <td style={{ color: '#7C3AED' }}>{p.type}</td>
+                                  <td>{p.required ? <span style={{ color: '#DC2626', fontWeight: 700 }}>yes</span> : 'no'}</td>
+                                  <td>{p.desc}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {ep.body && <div style={{ marginBottom: 12 }}><CodeBlock code={ep.body} label="request" /></div>}
+                      {ep.response && <CodeBlock code={ep.response} label="response" />}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Webhooks ── */}
+      <div className="doc-card" id="webhooks">
+        <h2 className="doc-h2">Webhooks</h2>
+        <p className="doc-sub">
+          Set your webhook URL above in this page&apos;s Webhook section. When a payment completes (UPI or USDT) we POST a signed
+          event to it. Failed deliveries retry automatically with exponential backoff (up to 5 attempts) — always respond
+          2xx quickly and process asynchronously. Verify the signature on <strong>every</strong> delivery before trusting it.
+        </p>
+        <div style={{ marginBottom: 14 }}><CodeBlock code={WEBHOOK_PAYLOAD} label="delivery" /></div>
+        <Tabs tabs={['Node.js', 'PHP']}>
+          {[<CodeBlock key="n" code={WEBHOOK_VERIFY_NODE} label="Node.js" />,
+            <CodeBlock key="p" code={WEBHOOK_VERIFY_PHP} label="PHP" />]}
+        </Tabs>
+      </div>
+
+      {/* ── Errors ── */}
+      <div className="doc-card" id="errors">
+        <h2 className="doc-h2">Errors</h2>
+        <p className="doc-sub">All errors return <code>{`{ "success": false, "error": "…" }`}</code> with a conventional HTTP status.</p>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="doc-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><th>Status</th><th>Code</th><th>Meaning &amp; fix</th></tr></thead>
+            <tbody>
+              {ERRORS.map((e, i) => (
+                <tr key={i}>
+                  <td style={{ fontWeight: 700, color: e.status.startsWith('4') ? '#D97706' : '#DC2626' }}>{e.status}</td>
+                  <td><code style={{ fontSize: 11.5 }}>{e.code}</code></td>
+                  <td>{e.desc}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── SDKs ── */}
+      <div className="doc-card" id="sdks">
+        <h2 className="doc-h2">SDKs &amp; Plugins</h2>
+        <p className="doc-sub">Official integration kits — zero dependencies, matching this API exactly.</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 }}>
+          {SDKS.map(sdk => (
+            <a key={sdk.name} href={sdk.file} download
+              style={{ display: 'block', border: '1.5px solid #E2E8F0', borderRadius: 14, padding: '16px 18px', textDecoration: 'none', transition: 'border-color .15s', background: '#fff' }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = '#2563EB')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = '#E2E8F0')}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: sdk.color + '22', color: sdk.color === '#F7DF1E' ? '#B45309' : sdk.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, marginBottom: 10 }}>{sdk.icon}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>{sdk.name}</div>
+              <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.55, marginBottom: 10 }}>{sdk.desc}</div>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#2563EB' }}>Download ZIP ↓</span>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ textAlign: 'center', padding: '8px 0 30px', fontSize: 12, color: '#94A3B8' }}>
+        Need help integrating? <a href="/contact" style={{ color: '#2563EB', fontWeight: 600, textDecoration: 'none' }}>Contact support</a> — we usually respond within a few hours.
       </div>
     </div>
   );
