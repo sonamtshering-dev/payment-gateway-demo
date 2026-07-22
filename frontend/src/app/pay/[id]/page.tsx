@@ -33,36 +33,24 @@ interface CryptoInit {
   expires_at: string;
 }
 
+// Same logo assets as the Connect Merchant page. Scheme rewrites the generic
+// upi:// intent into the app-specific deep link; empty scheme opens the
+// system chooser via the plain upi:// link.
 const UPI_APPS = [
   {
     name: 'GPay',
     scheme: 'gpay://upi/pay?',
-    svg: `<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="12" fill="#fff"/><path d="M40.5 22H24v7h10.2c-1 4.6-4.9 7.8-10.2 7.8-6.2 0-11.3-5-11.3-11.3s5-11.2 11.3-11.2c2.8 0 5.3 1 7.3 2.7l5-5A18 18 0 0024 7C14.6 7 7 14.6 7 24s7.6 17 17 17c9.8 0 16.3-6.9 16.3-16.6 0-1.1-.1-2.2-.3-3.3h.5z" fill="#4285F4"/><path d="M8.6 16l5.8 4.3a11.2 11.2 0 0110.6-7.5c2.8 0 5.3 1 7.3 2.7l5-5A18 18 0 0024 7c-6.7 0-12.5 3.8-15.4 9.4v-.4z" fill="#EA4335"/><path d="M24 41c4.8 0 9-1.7 12.2-4.6l-5.7-4.8c-1.7 1.2-4 1.9-6.5 1.9a11.2 11.2 0 01-10.6-7.5L7.4 30c3 6 9.2 11 16.6 11z" fill="#34A853"/><path d="M40.5 22H24v7h10.2c-.5 2.4-1.9 4.4-3.9 5.7l5.7 4.8c3.3-3 5.3-7.6 5.3-12.8 0-1.1-.1-2.2-.3-3.3l.5.6z" fill="#FBBC05"/></svg>`,
+    svg: `<img src="/payment-logos/gpay.png" style="width:48px;height:48px;border-radius:11px;object-fit:contain;background:#fff" alt="Google Pay"/>`,
   },
   {
     name: 'PhonePe',
     scheme: 'phonepe://pay?',
-    svg: `<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="12" fill="#6739B7"/><circle cx="24" cy="24" r="14" fill="#fff" opacity="0.15"/><text x="24" y="30" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="18" fill="white">Pe</text></svg>`,
+    svg: `<img src="/payment-logos/phonepe.jpeg" style="width:48px;height:48px;border-radius:11px;object-fit:cover" alt="PhonePe"/>`,
   },
   {
     name: 'Paytm',
     scheme: 'paytmmp://pay?',
-    svg: `<img src="/channels4_profile.jpg" style="width:48px;height:48px;border-radius:11px;object-fit:cover" alt="Paytm"/>`,
-  },
-  {
-    name: 'BHIM',
-    scheme: 'upi://pay?',
-    svg: `<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="12" fill="#00BAF2"/><text x="24" y="20" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="10" fill="white">BHIM</text><path d="M14 27 L24 37 L34 27" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="24" y1="37" x2="24" y2="17" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>`,
-  },
-  {
-    name: 'Amazon Pay',
-    scheme: 'amzn://pay?',
-    svg: `<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="12" fill="#232F3E"/><text x="24" y="21" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="11" fill="white">pay</text><path d="M11 28 Q24 35 37 28" stroke="#FF9900" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`,
-  },
-  {
-    name: 'Any UPI',
-    scheme: '',
-    svg: `<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="12" fill="#F1F5F9" stroke="#E2E8F0" stroke-width="1"/><text x="24" y="20" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="9" fill="#475569">UPI</text><path d="M16 28 L24 36 L32 28 M24 36 L24 16" stroke="#2563EB" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    svg: `<img src="/payment-logos/paytm.jpeg" style="width:48px;height:48px;border-radius:11px;object-fit:cover" alt="Paytm"/>`,
   },
 ];
 
@@ -183,7 +171,9 @@ export default function PayPage() {
 
   const handleUPI = (app: typeof UPI_APPS[0]) => {
     if (!payment?.upi_intent_link) return;
-    const url = app.scheme ? payment.upi_intent_link.replace('upi://', app.scheme) : payment.upi_intent_link;
+    // upi://pay?pa=... -> gpay://upi/pay?pa=... (replace the full upi://pay? prefix,
+    // otherwise the app link ends up with a duplicated "pay?" and fails to open)
+    const url = app.scheme ? payment.upi_intent_link.replace('upi://pay?', app.scheme) : payment.upi_intent_link;
     window.location.href = url;
   };
 

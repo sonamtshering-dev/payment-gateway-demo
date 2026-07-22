@@ -190,7 +190,10 @@ export default function CryptoSettingsPage() {
       {/* Wallets */}
       <div className="cr-card" style={{ padding: '18px 20px' }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>Wallet addresses</div>
-        <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 16 }}>Enter one wallet per network. Only networks with an address will be offered at checkout.</div>
+        <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 12 }}>Enter one wallet per network. Only networks with an address will be offered at checkout.</div>
+        <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#92400E', lineHeight: 1.6 }}>
+          <strong>Receiving to Binance or another exchange?</strong> Use your exchange <em>deposit address</em>: in Binance open Assets → Deposit → USDT → pick the network (TRC20 recommended, lowest fees) → copy the address shown and paste it here. Double-check the network matches — a wrong-network deposit can lose funds.
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {networks.map(net => {
             const meta = NETWORK_META[net.id];

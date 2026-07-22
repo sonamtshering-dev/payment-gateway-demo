@@ -111,6 +111,18 @@ const ENDPOINT_CATEGORIES = [
     ],
   },
   {
+    name: 'Crypto (USDT)',
+    color: '#26A17B',
+    bg: '#F0FDF9',
+    endpoints: [
+      { method: 'POST', path: '/api/v1/public/payment/:id/crypto/init', title: 'Init USDT Payment',   desc: 'Lock rate and get wallet + exact USDT amount for an order' },
+      { method: 'POST', path: '/api/v1/public/crypto/verify',           title: 'Verify Transaction',  desc: 'Verify a customer-submitted transaction hash on-chain' },
+      { method: 'GET',  path: '/api/v1/dashboard/crypto',               title: 'Get Crypto Settings', desc: 'Your USDT config, wallets and supported networks' },
+      { method: 'PUT',  path: '/api/v1/dashboard/crypto/config',        title: 'Update Crypto Config', desc: 'Enable USDT, pricing mode, confirmations, timeout' },
+      { method: 'POST', path: '/api/v1/dashboard/crypto/wallet',        title: 'Save Wallet Address', desc: 'Set your receiving wallet for a network' },
+    ],
+  },
+  {
     name: 'Merchants',
     color: '#0891B2',
     bg: '#F0F9FF',
@@ -142,6 +154,76 @@ const ENDPOINT_DETAILS: Record<string, { body?: string; response?: string; param
   '/api/v1/dashboard/webhook': {
     params: [{ name: 'webhook_url', type: 'string', required: true, desc: 'HTTPS endpoint to receive payment events' }],
     response: `{ "success": true, "message": "Webhook URL updated" }`,
+  },
+  '/api/v1/public/payment/:id/crypto/init': {
+    params: [
+      { name: 'id',      type: 'string', required: true, desc: 'payment_id of a pending order' },
+      { name: 'network', type: 'string', required: true, desc: 'One of: trc20, bep20, erc20' },
+    ],
+    body: `curl -X POST ${BASE_URL}/api/v1/public/payment/PAYMENT_ID/crypto/init \\
+  -H "Content-Type: application/json" \\
+  -d '{ "network": "trc20" }'`,
+    response: `{
+  "success": true,
+  "data": {
+    "crypto_payment_id": "8f2c…",
+    "network": "trc20",
+    "network_label": "USDT · TRC20 (Tron)",
+    "merchant_wallet": "TXYZaBc…",
+    "expected_usdt": "11.340072",
+    "exchange_rate": 88.18,
+    "inr_amount": 100000,
+    "qr_code_base64": "data:image/png;base64,…",
+    "expires_at": "2026-07-22T19:30:00Z",
+    "status": "pending"
+  }
+}
+
+// The customer MUST send exactly expected_usdt — the unique
+// decimal tail binds their transfer to this specific order.
+// The exchange rate is locked and never changes for this order.`,
+  },
+  '/api/v1/public/crypto/verify': {
+    params: [
+      { name: 'crypto_payment_id', type: 'string', required: true, desc: 'From the init response' },
+      { name: 'tx_hash',           type: 'string', required: true, desc: 'Transaction hash the customer received after sending' },
+    ],
+    body: `curl -X POST ${BASE_URL}/api/v1/public/crypto/verify \\
+  -H "Content-Type: application/json" \\
+  -d '{ "crypto_payment_id": "8f2c…", "tx_hash": "0xabc…" }'`,
+    response: `{
+  "success": true,
+  "data": {
+    "status": "paid",
+    "message": "Payment confirmed",
+    "tx_hash": "0xabc…",
+    "explorer_url": "https://tronscan.org/#/transaction/…",
+    "amount_usdt": "11.340072"
+  }
+}
+
+// Verification checks on-chain: recipient wallet, official USDT
+// contract, exact amount, confirmations, expiry window, and that
+// the hash was never used before. Idempotent — safe to retry.
+// On success your webhook fires with the standard paid payload.`,
+  },
+  '/api/v1/dashboard/crypto/config': {
+    params: [
+      { name: 'usdt_enabled',           type: 'boolean', required: true,  desc: 'Master switch for USDT at checkout' },
+      { name: 'pricing_mode',           type: 'string',  required: true,  desc: 'live | fixed | live_adjustment' },
+      { name: 'fixed_rate',             type: 'number',  required: false, desc: 'INR per 1 USDT (fixed mode)' },
+      { name: 'adjustment_pct',         type: 'number',  required: false, desc: 'Percent applied to live rate (live_adjustment mode)' },
+      { name: 'required_confirmations', type: 'integer', required: false, desc: 'Extra confirmations beyond the per-network safe minimum' },
+      { name: 'payment_timeout_min',    type: 'integer', required: false, desc: 'USDT payment window in minutes (5–180)' },
+    ],
+    response: `{ "success": true, "message": "Crypto settings updated" }`,
+  },
+  '/api/v1/dashboard/crypto/wallet': {
+    params: [
+      { name: 'network', type: 'string', required: true, desc: 'trc20 | bep20 | erc20' },
+      { name: 'address', type: 'string', required: true, desc: 'Your receiving wallet address on that network. Exchange deposit addresses (e.g. Binance) work too.' },
+    ],
+    response: `{ "success": true, "message": "Wallet saved" }`,
   },
 };
 
