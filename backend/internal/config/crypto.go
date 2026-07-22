@@ -64,7 +64,7 @@ func loadCryptoConfig() CryptoConfig {
 		TronGridURL:     getEnv("TRONGRID_URL", "https://api.trongrid.io"),
 		TronGridAPIKey:  getEnv("TRONGRID_API_KEY", ""),
 		BscRPCURL:       getEnv("BSC_RPC_URL", "https://bsc-dataseed.binance.org"),
-		EthRPCURL:       getEnv("ETH_RPC_URL", "https://eth.llamarpc.com"),
+		EthRPCURL:       getEnv("ETH_RPC_URL", "https://ethereum-rpc.publicnode.com"),
 		RateAPIURL:      getEnv("CRYPTO_RATE_API_URL", "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=inr"),
 		RateFallbackINR: fallback,
 	}
