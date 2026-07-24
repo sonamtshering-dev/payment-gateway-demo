@@ -157,6 +157,7 @@ func main() {
 			auth.POST("/accept-invite", h.AcceptTeamInvite)
 			auth.POST("/otp/request", h.RequestLoginOTP)
 			auth.POST("/otp/verify", h.VerifyLoginOTP)
+			auth.POST("/telegram/login", h.TelegramLoginAuth)
 		}
 
 		// ---- PAYMENT API (API-key + signature authenticated) ----
@@ -268,6 +269,20 @@ func main() {
 			admin.POST("/plans",       h.AdminCreatePlan)
 			admin.PUT("/plans/:id",    h.AdminUpdatePlan)
 			admin.DELETE("/plans/:id", h.AdminDeletePlan)
+
+			// Enhanced admin endpoints
+			admin.GET("/merchants/:id",                  h.AdminGetMerchantDetail)
+			admin.POST("/merchants/:id/reset-password",  h.AdminResetMerchantPassword)
+			admin.POST("/merchants/:id/rotate-keys",     h.AdminRotateMerchantKeys)
+			admin.PUT("/merchants/:id/limit",            h.AdminUpdateMerchantLimit)
+			admin.GET("/webhook-logs",                   h.AdminGetWebhookLogs)
+			admin.POST("/webhook-logs/:id/retry",        h.AdminRetryWebhook)
+			admin.GET("/revenue-chart",                  h.AdminGetRevenueChart)
+			admin.GET("/subscriptions",                  h.AdminGetSubscriptions)
+			admin.GET("/audit-logs",                     h.AdminGetAuditLogs)
+			admin.GET("/top-merchants",                  h.AdminGetTopMerchants)
+			admin.GET("/payments-v2",                    h.AdminListPaymentsPaginated)
+			admin.GET("/fraud-v2",                       h.AdminListFraudPaginated)
 		}
 	}
 

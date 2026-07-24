@@ -29,11 +29,26 @@ func (h *Handler) InviteTeamMember(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "enter a valid email and role"})
 		return
 	}
-	if err := h.service.InviteTeamMember(c.Request.Context(), merchantID, req); err != nil {
+	tgLink, err := h.service.InviteTeamMember(c.Request.Context(), merchantID, req)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Invitation sent"})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Invitation sent", Data: map[string]string{"tg_link": tgLink}})
+}
+
+func (h *Handler) TelegramLoginAuth(c *gin.Context) {
+	var data models.TelegramAuthData
+	if err := c.ShouldBindJSON(&data); err != nil || data.ID == 0 || data.Hash == "" {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid Telegram auth data"})
+		return
+	}
+	resp, err := h.service.TelegramLoginAuth(c.Request.Context(), data)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: resp})
 }
 
 func (h *Handler) UpdateTeamMember(c *gin.Context) {

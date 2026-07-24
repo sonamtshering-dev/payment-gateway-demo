@@ -34,10 +34,12 @@ export default function TeamPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('viewer');
   const [inviting, setInviting] = useState(false);
+  const [lastTgLink, setLastTgLink] = useState('');
 
   const notify = (text: string, ok = true) => { setFlash({ ok, text }); setTimeout(() => setFlash(null), 4000); };
 
   const load = useCallback(async () => {
+    if (!localStorage.getItem('upay_access_token')) { setLoading(false); return; }
     try {
       const r = await apiFetch('/api/v1/dashboard/team');
       if (r.status === 403) { setForbidden(true); return; }
@@ -56,8 +58,12 @@ export default function TeamPage() {
         method: 'POST', body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
       });
       const d = await r.json();
-      if (d.success) { notify('Invitation sent'); setInviteEmail(''); load(); }
-      else notify(d.error || 'Failed to invite', false);
+      if (d.success) {
+        notify('Invitation sent');
+        setInviteEmail('');
+        if (d.data?.tg_link) setLastTgLink(d.data.tg_link);
+        load();
+      } else notify(d.error || 'Failed to invite', false);
     } catch { notify('Network error', false); }
     finally { setInviting(false); }
   };
@@ -149,6 +155,38 @@ export default function TeamPage() {
           ))}
         </div>
       </div>
+
+      {/* Telegram invite link — shown after a successful invite */}
+      {lastTgLink && (
+        <div className="tm-card" style={{ padding:'16px 20px', background:'#F0F9FF', border:'1px solid #BAE6FD' }}>
+          <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:'#0088cc', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'#0369A1', marginBottom:3 }}>Share via Telegram</div>
+              <div style={{ fontSize:12, color:'#0284C7', lineHeight:1.5, marginBottom:10 }}>
+                The invite email was sent. You can also share this Telegram link — when the invitee taps it, the bot will send them the activation link directly.
+              </div>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                <a href={lastTgLink} target="_blank" rel="noreferrer"
+                  style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 16px', borderRadius:8, background:'#0088cc', color:'#fff', fontSize:12.5, fontWeight:700, textDecoration:'none' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+                  Open in Telegram
+                </a>
+                <button onClick={() => { navigator.clipboard.writeText(lastTgLink); notify('Link copied'); }}
+                  style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px', borderRadius:8, border:'1.5px solid #BAE6FD', background:'#fff', color:'#0369A1', fontSize:12.5, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                  Copy link
+                </button>
+                <button onClick={() => setLastTgLink('')}
+                  style={{ marginLeft:'auto', background:'none', border:'none', color:'#94A3B8', fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Members list */}
       <div className="tm-card" style={{ overflow: 'hidden' }}>

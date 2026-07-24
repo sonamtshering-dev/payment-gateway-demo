@@ -55,6 +55,7 @@ export default function OrdersPage() {
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
+  const [copiedTxn, setCopiedTxn] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -91,6 +92,14 @@ export default function OrdersPage() {
     setCopied(id);
     setTimeout(() => setCopied(null), 1500);
   };
+
+  const copyTxnId = (id: string) => {
+    navigator.clipboard?.writeText(id);
+    setCopiedTxn(id);
+    setTimeout(() => setCopiedTxn(null), 1500);
+  };
+
+  const shortTxnId = (id: string) => 'TXN-' + (id?.slice(0, 8) ?? '').toUpperCase();
 
   const exportCSV = () => {
     const rows = [['Payment ID', 'Order ID', 'Amount', 'Status', 'Date']];
@@ -234,7 +243,15 @@ export default function OrdersPage() {
                       <td style={{ padding: '11px 16px', fontFamily: 'monospace', fontSize: 11.5, color: C.text2, overflow: 'hidden', maxWidth: 140, whiteSpace: 'nowrap' }}>
                         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.order_id}</div>
                       </td>
-                      <td style={{ padding: '11px 16px', fontFamily: 'monospace', fontSize: 11, color: C.text3, whiteSpace: 'nowrap' }}>{tx.id?.slice(0, 13)}...</td>
+                      <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
+                        <button
+                          onClick={() => copyTxnId(tx.id)}
+                          title={tx.id}
+                          style={{ background: copiedTxn === tx.id ? '#ECFDF5' : C.blue50, border: `1px solid ${copiedTxn === tx.id ? '#A7F3D0' : '#BFDBFE'}`, borderRadius: 6, padding: '2px 8px', color: copiedTxn === tx.id ? '#059669' : C.blue, fontSize: 10.5, fontWeight: 700, fontFamily: 'monospace', cursor: 'pointer', letterSpacing: '.04em', transition: 'all .12s' }}
+                        >
+                          {copiedTxn === tx.id ? 'Copied!' : shortTxnId(tx.id)}
+                        </button>
+                      </td>
                       <td style={{ padding: '11px 16px', fontSize: 12, color: C.text2, maxWidth: 120 }}>
                         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.customer_reference || '—'}</div>
                       </td>
@@ -285,11 +302,12 @@ export default function OrdersPage() {
                       <div style={{ fontSize: 10.5, color: C.text3 }}>{fmtTime(tx.created_at)}</div>
                     </div>
                   </div>
-                  {tx.customer_reference && (
-                    <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {tx.customer_reference}
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <span style={{ background: C.blue50, border: `1px solid #BFDBFE`, borderRadius: 5, padding: '1px 7px', color: C.blue, fontSize: 10, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '.04em' }}>{shortTxnId(tx.id)}</span>
+                    {tx.customer_reference && (
+                      <span style={{ fontSize: 11.5, color: C.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.customer_reference}</span>
+                    )}
+                  </div>
                   <button
                     onClick={() => copyText(tx.order_id, tx.id)}
                     style={{ width: '100%', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px', color: copied === tx.id ? '#059669' : C.text2, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s' }}

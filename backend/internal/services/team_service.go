@@ -40,35 +40,45 @@ func (s *Service) ListTeamMembers(ctx context.Context, merchantID uuid.UUID) ([]
 	return members, nil
 }
 
-func (s *Service) InviteTeamMember(ctx context.Context, merchantID uuid.UUID, req models.InviteTeamMemberRequest) error {
+// botDeepLink returns a Telegram bot deep link embedding the invite token.
+// The recipient taps it → the bot receives /start inv_TOKEN → sends the accept URL.
+func botDeepLink(botName, token string) string {
+	if botName == "" {
+		return ""
+	}
+	return "https://t.me/" + botName + "?start=inv_" + token
+}
+
+func (s *Service) InviteTeamMember(ctx context.Context, merchantID uuid.UUID, req models.InviteTeamMemberRequest) (tgLink string, err error) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 
 	// The owner's own email can't be a team member anywhere.
 	if m, _ := s.repo.GetMerchantByEmail(ctx, email); m != nil {
-		return fmt.Errorf("this email already has a merchant account")
+		return "", fmt.Errorf("this email already has a merchant account")
 	}
 	if existing, _ := s.repo.GetTeamMemberByEmail(ctx, email); existing != nil {
 		if existing.MerchantID != merchantID {
-			return fmt.Errorf("this email is already on another team")
+			return "", fmt.Errorf("this email is already on another team")
 		}
 		if existing.Status != "invited" {
-			return fmt.Errorf("this email is already on your team")
+			return "", fmt.Errorf("this email is already on your team")
 		}
 		// Re-invite: refresh token and resend.
 		token, hash, err := newInviteToken()
 		if err != nil {
-			return err
+			return "", err
 		}
 		if err := s.repo.RefreshTeamInvite(ctx, existing.ID, hash, time.Now().Add(72*time.Hour)); err != nil {
-			return err
+			return "", err
 		}
+		link := botDeepLink(s.config.Telegram.BotName, token)
 		s.sendInviteEmail(ctx, merchantID, email, req.Role, token)
-		return nil
+		return link, nil
 	}
 
 	token, hash, err := newInviteToken()
 	if err != nil {
-		return err
+		return "", err
 	}
 	expires := time.Now().Add(72 * time.Hour)
 	member := &models.TeamMember{
@@ -76,10 +86,11 @@ func (s *Service) InviteTeamMember(ctx context.Context, merchantID uuid.UUID, re
 		Status: "invited", InviteTokenHash: &hash, InviteExpiresAt: &expires,
 	}
 	if err := s.repo.CreateTeamMember(ctx, member); err != nil {
-		return fmt.Errorf("could not create invite")
+		return "", fmt.Errorf("could not create invite")
 	}
+	link := botDeepLink(s.config.Telegram.BotName, token)
 	s.sendInviteEmail(ctx, merchantID, email, req.Role, token)
-	return nil
+	return link, nil
 }
 
 func (s *Service) sendInviteEmail(ctx context.Context, merchantID uuid.UUID, email, role, token string) {
@@ -110,6 +121,17 @@ func (s *Service) UpdateTeamMember(ctx context.Context, merchantID, memberID uui
 
 func (s *Service) RemoveTeamMember(ctx context.Context, merchantID, memberID uuid.UUID) error {
 	return s.repo.DeleteTeamMember(ctx, merchantID, memberID)
+}
+
+// ResolveInviteToken looks up an invite token and returns the accept URL if valid.
+// Returns empty string when the token is invalid or expired.
+func (s *Service) ResolveInviteToken(ctx context.Context, token string) string {
+	hash := sha256Hex(token)
+	member, err := s.repo.GetTeamMemberByInviteToken(ctx, hash)
+	if err != nil || member == nil {
+		return ""
+	}
+	return appURL() + "/auth/accept-invite?token=" + token
 }
 
 // AcceptTeamInvite finishes onboarding: sets name + password and activates.

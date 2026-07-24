@@ -150,15 +150,29 @@ func (h *Handler) TelegramBotWebhook(c *gin.Context) {
 		text := strings.TrimSpace(update.Message.Text)
 		chatID := fmt.Sprintf("%d", update.Message.Chat.ID)
 
-		// Extract code: handles both "/connect CODE" and "/start CODE" (deep link)
+		// Extract code: handles "/connect CODE", "/start CODE" (connect deep link),
+		// and "/start inv_TOKEN" (team invite deep link).
 		var connectCode string
+		var inviteToken string
 		if strings.HasPrefix(text, "/connect ") {
 			connectCode = strings.TrimSpace(strings.TrimPrefix(text, "/connect "))
+		} else if strings.HasPrefix(text, "/start inv_") {
+			inviteToken = strings.TrimSpace(strings.TrimPrefix(text, "/start inv_"))
 		} else if strings.HasPrefix(text, "/start ") {
 			connectCode = strings.TrimSpace(strings.TrimPrefix(text, "/start "))
 		}
 
-		if connectCode != "" {
+		if inviteToken != "" {
+			// Team invite via bot deep link: look up invite and send accept URL.
+			acceptURL := h.service.ResolveInviteToken(c.Request.Context(), inviteToken)
+			if acceptURL == "" {
+				h.service.SendTelegramDirect(c.Request.Context(), chatID,
+					"❌ This invite link has expired or is invalid. Ask the account owner to send a new invite.")
+			} else {
+				h.service.SendTelegramDirect(c.Request.Context(), chatID,
+					"👋 <b>You've been invited to join a NovaPay team!</b>\n\nTap the link below to set your name and password and activate your access:\n\n"+acceptURL+"\n\n<i>This link expires in 72 hours.</i>")
+			}
+		} else if connectCode != "" {
 			if err := h.service.LinkTelegramChat(c.Request.Context(), connectCode, chatID); err != nil {
 				h.service.SendTelegramDirect(c.Request.Context(), chatID,
 					"Invalid or expired code. Please generate a new one from your NovaPay dashboard.")

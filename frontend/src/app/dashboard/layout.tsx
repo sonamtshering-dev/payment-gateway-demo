@@ -8,7 +8,7 @@ import {
   FileCode2, Shield, Home, LogOut, Bell, Menu, X,
   BarChart2, Palette, CreditCard, Users,
   ShieldCheck, AlertTriangle, PackagePlus, ChevronDown,
-  ChevronLeft, ChevronRight, Settings, Send, Coins, UserCircle,
+  ChevronLeft, ChevronRight, Send, Coins, UserCircle,
 } from 'lucide-react';
 
 // ── Navigation structure ─────────────────────────────────────────
@@ -35,6 +35,8 @@ const NAV_GROUPS = [
       { label: 'Crypto Payments',  href: '/dashboard/crypto',           icon: Coins       },
       { label: 'Referrals',        href: '/dashboard/referral',         icon: Users       },
       { label: 'KYC Verification', href: '/dashboard/kyc',              icon: ShieldCheck },
+      { label: 'Profile',          href: '/dashboard/profile',          icon: UserCircle  },
+      { label: 'Team Management',  href: '/dashboard/team',             icon: Users       },
     ],
   },
   {
@@ -49,8 +51,9 @@ const NAV_GROUPS = [
     label: 'Developer',
     icon: FileCode2,
     items: [
-      { label: 'API & Webhooks', href: '/dashboard/api-docs',  icon: FileCode2 },
-      { label: 'Branding',       href: '/dashboard/branding',  icon: Palette   },
+      { label: 'API & Webhooks',  href: '/dashboard/api-docs',  icon: FileCode2 },
+      { label: 'Branding',        href: '/dashboard/branding',  icon: Palette   },
+      { label: 'Telegram Alerts', href: '/dashboard/telegram',  icon: Send      },
     ],
   },
   {
@@ -58,15 +61,6 @@ const NAV_GROUPS = [
     icon: AlertTriangle,
     items: [
       { label: 'Fraud Alerts', href: '/dashboard/fraud', icon: AlertTriangle },
-    ],
-  },
-  {
-    label: 'Settings',
-    icon: Settings,
-    items: [
-      { label: 'Profile',         href: '/dashboard/profile',  icon: UserCircle },
-      { label: 'Team Management', href: '/dashboard/team',     icon: Users },
-      { label: 'Telegram Alerts', href: '/dashboard/telegram', icon: Send },
     ],
   },
 ];
@@ -498,7 +492,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </a>
             <button
               className="np-nav-item np-danger"
-              onClick={logout}
+              onClick={() => {
+                localStorage.removeItem('upay_access_token');
+                localStorage.removeItem('upay_refresh_token');
+                window.location.replace('/auth/login');
+              }}
               title={collapsed ? 'Logout' : undefined}
             >
               <LogOut size={15} className="np-nav-icon" style={{ opacity: 0.6 }} />

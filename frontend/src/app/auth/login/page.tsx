@@ -1,8 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
+
+const TG_BOT_NAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME || 'NovaPayAlerts_Bot';
 
 const NLogo = () => (
   <img src="/np-logo.jpg" alt="NovaPay" style={{ width: 30, height: 30, objectFit: 'contain', borderRadius: 6 }} />
@@ -34,7 +36,7 @@ export default function LoginPage() {
     try {
       await login(email, password);
       if (remember) localStorage.setItem('upay_remember', '1');
-      router.push('/dashboard');
+      window.location.replace('/dashboard');
     } catch (err: any) {
       const msg: string = err.message || '';
       if (/host=|sqlstate|unavailable|service/i.test(msg)) {
@@ -46,6 +48,41 @@ export default function LoginPage() {
   };
 
   const [otpChannel, setOtpChannel] = useState('email');
+  const [tgLoading, setTgLoading] = useState(false);
+  const tgRef = useRef<HTMLDivElement>(null);
+
+  // Load Telegram Login Widget
+  useEffect(() => {
+    if (!tgRef.current) return;
+    (window as any).onTelegramAuth = async (user: any) => {
+      setTgLoading(true); setError('');
+      try {
+        const r = await fetch('/api/v1/auth/telegram/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(user),
+        });
+        const d = await r.json();
+        if (r.ok && d.success && d.data?.access_token) {
+          localStorage.setItem('upay_access_token', d.data.access_token);
+          localStorage.setItem('upay_refresh_token', d.data.refresh_token);
+          window.location.href = '/dashboard';
+        } else {
+          setError(d.error || 'Telegram login failed. Make sure you have connected the bot from your dashboard first.');
+        }
+      } catch { setError('Network error. Please try again.'); }
+      finally { setTgLoading(false); }
+    };
+    const s = document.createElement('script');
+    s.src = 'https://telegram.org/js/telegram-widget.js?22';
+    s.setAttribute('data-telegram-login', TG_BOT_NAME);
+    s.setAttribute('data-size', 'large');
+    s.setAttribute('data-onauth', 'onTelegramAuth(user)');
+    s.setAttribute('data-request-access', 'write');
+    s.async = true;
+    tgRef.current.innerHTML = '';
+    tgRef.current.appendChild(s);
+    return () => { s.remove(); delete (window as any).onTelegramAuth; };
+  }, []);
 
   const handleSendOTP = async () => {
     if (!email) { setError('Enter your email first'); return; }
@@ -284,7 +321,24 @@ export default function LoginPage() {
             </div>
           )}
 
-          <p style={{ textAlign:'center' as const, fontSize:13, color:'#64748B', marginTop:20 }}>
+          {/* Telegram login */}
+          <div style={{ margin:'20px 0', display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ flex:1, height:1, background:'#E2E8F0' }} />
+            <span style={{ fontSize:12, color:'#94A3B8', fontWeight:500, whiteSpace:'nowrap' }}>or continue with</span>
+            <div style={{ flex:1, height:1, background:'#E2E8F0' }} />
+          </div>
+
+          {tgLoading ? (
+            <div style={{ textAlign:'center', padding:'14px', fontSize:13, color:'#2563EB', fontWeight:600 }}>Signing in with Telegram…</div>
+          ) : (
+            <div ref={tgRef} style={{ display:'flex', justifyContent:'center', minHeight:48 }} />
+          )}
+
+          <p style={{ textAlign:'center' as const, fontSize:11.5, color:'#94A3B8', marginTop:8, lineHeight:1.5 }}>
+            Requires your Telegram to be connected in Settings → Telegram Alerts first.
+          </p>
+
+          <p style={{ textAlign:'center' as const, fontSize:13, color:'#64748B', marginTop:16 }}>
             Don&apos;t have an account?{' '}
             <Link href="/auth/register" style={{ color:'#2563EB', fontWeight:700, textDecoration:'none' }}>Sign up</Link>
           </p>

@@ -1,36 +1,57 @@
 package services
 
 import (
-	"encoding/base64"
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"net/smtp"
+	"io"
+	"net/http"
 	"os"
 )
 
 type EmailService struct {
-	user     string
-	password string
-	from     string
+	apiKey string
+	from   string
 }
 
 func NewEmailService() *EmailService {
-	user := os.Getenv("GMAIL_USER")
 	return &EmailService{
-		user:     user,
-		password: os.Getenv("GMAIL_APP_PASSWORD"),
-		from:     user,
+		apiKey: os.Getenv("RESEND_API_KEY"),
+		from:   os.Getenv("RESEND_FROM_EMAIL"),
 	}
 }
 
 func (e *EmailService) Send(to, subject, html string) error {
-	if e.user == "" || e.password == "" {
+	if e.apiKey == "" {
 		fmt.Printf("[EMAIL SKIPPED] To: %s | Subject: %s\n", to, subject)
 		return nil
 	}
-	auth := smtp.PlainAuth("", e.user, e.password, "smtp.gmail.com")
-	encSubject := "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(subject)) + "?="
-	msg := fmt.Sprintf("From: NovaPay <%s>\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s", e.from, to, encSubject, html)
-	return smtp.SendMail("smtp.gmail.com:587", auth, e.from, []string{to}, []byte(msg))
+	from := e.from
+	if from == "" {
+		from = "NovaPay <noreply@nova-pay.in>"
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"from":    from,
+		"to":      []string{to},
+		"subject": subject,
+		"html":    html,
+	})
+	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+e.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("resend error %d: %s", resp.StatusCode, string(body))
+	}
+	return nil
 }
 
 func emailLayout(badgeText, badgeBg, badgeColor, title, body, btnText, btnURL, footerNote string) string {

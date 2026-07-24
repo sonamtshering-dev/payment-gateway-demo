@@ -82,8 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     clearSession();
-    router.push('/auth/login');
-  }, [clearSession, router]);
+    window.location.href = '/auth/login';
+  }, [clearSession]);
 
   return (
     <AuthContext.Provider value={{
