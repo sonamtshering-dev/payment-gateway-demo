@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -136,6 +137,13 @@ func (w *Worker) deliverWebhook(ctx context.Context, payload models.WebhookPaylo
 	}
 	merchant, err := w.repo.GetMerchantByID(ctx, payment.MerchantID)
 	if err != nil || merchant == nil || merchant.WebhookURL == "" {
+		return
+	}
+
+	// Re-validate the webhook URL at delivery time to defend against DNS rebinding:
+	// the URL was checked for private IPs when saved, but DNS could have changed since.
+	if parsed, pErr := url.Parse(merchant.WebhookURL); pErr != nil || services.IsPrivateHost(parsed.Hostname()) {
+		log.Warn().Str("url", merchant.WebhookURL).Msg("Webhook delivery blocked — SSRF DNS rebinding guard")
 		return
 	}
 

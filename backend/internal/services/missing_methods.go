@@ -78,6 +78,12 @@ var privateRanges = func() []*net.IPNet {
 	return nets
 }()
 
+// IsPrivateHost is exported so the webhook delivery worker can re-check at
+// delivery time, guarding against DNS rebinding attacks.
+func IsPrivateHost(host string) bool {
+	return isPrivateIP(host)
+}
+
 func isPrivateIP(host string) bool {
 	// Strip brackets from IPv6 literal
 	host = strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"os"
@@ -103,7 +104,7 @@ func (e *EmailService) SendWelcome(name, email, referralCode string) error {
 	if appURL == "" {
 		appURL = "https://nova-pay.in"
 	}
-	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">Welcome to NovaPay,<br>%s!</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">Your merchant account is ready. Start accepting UPI payments from customers across India with zero transaction fees.</p>`, name)
+	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">Welcome to NovaPay,<br>%s!</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">Your merchant account is ready. Start accepting UPI payments from customers across India with zero transaction fees.</p>`, html.EscapeString(name))
 	features := `<ul style="list-style:none;margin:0 0 28px;padding:0">` +
 		emailFeature("Accept UPI, QR codes and payment links") +
 		emailFeature("Real-time payment notifications via email") +
@@ -146,7 +147,7 @@ func (e *EmailService) SendKYCApproved(email, name string) error {
 	if appURL == "" {
 		appURL = "https://nova-pay.in"
 	}
-	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">KYC approved,<br>%s!</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">Your identity documents have been reviewed and approved. Your account is now fully activated.</p>`, name)
+	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">KYC approved,<br>%s!</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">Your identity documents have been reviewed and approved. Your account is now fully activated.</p>`, html.EscapeString(name))
 	rows := emailRow("Verification status", "Approved", "#16a34a") +
 		emailRow("Account type", "Merchant", "")
 	features := `<ul style="list-style:none;margin:0 0 28px;padding:0">` +
@@ -167,8 +168,8 @@ func (e *EmailService) SendKYCRejected(email, name, reason string) error {
 	if appURL == "" {
 		appURL = "https://nova-pay.in"
 	}
-	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">KYC needs attention</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">Hi %s, your KYC submission was not approved. Please review the reason below and resubmit.</p>`, name)
-	warnBox := fmt.Sprintf(`<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:18px 20px;margin-bottom:28px"><div style="font-size:14px;font-weight:700;color:#b91c1c;margin-bottom:6px">Rejection reason</div><div style="font-size:13px;color:#dc2626;line-height:1.5">%s</div></div>`, reason)
+	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">KYC needs attention</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">Hi %s, your KYC submission was not approved. Please review the reason below and resubmit.</p>`, html.EscapeString(name))
+	warnBox := fmt.Sprintf(`<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:18px 20px;margin-bottom:28px"><div style="font-size:14px;font-weight:700;color:#b91c1c;margin-bottom:6px">Rejection reason</div><div style="font-size:13px;color:#dc2626;line-height:1.5">%s</div></div>`, html.EscapeString(reason))
 	return e.Send(email, "KYC Update Required — NovaPay", emailLayout(
 		"&#10007; Action required", "#fef2f2", "#b91c1c",
 		title, warnBox,
@@ -213,7 +214,7 @@ func (e *EmailService) SendMonthlyStatement(email, name, month string, totalSale
 	if appURL == "" {
 		appURL = "https://nova-pay.in"
 	}
-	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">Monthly Statement</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">Hi %s, here is your NovaPay statement for %s.</p>`, name, month)
+	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">Monthly Statement</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">Hi %s, here is your NovaPay statement for %s.</p>`, html.EscapeString(name), html.EscapeString(month))
 	rows := emailRow("Total Sales", fmt.Sprintf("₹%.2f", totalSales), "#0f172a") +
 		emailRow("Total Cost", fmt.Sprintf("₹%.2f", totalCost), "#dc2626") +
 		emailRow("Total Profit", fmt.Sprintf("₹%.2f", totalProfit), "#16a34a") +
@@ -228,9 +229,9 @@ func (e *EmailService) SendMonthlyStatement(email, name, month string, totalSale
 
 // SendTeamInvite emails a team invitation with the accept link.
 func (e *EmailService) SendTeamInvite(email, businessName, role, link string) error {
-	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">You've been invited to join %s</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">You've been added to the team on NovaPay with <strong>%s</strong> access. Set your password to activate your account.</p>`, businessName, role)
+	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">You've been invited to join %s</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">You've been added to the team on NovaPay with <strong>%s</strong> access. Set your password to activate your account.</p>`, html.EscapeString(businessName), html.EscapeString(role))
 	note := `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px 20px;margin-bottom:24px;font-size:13px;color:#92400e;line-height:1.6">This invite link expires in <strong>72 hours</strong>. If you weren't expecting it, you can safely ignore this email.</div>`
-	return e.Send(email, fmt.Sprintf("You've been invited to %s on NovaPay", businessName), emailLayout(
+	return e.Send(email, fmt.Sprintf("You've been invited to %s on NovaPay", html.EscapeString(businessName)), emailLayout(
 		"&#128101; Team invitation", "#eff6ff", "#1d4ed8",
 		title, note,
 		"Accept Invitation →", link,
@@ -240,7 +241,7 @@ func (e *EmailService) SendTeamInvite(email, businessName, role, link string) er
 
 // SendLoginOTP emails a one-time login code.
 func (e *EmailService) SendLoginOTP(email, name, code string) error {
-	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">Your login code</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">Hi %s, use this one-time code to sign in to NovaPay. It expires in 5 minutes.</p>`, name)
+	title := fmt.Sprintf(`<h1 style="font-size:28px;font-weight:800;color:#0f172a;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px">Your login code</h1><p style="font-size:15px;color:#64748b;line-height:1.6;margin:0 0 32px">Hi %s, use this one-time code to sign in to NovaPay. It expires in 5 minutes.</p>`, html.EscapeString(name))
 	codeBox := fmt.Sprintf(`<div style="background:#020817;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;border:1px solid #1e3a5f"><div style="color:rgba(255,255,255,0.4);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em">One-time code</div><div style="color:#60a5fa;font-size:36px;font-weight:800;letter-spacing:10px;font-family:monospace;margin:10px 0">%s</div></div>`, code)
 	warn := `<div style="font-size:13px;color:#94a3b8;line-height:1.6;margin-bottom:8px">If you didn't try to log in, you can ignore this email — your password is still required to access the account.</div>`
 	appURL := os.Getenv("APP_URL")

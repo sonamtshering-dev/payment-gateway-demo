@@ -431,6 +431,22 @@ func (rl *IPRateLimiter) Allow(ip string) bool {
 // SECURITY HEADERS
 // ============================================================================
 
+// RequireJSON rejects write requests that don't declare application/json,
+// preventing WAF bypass via Content-Type confusion.
+func RequireJSON() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead && c.Request.Method != http.MethodOptions {
+			ct := c.GetHeader("Content-Type")
+			if !strings.HasPrefix(ct, "application/json") {
+				c.JSON(http.StatusUnsupportedMediaType, models.ErrorResponse{Error: "Content-Type must be application/json"})
+				c.Abort()
+				return
+			}
+		}
+		c.Next()
+	}
+}
+
 func SecurityHeaders() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("X-Content-Type-Options", "nosniff")

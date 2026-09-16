@@ -20,6 +20,10 @@ import (
 
 var orderIDRe = regexp.MustCompile(`^[a-zA-Z0-9_\-]{1,64}$`)
 
+// dummyHash is used to keep login response time constant whether or not
+// the email exists, preventing timing-based email enumeration.
+var dummyHash, _ = utils.HashPassword("dummy-constant-time-placeholder")
+
 type Service struct {
 	repo       *repository.Repository
 	redis      *redis.Client
@@ -144,7 +148,9 @@ func (s *Service) Login(ctx context.Context, req models.LoginRequest) (*models.A
 		return nil, fmt.Errorf("service unavailable")
 	}
 	if merchant == nil {
-		// Not an owner account — try team member login.
+		// Run bcrypt against dummy hash so response time matches a real account,
+		// preventing timing-based email enumeration.
+		utils.CheckPassword(req.Password, dummyHash)
 		return s.teamMemberLogin(ctx, req, lockKey, attemptsKey)
 	}
 
