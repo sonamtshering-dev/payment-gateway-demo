@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -38,10 +39,15 @@ func (h *Handler) PaymentPage(c *gin.Context) {
 
 	amountRupees := fmt.Sprintf("%.2f", float64(status.Amount)/100.0)
 
+	// Escape all merchant-controlled values before embedding in HTML (XSS prevention)
+	escOrderID := html.EscapeString(status.OrderID)
+	escQRCode := html.EscapeString(payment.QRCodeData)
+	escUPILink := html.EscapeString(payment.UPIIntentLink)
+
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Header("Cache-Control", "no-store")
 
-	html := fmt.Sprintf(`<!DOCTYPE html>
+	page := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -397,18 +403,18 @@ pollStatus();
 </html>`,
 		amountRupees,
 		amountRupees,
-		status.OrderID,
-		payment.QRCodeData,
-		payment.UPIIntentLink,
-		payment.UPIIntentLink,
-		payment.UPIIntentLink,
-		payment.UPIIntentLink,
-		paymentIDStr,
+		escOrderID,
+		escQRCode,
+		escUPILink,
+		escUPILink,
+		escUPILink,
+		escUPILink,
+		paymentIDStr, // UUID — safe, validated by uuid.Parse above
 		status.ExpiresAt.Format("2006-01-02T15:04:05Z"),
 		status.CreatedAt.Format("2006-01-02T15:04:05Z"),
 	)
 
-	c.String(http.StatusOK, html)
+	c.String(http.StatusOK, page)
 }
 
 func customerDetailsPage(paymentID, amount string) string {

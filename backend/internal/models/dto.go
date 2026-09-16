@@ -42,6 +42,7 @@ type MerchantPublic struct {
 	IsAdmin      bool      `json:"is_admin"`
 	LogoURL      string    `json:"logo_url,omitempty"`
 	BusinessName string    `json:"business_name,omitempty"`
+	PrimaryColor string    `json:"primary_color,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -96,6 +97,7 @@ type PaymentStatusResponse struct {
 	CustomerRef   string `json:"customer_reference,omitempty"`
 	MerchantLogo  string `json:"merchant_logo,omitempty"`
 	BusinessName  string `json:"business_name,omitempty"`
+	PrimaryColor  string `json:"primary_color,omitempty"`
 
 	// Crypto availability for the checkout page (only networks with a wallet set).
 	USDTEnabled    bool                  `json:"usdt_enabled"`
@@ -137,14 +139,16 @@ type AddCashierRequest struct {
 // ============================================================================
 
 type WebhookPayload struct {
-	PaymentID string `json:"payment_id"`
-	OrderID   string `json:"order_id"`
-	Amount    int64  `json:"amount"`
-	Currency  string `json:"currency"`
-	Status    string `json:"status"`
-	UTR       string `json:"utr,omitempty"`
-	Timestamp int64  `json:"timestamp"`
-	Signature string `json:"signature"`
+	PaymentID  string `json:"payment_id"`
+	OrderID    string `json:"order_id"`
+	Amount     int64  `json:"amount"`
+	Currency   string `json:"currency"`
+	Status     string `json:"status"`
+	UTR        string `json:"utr,omitempty"`
+	Timestamp  int64  `json:"timestamp"`
+	Signature  string `json:"signature"`
+	DeliveryID string `json:"delivery_id,omitempty"` // set on retries so we update the existing row
+	Attempt    int    `json:"attempt,omitempty"`     // current attempt number
 }
 
 // ============================================================================

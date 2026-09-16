@@ -20,10 +20,12 @@ type MerchantProvider struct {
 }
 
 type ConnectProviderRequest struct {
-	Provider     string `json:"provider"      binding:"required,oneof=upi_direct phonepe paytm gpay bharatpe other"`
-	MerchantName string `json:"merchant_name" binding:"required,min=2,max=100"`
-	MerchantMID  string `json:"merchant_mid"  binding:"omitempty,max=100"`
-	UPIID        string `json:"upi_id"        binding:"required"`
+	Provider          string `json:"provider"           binding:"required,oneof=upi_direct phonepe paytm gpay bharatpe other"`
+	MerchantName      string `json:"merchant_name"      binding:"required,min=2,max=100"`
+	MerchantMID       string `json:"merchant_mid"       binding:"omitempty,max=100"`
+	UPIID             string `json:"upi_id"             binding:"required"`
+	PhonePeSaltKey    string `json:"phonepe_salt_key"   binding:"omitempty"`
+	PhonePeSaltIndex  string `json:"phonepe_salt_index" binding:"omitempty"`
 }
 
 type UpdateProviderRequest struct {

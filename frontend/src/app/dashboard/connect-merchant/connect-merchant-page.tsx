@@ -2,15 +2,19 @@
 import { useEffect, useState } from 'react';
 
 export default function ConnectMerchantPage() {
-  const [upis, setUpis]           = useState<any[]>([]);
-  const [newUPI, setNewUPI]       = useState('');
-  const [label, setLabel]         = useState('');
-  const [paytmMID, setPaytmMID]   = useState('');
-  const [loading, setLoading]     = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [savingMID, setSavingMID] = useState('');
-  const [error, setError]         = useState('');
-  const [success, setSuccess]     = useState('');
+  const [upis, setUpis]                     = useState<any[]>([]);
+  const [newUPI, setNewUPI]                 = useState('');
+  const [label, setLabel]                   = useState('');
+  const [paytmMID, setPaytmMID]             = useState('');
+  const [phonepeID, setPhonepeID]           = useState('');
+  const [phonepeSalt, setPhonepeSalt]       = useState('');
+  const [phonepeSaltIdx, setPhonepeSaltIdx] = useState('1');
+  const [loading, setLoading]               = useState(false);
+  const [saving, setSaving]                 = useState(false);
+  const [savingMID, setSavingMID]           = useState('');
+  const [savingPP, setSavingPP]             = useState('');
+  const [error, setError]                   = useState('');
+  const [success, setSuccess]               = useState('');
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('upay_access_token') : '';
   const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -64,6 +68,23 @@ export default function ConnectMerchantPage() {
     finally { setSavingMID(''); }
   };
 
+  const savePhonePe = async (upiId: string) => {
+    if (!phonepeID.trim() || !phonepeSalt.trim()) { flash('Enter PhonePe Merchant ID and Salt Key', true); return; }
+    setSavingPP(upiId);
+    try {
+      const r = await fetch('/api/v1/dashboard/phonepe-config', {
+        method: 'POST', headers,
+        body: JSON.stringify({ merchant_id: phonepeID.trim(), salt_key: phonepeSalt.trim(), salt_index: phonepeSaltIdx.trim() || '1' }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed');
+      flash('PhonePe config saved! Auto-verification is now active ✅');
+      setPhonepeID(''); setPhonepeSalt(''); setPhonepeSaltIdx('1');
+      loadUPIs();
+    } catch (e: any) { flash(e.message, true); }
+    finally { setSavingPP(''); }
+  };
+
   const deleteUPI = async (id: string) => {
     if (!confirm('Remove this UPI ID?')) return;
     try {
@@ -88,7 +109,7 @@ export default function ConnectMerchantPage() {
         Connect Merchant
       </div>
       <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.38)', marginBottom: 28 }}>
-        Add your UPI ID to receive payments. Connect your Paytm MID for automatic payment verification.
+        Add your UPI ID to receive payments. Connect your Paytm MID or PhonePe PG credentials for automatic payment verification.
       </div>
 
       {error   && <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '12px 16px', color: '#f87171', fontSize: 13, marginBottom: 20 }}>{error}</div>}
@@ -112,17 +133,18 @@ export default function ConnectMerchantPage() {
         </button>
       </div>
 
-      {/* Paytm Auto-Verify Info Banner */}
+      {/* Auto-Verify Info Banner */}
       <div style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 14, padding: '16px 20px', marginBottom: 20 }}>
         <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 14, fontWeight: 700, color: '#93c5fd', marginBottom: 6 }}>
-          ⚡ Automatic Payment Verification
+           Automatic Payment Verification
         </div>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.7 }}>
-          Connect your <strong style={{ color: '#dbeafe' }}>Paytm Business MID</strong> to enable automatic payment confirmation.
-          When a customer pays, your gateway checks Paytm every 5 seconds and marks the payment as paid automatically — no manual action needed.
+          Connect your <strong style={{ color: '#dbeafe' }}>Paytm Business MID</strong> or <strong style={{ color: '#dbeafe' }}>PhonePe Business PG credentials</strong> to enable automatic payment confirmation.
+          When a customer pays, your gateway checks every 5 seconds and marks the payment as paid automatically.
         </div>
         <div style={{ marginTop: 10, fontSize: 12, color: '#64748b' }}>
-          Find your MID: Paytm Business App → Settings → Business Profile → Merchant ID
+          Paytm MID: Paytm Business App → Settings → Business Profile → Merchant ID &nbsp;|&nbsp;
+          PhonePe: business.phonepe.com → API &amp; Plugin → Merchant ID / Salt Key
         </div>
       </div>
 
@@ -131,7 +153,7 @@ export default function ConnectMerchantPage() {
         <div style={{ textAlign: 'center' as const, padding: 40, color: '#4b5563' }}>Loading…</div>
       ) : upis.length === 0 ? (
         <div style={{ background: '#0f1d35', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: 40, textAlign: 'center' as const, color: '#4b5563' }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>🔗</div>
+          <div style={{ fontSize: 32, marginBottom: 10 }}></div>
           <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 700, color: '#dbeafe', marginBottom: 6 }}>No UPI IDs yet</div>
           <div style={{ fontSize: 13 }}>Add a UPI ID above to start accepting payments</div>
         </div>
@@ -147,7 +169,7 @@ export default function ConnectMerchantPage() {
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {upi.paytm_enabled && (
                     <span style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 100 }}>
-                      ⚡ Auto-Verify ON
+                       Auto-Verify ON
                     </span>
                   )}
                   <span style={{ background: upi.is_active ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: upi.is_active ? '#10b981' : '#ef4444', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 100 }}>
@@ -180,6 +202,23 @@ export default function ConnectMerchantPage() {
                   >
                     {savingMID === upi.id ? 'Saving…' : upi.paytm_enabled ? 'Update MID' : 'Enable Auto-Verify'}
                   </button>
+                </div>
+              </div>
+
+              {/* PhonePe PG section — Coming Soon */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16, marginTop: 16, position: 'relative' }}>
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(7,13,27,0.65)', backdropFilter: 'blur(3px)', borderRadius: 10, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#a78bfa', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.3)', padding: '4px 12px', borderRadius: 100 }}>Coming Soon</span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>PhonePe PG integration is under development</span>
+                </div>
+                <label style={{ ...lbl, marginBottom: 8, opacity: 0.3 }}>
+                  <span style={{ color: '#a78bfa' }}>PhonePe</span> Business PG
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto auto', gap: 8, alignItems: 'center', opacity: 0.3 }}>
+                  <input style={inp} placeholder="Merchant ID" disabled />
+                  <input style={inp} placeholder="Salt Key" disabled />
+                  <input style={{ ...inp, width: 64 }} placeholder="Idx" disabled />
+                  <button disabled style={{ background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: 10, padding: '11px 18px', color: '#fff', fontSize: 13, fontWeight: 700 }}>Enable</button>
                 </div>
               </div>
             </div>

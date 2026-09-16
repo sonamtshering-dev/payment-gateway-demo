@@ -401,7 +401,7 @@ func (s *Service) settleParentOrder(ctx context.Context, cp *models.CryptoPaymen
 	payment, err := s.repo.GetPaymentByID(ctx, cp.PaymentID)
 	if err == nil && payment != nil {
 		go s.dispatchWebhook(context.Background(), payment, txHash)
-		s.notifyTelegramPaymentReceived(context.Background(), payment.MerchantID, payment.OrderID, payment.Amount)
+		s.notifyTelegramPaymentReceived(context.Background(), payment.MerchantID, payment.OrderID, txHash, payment.Amount)
 	}
 }
 

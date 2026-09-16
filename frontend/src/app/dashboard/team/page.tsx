@@ -129,9 +129,10 @@ export default function TeamPage() {
           <UserPlus size={15} color="#2563EB" />
           <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Invite a team member</div>
         </div>
-        <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 14 }}>They&apos;ll get an email with a link to set their password. Invites expire in 72 hours.</div>
+        <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 14 }}>Enter their email and role. After inviting, you&apos;ll get a Telegram link to share with them — when they tap it, the bot sends their activation link directly in Telegram.</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="teammate@company.com"
+            onKeyDown={e => e.key === 'Enter' && invite()}
             style={{ flex: 2, minWidth: 200, padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, fontFamily: 'inherit', color: '#0F172A', outline: 'none' }} />
           <select className="tm-select" value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ flex: 1, minWidth: 110 }}>
             <option value="viewer">Viewer — read only</option>
@@ -158,28 +159,28 @@ export default function TeamPage() {
 
       {/* Telegram invite link — shown after a successful invite */}
       {lastTgLink && (
-        <div className="tm-card" style={{ padding:'16px 20px', background:'#F0F9FF', border:'1px solid #BAE6FD' }}>
-          <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
-            <div style={{ width:36, height:36, borderRadius:10, background:'#0088cc', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+        <div className="tm-card" style={{ padding: '20px 22px', background: 'linear-gradient(135deg,#0f172a 0%,#0c2340 100%)', border: '1px solid #1e3a5f' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: '#0088cc', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,136,204,.4)' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
             </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:13, fontWeight:700, color:'#0369A1', marginBottom:3 }}>Share via Telegram</div>
-              <div style={{ fontSize:12, color:'#0284C7', lineHeight:1.5, marginBottom:10 }}>
-                The invite email was sent. You can also share this Telegram link — when the invitee taps it, the bot will send them the activation link directly.
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', marginBottom: 4 }}>Share invite via Telegram</div>
+              <div style={{ fontSize: 12.5, color: '#94A3B8', lineHeight: 1.6, marginBottom: 14 }}>
+                Send this link to <b style={{ color: '#CBD5E1' }}>your team member</b>. When they tap it in any chat, the NovaPay bot will send their activation link directly to their Telegram.
               </div>
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <a href={lastTgLink} target="_blank" rel="noreferrer"
-                  style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 16px', borderRadius:8, background:'#0088cc', color:'#fff', fontSize:12.5, fontWeight:700, textDecoration:'none' }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 20px', borderRadius: 10, background: '#0088cc', color: '#fff', fontSize: 13, fontWeight: 700, textDecoration: 'none', boxShadow: '0 2px 10px rgba(0,136,204,.4)' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
                   Open in Telegram
                 </a>
                 <button onClick={() => { navigator.clipboard.writeText(lastTgLink); notify('Link copied'); }}
-                  style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px', borderRadius:8, border:'1.5px solid #BAE6FD', background:'#fff', color:'#0369A1', fontSize:12.5, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, border: '1.5px solid #334155', background: 'rgba(255,255,255,0.06)', color: '#CBD5E1', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                   Copy link
                 </button>
                 <button onClick={() => setLastTgLink('')}
-                  style={{ marginLeft:'auto', background:'none', border:'none', color:'#94A3B8', fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#475569', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
                   Dismiss
                 </button>
               </div>

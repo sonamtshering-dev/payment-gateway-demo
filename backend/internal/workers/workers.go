@@ -58,6 +58,8 @@ func (w *Worker) StartWithWaitGroup(ctx context.Context, wg *sync.WaitGroup) {
 	wg.Add(1)
 	go func() { defer wg.Done(); w.paytmVerificationWorker(ctx) }()
 	wg.Add(1)
+	go func() { defer wg.Done(); w.phonePeVerificationWorker(ctx) }()
+	wg.Add(1)
 	go func() { defer wg.Done(); w.subscriptionReminderWorker(ctx) }()
 	wg.Add(3)
 	go func() { defer wg.Done(); w.telegramDispatchWorker(ctx) }()
@@ -137,7 +139,14 @@ func (w *Worker) deliverWebhook(ctx context.Context, payload models.WebhookPaylo
 		return
 	}
 
-	payloadBytes, _ := json.Marshal(payload)
+	// Build outgoing payload without internal retry fields
+	outPayload := models.WebhookPayload{
+		PaymentID: payload.PaymentID, OrderID: payload.OrderID,
+		Amount: payload.Amount, Currency: payload.Currency,
+		Status: payload.Status, UTR: payload.UTR,
+		Timestamp: payload.Timestamp, Signature: payload.Signature,
+	}
+	payloadBytes, _ := json.Marshal(outPayload)
 	signature := utils.ComputeWebhookSignature(merchant.WebhookSecret, payloadBytes)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", merchant.WebhookURL, bytes.NewReader(payloadBytes))
@@ -164,6 +173,29 @@ func (w *Worker) deliverWebhook(ctx context.Context, payload models.WebhookPaylo
 		success = resp.StatusCode >= 200 && resp.StatusCode < 300
 	}
 
+	isRetry := payload.DeliveryID != ""
+	attempt := payload.Attempt
+	if attempt < 1 {
+		attempt = 1
+	}
+
+	if isRetry {
+		// Update the existing delivery record — do NOT create a new one
+		deliveryID, parseErr := uuid.Parse(payload.DeliveryID)
+		if parseErr == nil {
+			if success {
+				w.repo.UpdateWebhookDelivery(ctx, deliveryID, responseCode, responseBody, true, nil)
+				log.Info().Str("payment_id", payload.PaymentID).Int("attempt", attempt).Msg("Webhook delivered on retry")
+			} else {
+				nextRetry := time.Now().Add(time.Duration(1<<uint(attempt)) * time.Minute)
+				w.repo.UpdateWebhookDelivery(ctx, deliveryID, responseCode, responseBody, false, &nextRetry)
+				log.Warn().Str("payment_id", payload.PaymentID).Int("status", responseCode).Int("attempt", attempt).Msg("Webhook retry failed")
+			}
+		}
+		return
+	}
+
+	// First attempt — create a new delivery record
 	if !success {
 		nextRetry := time.Now().Add(2 * time.Minute)
 		w.repo.CreateWebhookDelivery(ctx, &models.WebhookDelivery{
@@ -201,15 +233,25 @@ func (w *Worker) webhookRetryWorker(ctx context.Context) {
 			for _, d := range deliveries {
 				nextAttempt := d.Attempt + 1
 				if nextAttempt > 5 {
+					// Mark permanently failed — set next_retry_at to NULL so it won't be picked up again
+					w.repo.UpdateWebhookDelivery(ctx, d.ID, d.ResponseCode, d.ResponseBody, false, nil)
 					log.Warn().Str("delivery_id", d.ID.String()).Msg("Webhook max retries reached, giving up")
 					w.enqueueTelegramForMerchant(ctx, d.MerchantID, services.TGNotifWebhookFailure,
 						services.FormatWebhookFailure(d.URL))
 					continue
 				}
-				backoff := time.Duration(1<<uint(nextAttempt)) * time.Minute
-				nextRetry := time.Now().Add(backoff)
-				w.repo.UpdateWebhookDelivery(ctx, d.ID, d.ResponseCode, d.ResponseBody, false, &nextRetry)
-				w.redis.LPush(ctx, "webhook:queue", d.Payload)
+				// Inject delivery ID and attempt into the payload so deliverWebhook updates instead of creating a new row
+				var p models.WebhookPayload
+				if err := json.Unmarshal([]byte(d.Payload), &p); err != nil {
+					log.Error().Err(err).Str("delivery_id", d.ID.String()).Msg("Failed to unmarshal webhook payload for retry")
+					continue
+				}
+				p.DeliveryID = d.ID.String()
+				p.Attempt = nextAttempt
+				// Update attempt counter before dispatching
+				w.repo.UpdateWebhookDelivery(ctx, d.ID, d.ResponseCode, d.ResponseBody, false, nil)
+				retryBytes, _ := json.Marshal(p)
+				w.redis.LPush(ctx, "webhook:queue", string(retryBytes))
 			}
 			if len(deliveries) > 0 {
 				log.Info().Int("count", len(deliveries)).Msg("Re-queued webhook retries")
@@ -218,7 +260,24 @@ func (w *Worker) webhookRetryWorker(ctx context.Context) {
 	}
 }
 
+func (w *Worker) runExpireSubscriptions(ctx context.Context) {
+	expired, err := w.repo.ExpireSubscriptions(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Error expiring subscriptions")
+		return
+	}
+	if len(expired) > 0 {
+		log.Info().Int("count", len(expired)).Msg("Expired subscriptions")
+		for _, em := range expired {
+			w.enqueueTelegramForMerchant(ctx, em.MerchantID, services.TGNotifSubscriptionExpired,
+				services.FormatSubscriptionExpired(em.PlanName))
+		}
+	}
+}
+
 func (w *Worker) subscriptionExpiryWorker(ctx context.Context) {
+	// Run once immediately on startup so expired subs are caught even after a restart
+	w.runExpireSubscriptions(ctx)
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 	for {
@@ -227,14 +286,7 @@ func (w *Worker) subscriptionExpiryWorker(ctx context.Context) {
 			log.Info().Msg("Subscription expiry worker stopped")
 			return
 		case <-ticker.C:
-			expired, err := w.repo.ExpireSubscriptions(ctx)
-			if err != nil {
-				log.Error().Err(err).Msg("Error expiring subscriptions")
-				continue
-			}
-			if expired > 0 {
-				log.Info().Int64("count", expired).Msg("Expired subscriptions")
-			}
+			w.runExpireSubscriptions(ctx)
 		}
 	}
 }

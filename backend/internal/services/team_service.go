@@ -243,7 +243,7 @@ func (s *Service) VerifyLoginOTP(ctx context.Context, email, code string) (*mode
 	attemptsKey := "otp:verify:attempts:" + email
 	if n, _ := s.redis.Incr(ctx, attemptsKey).Result(); n == 1 {
 		s.redis.Expire(ctx, attemptsKey, 10*time.Minute)
-	} else if n > 5 {
+	} else if n >= 5 {
 		s.redis.Del(ctx, "otp:login:"+email)
 		return nil, fmt.Errorf("too many wrong codes — request a new one")
 	}

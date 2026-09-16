@@ -222,3 +222,11 @@ func GenerateUPILinkWithRef(upiID, merchantName string, amount int64, orderID, t
 		upiID, merchantName, amountStr, orderID, txnRef,
 	)
 }
+
+// GenPhonePeChecksum builds the X-VERIFY header value for PhonePe PG status API.
+// spec: SHA256(urlPath + saltKey) + "###" + saltIndex
+func GenPhonePeChecksum(urlPath, saltKey, saltIndex string) string {
+	payload := urlPath + saltKey
+	sum := sha256.Sum256([]byte(payload))
+	return fmt.Sprintf("%x###%s", sum, saltIndex)
+}

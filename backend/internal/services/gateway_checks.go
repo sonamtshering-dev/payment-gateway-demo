@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -22,15 +23,26 @@ func (s *Service) CheckMerchantGating(ctx context.Context, merchantID uuid.UUID)
 		return fmt.Errorf("KYC_REQUIRED: KYC verification is %s. Please complete KYC to use the gateway", status)
 	}
 
-	// Check active subscription
+	// Check active subscription or trial
 	sub, err := s.repo.GetMerchantSubscription(ctx, merchantID)
 	if err != nil {
 		return fmt.Errorf("failed to check subscription")
 	}
-	if sub == nil || sub.Status != "active" {
-		if sub != nil && sub.Status == "expired" {
-			return fmt.Errorf("SUBSCRIPTION_EXPIRED: Your subscription has expired. Please renew to continue using the gateway")
+	if sub == nil {
+		return fmt.Errorf("SUBSCRIPTION_REQUIRED: No active subscription found. Please purchase a plan to use the gateway")
+	}
+	// Real-time expiry check regardless of what the DB status says
+	// (worker runs hourly, so status may lag behind the actual expiry time)
+	if sub.ExpiresAt != nil && time.Now().After(*sub.ExpiresAt) {
+		if sub.Status == "trial" {
+			return fmt.Errorf("TRIAL_EXPIRED: Your 2-day free trial has ended. Please purchase a plan to continue using the gateway")
 		}
+		return fmt.Errorf("SUBSCRIPTION_EXPIRED: Your subscription has expired. Please renew to continue using the gateway")
+	}
+	if sub.Status == "expired" {
+		return fmt.Errorf("SUBSCRIPTION_EXPIRED: Your subscription has expired. Please renew to continue using the gateway")
+	}
+	if sub.Status != "active" && sub.Status != "trial" {
 		return fmt.Errorf("SUBSCRIPTION_REQUIRED: No active subscription found. Please purchase a plan to use the gateway")
 	}
 

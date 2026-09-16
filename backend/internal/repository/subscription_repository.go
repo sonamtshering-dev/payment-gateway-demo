@@ -20,7 +20,7 @@ func (r *Repository) GetMerchantSubscription(ctx context.Context, merchantID uui
 	var sub MerchantSubscription
 	err := r.db.QueryRow(ctx, `
 		SELECT id, merchant_id, plan_id, status, started_at, expires_at
-		FROM merchant_subscriptions WHERE merchant_id=$1 AND status IN ('active','expired')
+		FROM merchant_subscriptions WHERE merchant_id=$1 AND status IN ('active','trial','expired')
 		ORDER BY created_at DESC LIMIT 1
 	`, merchantID).Scan(&sub.ID, &sub.MerchantID, &sub.PlanID, &sub.Status, &sub.StartedAt, &sub.ExpiresAt)
 	if err != nil {
@@ -32,7 +32,7 @@ func (r *Repository) GetMerchantSubscription(ctx context.Context, merchantID uui
 func (r *Repository) UpsertMerchantSubscription(ctx context.Context, sub *MerchantSubscription) error {
 	_, err := r.db.Exec(ctx, `
 		UPDATE merchant_subscriptions SET status='cancelled', updated_at=NOW()
-		WHERE merchant_id=$1 AND status='active'
+		WHERE merchant_id=$1 AND status IN ('active','trial')
 	`, sub.MerchantID)
 	if err != nil {
 		return err
@@ -52,18 +52,35 @@ func (r *Repository) CancelMerchantSubscription(ctx context.Context, merchantID 
 	return err
 }
 
-func (r *Repository) ExpireSubscriptions(ctx context.Context) (int64, error) {
-	result, err := r.db.Exec(ctx, `
-		UPDATE merchant_subscriptions 
+// ExpiredMerchant holds data returned by ExpireSubscriptions for notification purposes.
+type ExpiredMerchant struct {
+	MerchantID uuid.UUID
+	PlanName   string
+}
+
+func (r *Repository) ExpireSubscriptions(ctx context.Context) ([]ExpiredMerchant, error) {
+	rows, err := r.db.Query(ctx, `
+		UPDATE merchant_subscriptions ms
 		SET status='expired', updated_at=NOW()
-		WHERE status='active' 
-		AND expires_at IS NOT NULL 
-		AND expires_at < NOW()
+		FROM plans p
+		WHERE ms.plan_id = p.id
+		  AND ms.status IN ('active','trial')
+		  AND ms.expires_at IS NOT NULL
+		  AND ms.expires_at < NOW()
+		RETURNING ms.merchant_id, p.name
 	`)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	var out []ExpiredMerchant
+	for rows.Next() {
+		var em ExpiredMerchant
+		if err := rows.Scan(&em.MerchantID, &em.PlanName); err == nil {
+			out = append(out, em)
+		}
+	}
+	return out, nil
 }
 
 // GetMerchantUsage returns usage counters for the current billing period.
@@ -91,7 +108,7 @@ func (r *Repository) GetMerchantUsage(ctx context.Context, merchantID uuid.UUID,
 func (r *Repository) UpdateSubscriptionStatus(ctx context.Context, merchantID uuid.UUID, status string) error {
 	_, err := r.db.Exec(ctx, `
 		UPDATE merchant_subscriptions SET status=$1, updated_at=NOW()
-		WHERE merchant_id=$2 AND status IN ('active','expired','cancelled')
+		WHERE merchant_id=$2 AND status IN ('active','trial','expired','cancelled')
 		AND id = (SELECT id FROM merchant_subscriptions WHERE merchant_id=$2 ORDER BY created_at DESC LIMIT 1)
 	`, status, merchantID)
 	return err

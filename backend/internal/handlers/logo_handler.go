@@ -6,12 +6,15 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/upay/gateway/internal/models"
 )
+
+var hexColorRe = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
 func (h *Handler) UploadMerchantLogo(c *gin.Context) {
 	merchantID := c.MustGet("merchant_id").(uuid.UUID)
@@ -85,4 +88,25 @@ func (h *Handler) UpdateBusinessName(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "business name updated"})
+}
+
+func (h *Handler) UpdateBranding(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
+	var req struct {
+		BusinessName string `json:"business_name"`
+		PrimaryColor string `json:"primary_color"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	if req.PrimaryColor != "" && !hexColorRe.MatchString(req.PrimaryColor) {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "primary_color must be a valid hex color (e.g. #1D4ED8)"})
+		return
+	}
+	if err := h.service.UpdateBranding(c.Request.Context(), merchantID, req.BusinessName, req.PrimaryColor); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "branding updated"})
 }

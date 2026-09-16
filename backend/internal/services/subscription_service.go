@@ -34,15 +34,27 @@ func (s *Service) CreateSubscription(ctx context.Context, merchantID, planID uui
 		ID:         utils.NewID(),
 		MerchantID: merchantID,
 		PlanID:     planID,
-		Status:     "active",
 		StartedAt:  time.Now(),
 	}
-	if plan.BillingCycle == "per month" {
-		exp := time.Now().AddDate(0, 1, 0)
-		sub.ExpiresAt = &exp
-	} else if plan.BillingCycle == "per year" {
-		exp := time.Now().AddDate(1, 0, 0)
-		sub.ExpiresAt = &exp
+	// Free plan with no prior subscription → start a 2-day trial
+	if plan.Price == 0 {
+		existing, _ := s.repo.GetMerchantSubscription(ctx, merchantID)
+		if existing == nil {
+			exp := time.Now().Add(48 * time.Hour)
+			sub.Status = "trial"
+			sub.ExpiresAt = &exp
+		} else {
+			sub.Status = "active"
+		}
+	} else {
+		sub.Status = "active"
+		if plan.BillingCycle == "per month" {
+			exp := time.Now().AddDate(0, 1, 0)
+			sub.ExpiresAt = &exp
+		} else if plan.BillingCycle == "per year" {
+			exp := time.Now().AddDate(1, 0, 0)
+			sub.ExpiresAt = &exp
+		}
 	}
 	if err := s.repo.UpsertMerchantSubscription(ctx, sub); err != nil {
 		return nil, fmt.Errorf("failed to save subscription: %w", err)
@@ -59,6 +71,12 @@ func (s *Service) GetSubscriptionWithPlan(ctx context.Context, merchantID uuid.U
 	sub, err := s.repo.GetMerchantSubscription(ctx, merchantID)
 	if err != nil || sub == nil {
 		return nil, err
+	}
+	// Real-time status override so frontend never shows "active/trial" for an expired subscription
+	if sub.Status != "expired" && sub.Status != "cancelled" {
+		if sub.ExpiresAt != nil && time.Now().After(*sub.ExpiresAt) {
+			sub.Status = "expired"
+		}
 	}
 	plan, err := s.repo.GetPlanByID(ctx, sub.PlanID)
 	if err != nil || plan == nil {
@@ -144,8 +162,8 @@ func (s *Service) CreateSubscriptionPayment(ctx context.Context, merchantID uuid
 }
 
 func (s *Service) AdminUpdateSubscriptionStatus(ctx context.Context, merchantID uuid.UUID, status string) error {
-	if status != "active" && status != "expired" && status != "cancelled" {
-		return fmt.Errorf("invalid status: must be active, expired, or cancelled")
+	if status != "active" && status != "trial" && status != "expired" && status != "cancelled" {
+		return fmt.Errorf("invalid status: must be active, trial, expired, or cancelled")
 	}
 	return s.repo.UpdateSubscriptionStatus(ctx, merchantID, status)
 }
@@ -155,10 +173,20 @@ func (s *Service) AdminChangeMerchantPlan(ctx context.Context, merchantID uuid.U
 	if err != nil || plan == nil {
 		return fmt.Errorf("plan not found")
 	}
+	// Preserve existing future expiry unless admin explicitly specifies a duration
+	existingSub, _ := s.repo.GetMerchantSubscription(ctx, merchantID)
 	var expiresAt *time.Time
 	if durationDays > 0 {
-		exp := time.Now().AddDate(0, 0, durationDays)
+		// Admin explicitly requested X days extension from current expiry (or now)
+		base := time.Now()
+		if existingSub != nil && existingSub.ExpiresAt != nil && existingSub.ExpiresAt.After(time.Now()) {
+			base = *existingSub.ExpiresAt
+		}
+		exp := base.AddDate(0, 0, durationDays)
 		expiresAt = &exp
+	} else if existingSub != nil && existingSub.ExpiresAt != nil && existingSub.ExpiresAt.After(time.Now()) {
+		// Keep the merchant's existing expiry when just switching plans
+		expiresAt = existingSub.ExpiresAt
 	} else if plan.BillingCycle == "per month" {
 		exp := time.Now().AddDate(0, 1, 0)
 		expiresAt = &exp

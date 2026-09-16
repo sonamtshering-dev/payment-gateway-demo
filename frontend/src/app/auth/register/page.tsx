@@ -94,7 +94,11 @@ export default function RegisterPage() {
             <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', marginBottom: 6, letterSpacing: -.5 }}>
               Create Your <span style={{ color: '#2563EB' }}>Account</span>
             </h1>
-            <p style={{ fontSize: 14, color: '#64748B', marginBottom: 24 }}>Join NovaPay and start accepting payments for free</p>
+            <p style={{ fontSize: 14, color: '#64748B', marginBottom: 16 }}>Join NovaPay and start accepting payments</p>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 8, padding: '6px 12px', marginBottom: 20 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#EA580C" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#C2410C' }}>2-day free trial — no card required</span>
+            </div>
 
             {error && (
               <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '11px 14px', color: '#DC2626', fontSize: 13, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -124,7 +128,7 @@ export default function RegisterPage() {
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Phone Number</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', border: '1.5px solid #E2E8F0', borderRadius: 10, background: '#FAFAFA', flexShrink: 0, fontSize: 14, color: '#0F172A', fontWeight: 600, whiteSpace: 'nowrap' as const }}>
-                    🇮🇳 +91
+                     +91
                   </div>
                   <input className="auth-inp" style={{ ...inp, flex: 1 }} type="tel" placeholder="10-digit number" value={form.phone} onChange={e => set('phone', e.target.value.replace(/\D/g, ''))} maxLength={10} />
                 </div>
@@ -204,7 +208,7 @@ export default function RegisterPage() {
             Join 500+ merchants using NovaPay to collect UPI payments at zero fees.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8, width: '100%' }}>
-            {[['⚡','Instant UPI settlement'],['🛡️','Bank-grade security'],['📊','Real-time analytics'],['💰','0% transaction fee']].map(([icon, text]) => (
+            {[['','Instant UPI settlement'],['','Bank-grade security'],['','Real-time analytics'],['','0% transaction fee']].map(([icon, text]) => (
               <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,.1)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'rgba(255,255,255,.9)', fontWeight: 500 }}>
                 {icon} {text}
               </div>

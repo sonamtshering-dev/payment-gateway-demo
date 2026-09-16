@@ -57,9 +57,20 @@ func (s *Service) ConnectProvider(ctx context.Context, merchantID uuid.UUID, req
 		Priority:   len(existing),
 	}
 	s.repo.AddMerchantUPI(ctx, upi)
-	// Sync Paytm MID into merchant_upis so the Paytm worker can find it
-	if req.MerchantMID != "" {
+	// Sync Paytm MID so the Paytm worker can auto-verify
+	if req.Provider == "paytm" && req.MerchantMID != "" {
 		s.repo.SavePaytmMID(ctx, merchantID, req.UPIID, req.MerchantMID)
+	}
+	// Sync PhonePe credentials so the PhonePe worker can auto-verify
+	if req.Provider == "phonepe" && req.MerchantMID != "" && req.PhonePeSaltKey != "" {
+		saltIndex := req.PhonePeSaltIndex
+		if saltIndex == "" {
+			saltIndex = "1"
+		}
+		encSalt, err := utils.Encrypt(req.PhonePeSaltKey, s.config.Security.EncryptionKey)
+		if err == nil {
+			s.repo.SavePhonePeConfig(ctx, merchantID, req.MerchantMID, encSalt, saltIndex)
+		}
 	}
 	if len(req.UPIID) > 7 {
 		p.UPIID = req.UPIID[:3] + "****" + req.UPIID[len(req.UPIID)-4:]

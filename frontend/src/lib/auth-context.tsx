@@ -31,6 +31,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearSession = useCallback(() => {
     localStorage.removeItem('upay_access_token');
     localStorage.removeItem('upay_refresh_token');
+    localStorage.removeItem('merchant_logo_url');
+    localStorage.removeItem('merchant_primary_color');
     api.clearToken();
     setMerchant(null);
   }, []);

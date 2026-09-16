@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   LayoutDashboard, Users, CreditCard, ShieldAlert, Webhook,
   BadgeCheck, Package, LogOut, RefreshCw, Search,
@@ -25,7 +25,7 @@ const toArr    = (v: any): any[] => Array.isArray(v) ? v : [];
 const pct      = (n: number) => `${(n||0).toFixed(1)}%`;
 const num      = (n: number) => (n||0).toLocaleString('en-IN');
 
-type Section = 'dashboard'|'merchants'|'payments'|'kyc'|'fraud'|'webhooks'|'subscriptions'|'plans'|'audit';
+type Section = 'dashboard'|'merchants'|'payments'|'kyc'|'fraud'|'webhooks'|'subscriptions'|'plans'|'audit'|'tickets';
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
 const C = {
@@ -245,10 +245,11 @@ export default function AdminPage() {
       { id:'fraud'        as Section, label:'Fraud Alerts',  icon:<ShieldAlert size={16}/> },
     ]},
     { label: 'Infrastructure', items: [
-      { id:'webhooks'     as Section, label:'Webhooks',      icon:<Webhook size={16}/> },
-      { id:'subscriptions'as Section, label:'Subscriptions', icon:<Star size={16}/> },
-      { id:'plans'        as Section, label:'Plans',         icon:<Package size={16}/> },
-      { id:'audit'        as Section, label:'Audit Logs',    icon:<FileText size={16}/> },
+      { id:'webhooks'     as Section, label:'Webhooks',          icon:<Webhook size={16}/> },
+      { id:'subscriptions'as Section, label:'Subscriptions',     icon:<Star size={16}/> },
+      { id:'plans'        as Section, label:'Plans',             icon:<Package size={16}/> },
+      { id:'audit'        as Section, label:'Audit Logs',        icon:<FileText size={16}/> },
+      { id:'tickets'      as Section, label:'Support Tickets',   icon:<Bell size={16}/> },
     ]},
   ];
 
@@ -314,15 +315,16 @@ export default function AdminPage() {
         </header>
 
         <main style={{flex:1,overflowY:'auto',padding:24}}>
-          {section==='dashboard'     && <DashboardSection api={api} flash={flash}/>}
-          {section==='merchants'     && <MerchantsSection api={api} flash={flash}/>}
-          {section==='payments'      && <PaymentsSection  api={api} flash={flash}/>}
-          {section==='kyc'           && <KYCSection       api={api} flash={flash}/>}
-          {section==='fraud'         && <FraudSection     api={api} flash={flash}/>}
-          {section==='webhooks'      && <WebhooksSection  api={api} flash={flash}/>}
-          {section==='subscriptions' && <SubsSection      api={api} flash={flash}/>}
-          {section==='plans'         && <PlansSection     api={api} flash={flash}/>}
-          {section==='audit'         && <AuditSection     api={api} flash={flash}/>}
+          {section==='dashboard'     && <DashboardSection   api={api} flash={flash}/>}
+          {section==='merchants'     && <MerchantsSection   api={api} flash={flash}/>}
+          {section==='payments'      && <PaymentsSection    api={api} flash={flash}/>}
+          {section==='kyc'           && <KYCSection         api={api} flash={flash}/>}
+          {section==='fraud'         && <FraudSection       api={api} flash={flash}/>}
+          {section==='webhooks'      && <WebhooksSection    api={api} flash={flash}/>}
+          {section==='subscriptions' && <SubsSection        api={api} flash={flash}/>}
+          {section==='plans'         && <PlansSection       api={api} flash={flash}/>}
+          {section==='audit'         && <AuditSection       api={api} flash={flash}/>}
+          {section==='tickets'       && <TicketsSection     api={api} flash={flash}/>}
         </main>
       </div>
 
@@ -353,7 +355,7 @@ function DashboardSection({ api, flash }: any) {
       if (t?.success) setTop(toArr(t.data));
     } catch(e:any) { flash(e.message,'err'); }
     setLoading(false);
-  }, [api, flash]);
+  }, []); // api/flash are never reassigned, no exhaustive-deps needed
 
   useEffect(() => { load(); }, [load]);
 
@@ -487,7 +489,7 @@ function MerchantsSection({ api, flash }: any) {
       }
     } catch(e:any) { flash(e.message,'err'); }
     setLoading(false);
-  }, [api, flash, page]);
+  }, [page]); // eslint-disable-next-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
 
@@ -680,7 +682,7 @@ function PaymentsSection({ api, flash }: any) {
       if (d?.success) { setPayments(toArr(d.data?.data)); setTotal(d.data?.total||0); }
     } catch(e:any) { flash(e.message,'err'); }
     setLoading(false);
-  }, [api, flash, page, status, search]);
+  }, [page, status, search]); // api/flash are stable
 
   useEffect(() => { load(); }, [load]);
 
@@ -779,7 +781,7 @@ function KYCSection({ api, flash }: any) {
       if (d?.success) setKycs(toArr(d.data));
     } catch(e:any) { flash(e.message,'err'); }
     setLoading(false);
-  }, [api, flash]);
+  }, []); // api/flash are stable
 
   useEffect(() => { load(); }, [load]);
 
@@ -875,7 +877,7 @@ function FraudSection({ api, flash }: any) {
       }
     } catch { setAlerts([]); }
     setLoading(false);
-  }, [api, page, severity, showResolved]);
+  }, [page, severity, showResolved]); // api is stable
 
   useEffect(() => { load(); }, [load]);
 
@@ -954,7 +956,7 @@ function WebhooksSection({ api, flash }: any) {
       if (d?.success) { setLogs(toArr(d.data?.data)); setTotal(d.data?.total||0); }
     } catch(e:any) { flash(e.message,'err'); }
     setLoading(false);
-  }, [api, flash, page]);
+  }, [page]); // api/flash are stable
 
   useEffect(() => { load(); }, [load]);
 
@@ -1018,9 +1020,21 @@ function SubsSection({ api, flash }: any) {
   const [extModal, setExtModal] = useState<any>(null);
   const [planModal, setPlanModal] = useState<any>(null);
   const [days, setDays]         = useState('30');
+  const [expiryDate, setExpiryDate] = useState('');
   const [plans, setPlans]       = useState<any[]>([]);
   const [selPlan, setSelPlan]   = useState('');
   const [saving, setSaving]     = useState(false);
+
+  const toDateInput = (iso?: string) => {
+    if (!iso) return '';
+    return new Date(iso).toISOString().split('T')[0];
+  };
+  const addDays = (d: number) => {
+    const base = extModal?.expires_at && new Date(extModal.expires_at) > new Date()
+      ? new Date(extModal.expires_at) : new Date();
+    base.setDate(base.getDate() + d);
+    setExpiryDate(base.toISOString().split('T')[0]);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1033,15 +1047,18 @@ function SubsSection({ api, flash }: any) {
       if (p?.success) setPlans(toArr(p.data));
     } catch(e:any) { flash(e.message,'err'); }
     setLoading(false);
-  }, [api, flash, page]);
+  }, [page]); // api/flash are stable
 
   useEffect(() => { load(); }, [load]);
 
   const extend = async () => {
     setSaving(true);
     try {
-      await api(`/api/v1/admin/subscriptions/${extModal.merchant_id}/extend`,{method:'POST',body:JSON.stringify({days:parseInt(days)})});
-      flash(`Extended by ${days} days`); setExtModal(null); load();
+      await api(`/api/v1/admin/subscriptions/${extModal.merchant_id}/extend`,{method:'POST',body:JSON.stringify({expires_at:expiryDate})});
+      if (selPlan) {
+        await api(`/api/v1/admin/subscriptions/${extModal.merchant_id}/plan`,{method:'PUT',body:JSON.stringify({plan_id:selPlan,duration_days:0})});
+      }
+      flash('Subscription updated'); setExtModal(null); load();
     } catch(e:any) { flash(e.message,'err'); }
     setSaving(false);
   };
@@ -1050,7 +1067,7 @@ function SubsSection({ api, flash }: any) {
     if (!selPlan) { flash('Select a plan','err'); return; }
     setSaving(true);
     try {
-      await api(`/api/v1/admin/subscriptions/${planModal.merchant_id}/plan`,{method:'PUT',body:JSON.stringify({plan_id:selPlan,duration_days:30})});
+      await api(`/api/v1/admin/subscriptions/${planModal.merchant_id}/plan`,{method:'PUT',body:JSON.stringify({plan_id:selPlan,duration_days:0})});
       flash('Plan updated'); setPlanModal(null); load();
     } catch(e:any) { flash(e.message,'err'); }
     setSaving(false);
@@ -1060,8 +1077,7 @@ function SubsSection({ api, flash }: any) {
     if (!confirm('Cancel this subscription?')) return;
     try {
       await api(`/api/v1/admin/subscriptions/${merchantId}/status`,{method:'PUT',body:JSON.stringify({status:'cancelled'})});
-      setSubs(ss=>ss.map((s:any)=>s.merchant_id===merchantId?{...s,status:'cancelled'}:s));
-      flash('Subscription cancelled');
+      flash('Subscription cancelled'); load();
     } catch(e:any) { flash(e.message,'err'); }
   };
 
@@ -1090,7 +1106,7 @@ function SubsSection({ api, flash }: any) {
                   <TD>{s.expires_at?dateStr(s.expires_at):'Never'}</TD>
                   <TD>
                     <div style={{display:'flex',gap:4}}>
-                      <Btn onClick={()=>{setExtModal(s);setDays('30');}} variant='ghost' small><Clock size={10}/>Extend</Btn>
+                      <Btn onClick={()=>{ setExtModal(s); setSelPlan(''); const base = s.expires_at && new Date(s.expires_at)>new Date() ? new Date(s.expires_at) : new Date(); base.setDate(base.getDate()+30); setExpiryDate(base.toISOString().split('T')[0]); }} variant='ghost' small><Clock size={10}/>Extend</Btn>
                       <Btn onClick={()=>{setPlanModal(s);setSelPlan('');}} variant='ghost' small><Package size={10}/>Plan</Btn>
                       {s.status==='active'&&<Btn onClick={()=>cancel(s.merchant_id)} variant='danger' small>Cancel</Btn>}
                     </div>
@@ -1104,13 +1120,51 @@ function SubsSection({ api, flash }: any) {
       </div>
 
       {extModal&&(
-        <Modal title={`Extend — ${extModal.merchant_name}`} onClose={()=>setExtModal(null)}>
-          <div style={{marginBottom:14}}>
-            <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Days to Add</label>
-            <input type="number" style={inputStyle} value={days} onChange={e=>setDays(e.target.value)} min="1"/>
+        <Modal title={`Edit Subscription — ${extModal.merchant_name}`} onClose={()=>setExtModal(null)}>
+          {/* Current info */}
+          <div style={{background:'rgba(255,255,255,0.04)',border:`1px solid ${C.border}`,borderRadius:10,padding:'10px 14px',marginBottom:18,fontSize:12,color:C.text3,display:'flex',gap:20,flexWrap:'wrap' as const}}>
+            <span>Plan: <b style={{color:C.blue}}>{extModal.plan_name||'—'}</b></span>
+            <span>Status: <b style={{color:extModal.status==='active'?C.green:C.text3}}>{extModal.status}</b></span>
+            <span>Expires: <b style={{color:C.text}}>{extModal.expires_at ? new Date(extModal.expires_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : 'Never'}</b></span>
           </div>
+
+          {/* Plan selector */}
+          <div style={{marginBottom:16}}>
+            <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:6,textTransform:'uppercase' as const,letterSpacing:'.07em'}}>Change Plan (optional)</label>
+            <select style={inputStyle} value={selPlan} onChange={e=>setSelPlan(e.target.value)}>
+              <option value="">— Keep current plan —</option>
+              {plans.map((p:any)=><option key={p.id} value={p.id}>{p.name} – ₹{(p.price||0)/100}/mo</option>)}
+            </select>
+          </div>
+
+          {/* Expiry date */}
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:6,textTransform:'uppercase' as const,letterSpacing:'.07em'}}>Set Expiry Date</label>
+            <input
+              type="date"
+              style={{...inputStyle, fontFamily:'inherit'}}
+              value={expiryDate}
+              min={new Date().toISOString().split('T')[0]}
+              onChange={e=>setExpiryDate(e.target.value)}
+            />
+          </div>
+
+          {/* Quick presets */}
+          <div style={{display:'flex',gap:6,marginBottom:20,flexWrap:'wrap' as const}}>
+            {[['7d',7],['30d',30],['60d',60],['90d',90],['180d',180],['1yr',365]].map(([label,d])=>(
+              <button key={label as string} onClick={()=>addDays(d as number)} style={{
+                padding:'5px 12px',borderRadius:8,border:`1px solid ${C.border}`,
+                background:'rgba(255,255,255,0.05)',color:C.text2,fontSize:11,fontWeight:700,
+                cursor:'pointer',fontFamily:'inherit',transition:'all .15s'
+              }}
+              onMouseEnter={e=>(e.currentTarget.style.background='rgba(99,102,241,0.15)')}
+              onMouseLeave={e=>(e.currentTarget.style.background='rgba(255,255,255,0.05)')}
+              >+{label as string}</button>
+            ))}
+          </div>
+
           <div style={{display:'flex',gap:8}}>
-            <Btn onClick={extend} loading={saving}><Check size={13}/>Extend Subscription</Btn>
+            <Btn onClick={extend} loading={saving} disabled={!expiryDate}><Check size={13}/>Save Changes</Btn>
             <Btn onClick={()=>setExtModal(null)} variant='ghost'>Cancel</Btn>
           </div>
         </Modal>
@@ -1138,7 +1192,63 @@ function SubsSection({ api, flash }: any) {
 // ════════════════════════════════════════════════════════════════
 // PLANS
 // ════════════════════════════════════════════════════════════════
-const EMPTY_PLAN = {name:'',price:'',billing_cycle:'per month',badge:'',is_featured:false,cta_label:'Get Started',sort_order:0,qr_limit:0,link_limit:0,api_limit:0,discount_6month:15,discount_1year:25,features:''};
+
+const ALL_FEATURES = [
+  { key: 'upi_links',      label: 'UPI Payment Links' },
+  { key: 'qr_codes',       label: 'QR Code Generation' },
+  { key: 'api_access',     label: 'API Access' },
+  { key: 'webhooks',       label: 'Webhook Support' },
+  { key: 'basic_analytics',label: 'Basic Analytics' },
+  { key: 'adv_analytics',  label: 'Advanced Analytics' },
+  { key: 'telegram',       label: 'Telegram Payment Alerts' },
+  { key: 'ai_assistant',   label: 'AI Assistant' },
+  { key: 'team_mgmt',      label: 'Team Management' },
+  { key: 'crypto',         label: 'Crypto / USDT Payments' },
+  { key: 'white_label',    label: 'White-label Branding' },
+  { key: 'priority_support',label:'Priority Support' },
+  { key: 'email_support',  label: 'Email Support' },
+  { key: 'dedicated_infra',label: 'Dedicated Infrastructure' },
+  { key: 'sla',            label: 'SLA Guarantee' },
+  { key: 'account_mgr',    label: 'Dedicated Account Manager' },
+  { key: 'custom_limits',  label: 'Custom Rate Limits' },
+];
+
+const LIMIT_OPTS_QR   = [[-1,'Unlimited'],[10,'10'],[50,'50'],[100,'100'],[500,'500'],[1000,'1,000'],[5000,'5,000']];
+const LIMIT_OPTS_LINK = [[-1,'Unlimited'],[1,'1'],[3,'3'],[5,'5'],[10,'10'],[25,'25'],[50,'50'],[100,'100']];
+const LIMIT_OPTS_API  = [[-1,'Unlimited'],[100,'100/day'],[500,'500/day'],[1000,'1,000/day'],[5000,'5,000/day'],[10000,'10,000/day']];
+const BILLING_OPTS    = ['forever','per month','per year','contact us'];
+const BADGE_OPTS      = ['','Most popular','Best value','New','Enterprise'];
+const CTA_OPTS        = ['Get Started','Start Free Trial','Contact Sales','Upgrade Now','Try for Free'];
+
+const EMPTY_PLAN = {
+  name:'', price:'0', billing_cycle:'per month', badge:'', is_featured:false,
+  cta_label:'Get Started', sort_order:0,
+  qr_limit:-1, link_limit:-1, api_limit:-1, qr_custom:'', link_custom:'', api_custom:'',
+  discount_6month:15, discount_1year:0, price_1year:'0',
+  selected_features: new Set<string>(), custom_features:''
+};
+
+function LimitSelect({ label, value, opts, onChange }: { label:string; value:number; opts:any[][]; onChange:(v:number)=>void }) {
+  const isCustom = !opts.some(([v])=>v===value);
+  return (
+    <div>
+      <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>{label}</label>
+      <select style={inputStyle} value={isCustom?'custom':String(value)}
+        onChange={e => {
+          if (e.target.value==='custom') onChange(0);
+          else onChange(Number(e.target.value));
+        }}>
+        {opts.map(([v,l]:any)=><option key={v} value={String(v)}>{l}</option>)}
+        <option value="custom">Custom…</option>
+      </select>
+      {isCustom && (
+        <input type="number" placeholder="Enter exact limit (-1=unlimited)"
+          style={{...inputStyle,marginTop:6}} value={value===0?'':value}
+          onChange={e=>onChange(parseInt(e.target.value)||0)}/>
+      )}
+    </div>
+  );
+}
 
 function PlansSection({ api, flash }: any) {
   const [plans, setPlans]       = useState<any[]>([]);
@@ -1155,19 +1265,58 @@ function PlansSection({ api, flash }: any) {
       if (d?.success) setPlans(toArr(d.data));
     } catch(e:any) { flash(e.message,'err'); }
     setLoading(false);
-  }, [api, flash]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const openEdit = (p:any) => {
-    setForm({name:p.name||'',price:String((p.price||0)/100),billing_cycle:p.billing_cycle||'per month',badge:p.badge||'',is_featured:p.is_featured||false,cta_label:p.cta_label||'Get Started',sort_order:p.sort_order||0,qr_limit:p.qr_limit||0,link_limit:p.link_limit||0,api_limit:p.api_limit||0,discount_6month:p.discount_6month??15,discount_1year:p.discount_1year??25,features:toArr(p.features).join('\n')});
+    const feats = toArr(p.features);
+    const knownLabels = new Set(ALL_FEATURES.map(f=>f.label));
+    const selKeys = new Set(
+      ALL_FEATURES.filter(f=>feats.includes(f.label)).map(f=>f.key)
+    );
+    const customFeats = feats.filter((f:string)=>!knownLabels.has(f)).join('\n');
+    setForm({
+      name:p.name||'', price:String((p.price||0)/100),
+      billing_cycle:p.billing_cycle||'per month', badge:p.badge||'',
+      is_featured:p.is_featured||false, cta_label:p.cta_label||'Get Started',
+      sort_order:p.sort_order||0,
+      qr_limit:p.qr_limit??-1, link_limit:p.link_limit??-1, api_limit:p.api_limit??-1,
+      discount_6month:p.discount_6month??15, discount_1year:p.discount_1year??0, price_1year:String((p.price_1year||0)/100),
+      selected_features:selKeys, custom_features:customFeats,
+    });
     setModal(p);
   };
 
+  const toggleFeature = (key:string) => {
+    setForm((f:any)=>{
+      const s = new Set(f.selected_features);
+      if (s.has(key)) s.delete(key); else s.add(key);
+      return {...f, selected_features:s};
+    });
+  };
+
+  const pf = (k:string,v:any) => setForm((f:any)=>({...f,[k]:v}));
+
   const save = async () => {
     if (!form.name||!form.cta_label) { flash('Name and CTA label required','err'); return; }
+    const selectedLabels = ALL_FEATURES.filter(f=>form.selected_features.has(f.key)).map(f=>f.label);
+    const customLines = form.custom_features.split('\n').map((s:string)=>s.trim()).filter(Boolean);
+    const features = [...selectedLabels, ...customLines];
     setSaving(true);
-    const body = {name:form.name,price:Math.round(parseFloat(form.price||'0')*100),billing_cycle:form.billing_cycle,badge:form.badge,is_featured:form.is_featured,cta_label:form.cta_label,sort_order:parseInt(form.sort_order)||0,qr_limit:parseInt(form.qr_limit)||0,link_limit:parseInt(form.link_limit)||0,api_limit:parseInt(form.api_limit)||0,discount_6month:parseInt(form.discount_6month)||15,discount_1year:parseInt(form.discount_1year)||25,features:form.features.split('\n').map((f:string)=>f.trim()).filter(Boolean)};
+    const body = {
+      name:form.name, price:Math.round(parseFloat(form.price||'0')*100),
+      billing_cycle:form.billing_cycle, badge:form.badge||'',
+      is_featured:form.is_featured, cta_label:form.cta_label,
+      sort_order:parseInt(form.sort_order)||0,
+      qr_limit:parseInt(form.qr_limit)||0,
+      link_limit:parseInt(form.link_limit)||0,
+      api_limit:parseInt(form.api_limit)||0,
+      discount_6month:parseInt(form.discount_6month)||0,
+      discount_1year:parseInt(form.discount_1year)||0,
+      price_1year:Math.round(parseFloat(form.price_1year||'0')*100),
+      features,
+    };
     try {
       const isEdit = modal!=='new';
       await api(isEdit?`/api/v1/admin/plans/${modal.id}`:'/api/v1/admin/plans',{method:isEdit?'PUT':'POST',body:JSON.stringify(body)});
@@ -1186,30 +1335,45 @@ function PlansSection({ api, flash }: any) {
     setDeleting('');
   };
 
-  const pf = (k:string,v:any) => setForm((f:any)=>({...f,[k]:v}));
+  const fmtLimit = (v:number|null|undefined) => (v==null||v===-1)?'Unlimited':(v||0).toLocaleString('en-IN');
 
   return (
-    <div style={{maxWidth:1000}}>
+    <div style={{maxWidth:1100}}>
       <SectionHeader title="Plans" sub={`${plans.length} plans`} onRefresh={load}>
-        <Btn onClick={()=>{setForm(EMPTY_PLAN);setModal('new');}}><Plus size={13}/>New Plan</Btn>
+        <Btn onClick={()=>{setForm({...EMPTY_PLAN,selected_features:new Set()});setModal('new');}}><Plus size={13}/>New Plan</Btn>
       </SectionHeader>
 
       {loading ? <div style={{textAlign:'center',padding:40}}><Spinner/></div> : (
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:14}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:14}}>
           {plans.map((p:any)=>(
-            <div key={p.id} style={{background:C.card,border:`1px solid ${p.is_featured?C.blue:C.border}`,borderRadius:14,padding:20,position:'relative'}}>
+            <div key={p.id} style={{background:C.card,border:`1px solid ${p.is_featured?C.blue:C.border}`,borderRadius:14,padding:20,position:'relative',display:'flex',flexDirection:'column',gap:10}}>
               {p.is_featured&&<div style={{position:'absolute',top:12,right:12,background:C.blue,color:'#fff',fontSize:9,fontWeight:800,padding:'2px 8px',borderRadius:20,textTransform:'uppercase',letterSpacing:'.08em'}}>Featured</div>}
-              <div style={{fontSize:14,fontWeight:900,marginBottom:4}}>{p.name}</div>
-              <div style={{fontSize:22,fontWeight:900,color:C.blue,letterSpacing:'-.02em'}}>
-                ₹{((p.price||0)/100).toLocaleString('en-IN')}
-                <span style={{fontSize:12,fontWeight:500,color:C.text3}}>/{p.billing_cycle}</span>
+              <div>
+                <div style={{fontSize:15,fontWeight:900,marginBottom:3}}>{p.name}</div>
+                <div style={{fontSize:22,fontWeight:900,color:C.blue,letterSpacing:'-.02em'}}>
+                  {(p.price||0)===0?'Free':'₹'+((p.price||0)/100).toLocaleString('en-IN')}
+                  <span style={{fontSize:12,fontWeight:500,color:C.text3}}>/{p.billing_cycle}</span>
+                </div>
+                {p.badge&&<div style={{marginTop:6}}><Badge val={p.badge}/></div>}
               </div>
-              {p.badge&&<div style={{marginTop:6}}><Badge val={p.badge}/></div>}
-              <div style={{marginTop:10,fontSize:12,color:C.text2}}>
-                {toArr(p.features).slice(0,3).map((f:string,i:number)=><div key={i} style={{marginBottom:3}}>· {f}</div>)}
-                {toArr(p.features).length>3&&<div style={{color:C.text3,fontSize:11}}>+{toArr(p.features).length-3} more</div>}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,borderTop:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,padding:'10px 0'}}>
+                {([['QR Codes',p.qr_limit,'/ period'],['Pay Links',p.link_limit,'active'],['API Calls',p.api_limit,'/ day']] as [string,number,string][]).map(([l,v,unit])=>(
+                  <div key={l} style={{textAlign:'center'}}>
+                    <div style={{fontSize:10,fontWeight:700,color:C.text3,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:4}}>{l}</div>
+                    <div style={{fontSize:16,fontWeight:900,color:v===-1?C.green:C.blue,letterSpacing:'-.02em'}}>{fmtLimit(v)}</div>
+                    <div style={{fontSize:9,color:C.text3,marginTop:1}}>{unit}</div>
+                  </div>
+                ))}
               </div>
-              <div style={{marginTop:12,display:'flex',gap:6}}>
+              <div style={{fontSize:12,color:C.text2}}>
+                {toArr(p.features).slice(0,4).map((f:string,i:number)=>(
+                  <div key={i} style={{marginBottom:2,display:'flex',alignItems:'center',gap:5}}>
+                    <Check size={10} color={C.green}/>{f}
+                  </div>
+                ))}
+                {toArr(p.features).length>4&&<div style={{color:C.text3,fontSize:11,marginTop:2}}>+{toArr(p.features).length-4} more features</div>}
+              </div>
+              <div style={{display:'flex',gap:6,marginTop:'auto'}}>
                 <Btn onClick={()=>openEdit(p)} variant='ghost' small><Pencil size={10}/>Edit</Btn>
                 <Btn onClick={()=>del(p.id)} variant='danger' small loading={deleting===p.id}><Trash2 size={10}/>Delete</Btn>
               </div>
@@ -1220,22 +1384,93 @@ function PlansSection({ api, flash }: any) {
       )}
 
       {modal&&(
-        <Modal title={modal==='new'?'New Plan':`Edit — ${modal.name}`} onClose={()=>setModal(null)} width={580}>
+        <Modal title={modal==='new'?'New Plan':`Edit — ${modal.name}`} onClose={()=>setModal(null)} width={640}>
+          {/* Row 1: Name + Price */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
-            {([['name','Plan Name','text'],['price','Price (₹)','number'],['billing_cycle','Billing Cycle','text'],['cta_label','CTA Label','text'],['badge','Badge (optional)','text'],['sort_order','Sort Order','number'],['qr_limit','QR Limit','number'],['link_limit','Link Limit','number'],['api_limit','API Limit/day','number'],['discount_6month','6-Month Discount %','number'],['discount_1year','1-Year Discount %','number']] as [string,string,string][]).map(([k,l,t])=>(
-              <div key={k}>
-                <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>{l}</label>
-                <input type={t} style={inputStyle} value={form[k]} onChange={e=>pf(k,e.target.value)}/>
-              </div>
-            ))}
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Plan Name</label>
+              <input style={inputStyle} value={form.name} onChange={e=>pf('name',e.target.value)} placeholder="e.g. Starter"/>
+            </div>
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Price (₹) — 0 = Free</label>
+              <input type="number" style={inputStyle} value={form.price} onChange={e=>pf('price',e.target.value)} min="0"/>
+            </div>
           </div>
-          <div style={{marginBottom:12}}>
-            <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Features (one per line)</label>
-            <textarea style={{...inputStyle,minHeight:90,resize:'vertical'}} value={form.features} onChange={e=>pf('features',e.target.value)}/>
+
+          {/* Row 2: Billing + CTA + Badge */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,marginBottom:12}}>
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Billing Cycle</label>
+              <select style={inputStyle} value={form.billing_cycle} onChange={e=>pf('billing_cycle',e.target.value)}>
+                {BILLING_OPTS.map(o=><option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>CTA Button Label</label>
+              <select style={inputStyle} value={form.cta_label} onChange={e=>pf('cta_label',e.target.value)}>
+                {CTA_OPTS.map(o=><option key={o} value={o}>{o}</option>)}
+                <option value={form.cta_label}>{form.cta_label}</option>
+              </select>
+            </div>
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Badge</label>
+              <select style={inputStyle} value={form.badge} onChange={e=>pf('badge',e.target.value)}>
+                {BADGE_OPTS.map(o=><option key={o} value={o}>{o||'— None —'}</option>)}
+              </select>
+            </div>
           </div>
-          <label style={{display:'flex',alignItems:'center',gap:8,marginBottom:16,fontSize:13,cursor:'pointer'}}>
-            <input type="checkbox" checked={form.is_featured} onChange={e=>pf('is_featured',e.target.checked)}/> Mark as Featured
+
+          {/* Row 3: Limits */}
+          <div style={{background:'rgba(255,255,255,0.03)',borderRadius:10,padding:14,marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.text3,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:10}}>Usage Limits (-1 = Unlimited)</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+              <LimitSelect label="QR Codes / Period" value={form.qr_limit} opts={LIMIT_OPTS_QR} onChange={v=>pf('qr_limit',v)}/>
+              <LimitSelect label="Active Payment Links" value={form.link_limit} opts={LIMIT_OPTS_LINK} onChange={v=>pf('link_limit',v)}/>
+              <LimitSelect label="API Calls / Day" value={form.api_limit} opts={LIMIT_OPTS_API} onChange={v=>pf('api_limit',v)}/>
+            </div>
+          </div>
+
+          {/* Row 4: Discounts + Yearly Price + Sort */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,marginBottom:12}}>
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>6-Month Discount %</label>
+              <select style={inputStyle} value={form.discount_6month} onChange={e=>pf('discount_6month',e.target.value)}>
+                {[0,5,10,15,20,25,30].map(v=><option key={v} value={v}>{v}%</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Yearly Price (₹) <span style={{fontWeight:400,textTransform:'none',color:C.text2}}>— 0 = use discount</span></label>
+              <input type="number" style={inputStyle} value={form.price_1year} onChange={e=>pf('price_1year',e.target.value)} min="0" placeholder="e.g. 9999"/>
+            </div>
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Sort Order</label>
+              <input type="number" style={inputStyle} value={form.sort_order} onChange={e=>pf('sort_order',e.target.value)} min="0"/>
+            </div>
+          </div>
+
+          {/* Features checkboxes */}
+          <div style={{background:'rgba(255,255,255,0.03)',borderRadius:10,padding:14,marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.text3,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:10}}>Features</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+              {ALL_FEATURES.map(f=>(
+                <label key={f.key} style={{display:'flex',alignItems:'center',gap:8,fontSize:13,cursor:'pointer',padding:'5px 8px',borderRadius:7,background:form.selected_features.has(f.key)?'rgba(59,130,246,0.12)':'transparent',border:`1px solid ${form.selected_features.has(f.key)?C.blue:'transparent'}`,transition:'all .15s'}}>
+                  <input type="checkbox" checked={form.selected_features.has(f.key)} onChange={()=>toggleFeature(f.key)} style={{accentColor:C.blue}}/>
+                  <span style={{color:form.selected_features.has(f.key)?C.text:C.text2}}>{f.label}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{marginTop:10}}>
+              <label style={{fontSize:11,fontWeight:700,color:C.text3,display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>Additional Custom Features (one per line)</label>
+              <textarea style={{...inputStyle,minHeight:60,resize:'vertical'}} value={form.custom_features} onChange={e=>pf('custom_features',e.target.value)} placeholder="e.g. Custom integration support"/>
+            </div>
+          </div>
+
+          <label style={{display:'flex',alignItems:'center',gap:8,marginBottom:16,fontSize:13,cursor:'pointer',padding:'8px 10px',borderRadius:8,border:`1px solid ${form.is_featured?C.blue:C.border}`,background:form.is_featured?'rgba(59,130,246,0.08)':'transparent'}}>
+            <input type="checkbox" checked={form.is_featured} onChange={e=>pf('is_featured',e.target.checked)} style={{accentColor:C.blue}}/>
+            <span style={{fontWeight:600}}>Mark as Featured</span>
+            <span style={{fontSize:11,color:C.text3,marginLeft:'auto'}}>Highlighted with blue border on pricing page</span>
           </label>
+
           <div style={{display:'flex',gap:8}}>
             <Btn onClick={save} loading={saving}><Check size={13}/>{modal==='new'?'Create Plan':'Update Plan'}</Btn>
             <Btn onClick={()=>setModal(null)} variant='ghost'>Cancel</Btn>
@@ -1249,6 +1484,135 @@ function PlansSection({ api, flash }: any) {
 // ════════════════════════════════════════════════════════════════
 // AUDIT LOGS
 // ════════════════════════════════════════════════════════════════
+function TicketsSection({ api, flash }: any) {
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter]   = useState('');
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [noteInput, setNoteInput] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q = filter ? `?status=${filter}` : '';
+      const d = await api(`/api/v1/admin/tickets${q}`);
+      if (d?.success) setTickets(toArr(d.data));
+    } catch(e:any) { flash(e.message,'err'); }
+    setLoading(false);
+  }, [filter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const update = async (id: string, status: string, adminNote?: string) => {
+    try {
+      await api(`/api/v1/admin/tickets/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status, admin_note: adminNote ?? noteInput[id] ?? '' }),
+      });
+      flash('Ticket updated','ok');
+      load();
+      setExpanded(null);
+    } catch(e:any) { flash(e.message,'err'); }
+  };
+
+  const TICKET_COLORS: Record<string,string> = { open: C.red, in_progress: C.amber, resolved: C.green };
+
+  return (
+    <div style={{maxWidth:1100}}>
+      <SectionHeader title="Support Tickets" sub={`${tickets.length} total`} onRefresh={load}>
+        <select value={filter} onChange={e=>setFilter(e.target.value)}
+          style={{background:C.surface,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:'6px 10px',fontSize:12}}>
+          <option value="">All</option>
+          <option value="open">Open</option>
+          <option value="in_progress">In Progress</option>
+          <option value="resolved">Resolved</option>
+        </select>
+      </SectionHeader>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,overflow:'hidden'}}>
+        <div style={{overflowX:'auto'}}>
+          <table>
+            <thead><tr>
+              <TH>Merchant</TH><TH>Subject</TH><TH>Status</TH><TH>Date</TH><TH>Actions</TH>
+            </tr></thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={5} style={{textAlign:'center',padding:40}}><Spinner/></td></tr>
+              ) : tickets.length === 0 ? (
+                <tr><td colSpan={5} style={{textAlign:'center',padding:40,color:C.text3}}>No tickets yet</td></tr>
+              ) : tickets.map((t:any) => (
+                <>
+                  <tr key={t.id} style={{cursor:'pointer'}} onClick={()=>setExpanded(expanded===t.id?null:t.id)}>
+                    <TD>{t.merchant_name || t.merchant_id?.slice(0,8)}</TD>
+                    <TD><span style={{fontWeight:500,color:C.text}}>{t.subject}</span></TD>
+                    <TD>
+                      <span style={{
+                        fontSize:11, fontWeight:600, padding:'3px 10px', borderRadius:20,
+                        background:(TICKET_COLORS[t.status]||C.text3)+'22',
+                        color:TICKET_COLORS[t.status]||C.text3,
+                      }}>{t.status.replace('_',' ')}</span>
+                    </TD>
+                    <TD>
+                      <div style={{fontSize:11}}>{dateStr(t.created_at)}</div>
+                      <div style={{fontSize:10,color:C.text3}}>{timeStr(t.created_at)}</div>
+                    </TD>
+                    <TD>
+                      <div style={{display:'flex',gap:6}} onClick={e=>e.stopPropagation()}>
+                        {t.status !== 'in_progress' && (
+                          <button onClick={()=>update(t.id,'in_progress')}
+                            style={{background:C.amber+'22',border:'none',color:C.amber,borderRadius:7,padding:'4px 10px',fontSize:11,cursor:'pointer',fontWeight:600}}>
+                            In Progress
+                          </button>
+                        )}
+                        {t.status !== 'resolved' && (
+                          <button onClick={()=>update(t.id,'resolved')}
+                            style={{background:C.green+'22',border:'none',color:C.green,borderRadius:7,padding:'4px 10px',fontSize:11,cursor:'pointer',fontWeight:600}}>
+                            Resolve
+                          </button>
+                        )}
+                      </div>
+                    </TD>
+                  </tr>
+                  {expanded === t.id && (
+                    <tr key={`${t.id}-detail`}>
+                      <td colSpan={5} style={{padding:'0 16px 16px',background:C.surface+'88'}}>
+                        <div style={{padding:'14px',background:C.bg,borderRadius:10,border:`1px solid ${C.border}`,marginTop:4}}>
+                          <div style={{fontSize:12,color:C.text2,marginBottom:8,fontWeight:600}}>Message</div>
+                          <div style={{fontSize:13,color:C.text,whiteSpace:'pre-wrap',marginBottom:12}}>{t.message}</div>
+                          {t.context && (
+                            <>
+                              <div style={{fontSize:12,color:C.text2,marginBottom:6,fontWeight:600}}>Chat Context</div>
+                              <div style={{fontSize:11,color:C.text3,whiteSpace:'pre-wrap',fontFamily:'monospace',background:C.surface,padding:10,borderRadius:8,marginBottom:12}}>{t.context}</div>
+                            </>
+                          )}
+                          {t.admin_note && (
+                            <div style={{fontSize:12,color:C.amber,marginBottom:10}}>Admin note: {t.admin_note}</div>
+                          )}
+                          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                            <input
+                              value={noteInput[t.id]||''}
+                              onChange={e=>setNoteInput(p=>({...p,[t.id]:e.target.value}))}
+                              placeholder="Add admin note…"
+                              style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:'7px 12px',fontSize:12,fontFamily:'inherit'}}
+                            />
+                            <button onClick={()=>update(t.id,t.status,noteInput[t.id])}
+                              style={{background:C.blue,border:'none',color:'#fff',borderRadius:8,padding:'7px 14px',fontSize:12,cursor:'pointer',fontWeight:600}}>
+                              Save Note
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AuditSection({ api, flash }: any) {
   const [logs, setLogs]       = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1262,7 +1626,7 @@ function AuditSection({ api, flash }: any) {
       if (d?.success) { setLogs(toArr(d.data?.data)); setTotal(d.data?.total||0); }
     } catch(e:any) { flash(e.message,'err'); }
     setLoading(false);
-  }, [api, flash, page]);
+  }, [page]); // api/flash are stable
 
   useEffect(() => { load(); }, [load]);
 

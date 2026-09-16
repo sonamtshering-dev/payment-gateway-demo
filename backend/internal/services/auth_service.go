@@ -3,9 +3,10 @@ package services
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/upay/gateway/internal/models"
 	"github.com/upay/gateway/internal/utils"
 )
@@ -14,43 +15,23 @@ func (s *Service) GetMerchantByEmail(ctx context.Context, email string) (*models
 	return s.repo.GetMerchantByEmail(ctx, email)
 }
 
-// In-memory store for password reset tokens (prod: use Redis/DB table)
-var (
-	resetTokens = map[string]resetEntry{}
-	resetMu     sync.Mutex
-)
-
-type resetEntry struct {
-	merchantID string
-	expiry     time.Time
-}
-
 func (s *Service) SavePasswordResetToken(ctx context.Context, merchantID, token string, expiry time.Time) error {
-	resetMu.Lock()
-	defer resetMu.Unlock()
-	// Clean expired tokens
-	for t, e := range resetTokens {
-		if time.Now().After(e.expiry) {
-			delete(resetTokens, t)
-		}
+	ttl := time.Until(expiry)
+	if ttl <= 0 {
+		return fmt.Errorf("expiry is in the past")
 	}
-	resetTokens[token] = resetEntry{merchantID: merchantID, expiry: expiry}
-	return nil
+	return s.redis.Set(ctx, "pwreset:"+token, merchantID, ttl).Err()
 }
 
 func (s *Service) ValidatePasswordResetToken(ctx context.Context, token string) (string, error) {
-	resetMu.Lock()
-	defer resetMu.Unlock()
-	entry, ok := resetTokens[token]
-	if !ok {
-		return "", fmt.Errorf("token not found")
+	val, err := s.redis.GetDel(ctx, "pwreset:"+token).Result()
+	if err == redis.Nil {
+		return "", fmt.Errorf("token not found or expired")
 	}
-	if time.Now().After(entry.expiry) {
-		delete(resetTokens, token)
-		return "", fmt.Errorf("token expired")
+	if err != nil {
+		return "", fmt.Errorf("failed to validate token")
 	}
-	delete(resetTokens, token) // one-time use
-	return entry.merchantID, nil
+	return val, nil
 }
 
 func (s *Service) ResetPassword(ctx context.Context, merchantID, newPassword string) error {
@@ -58,5 +39,13 @@ func (s *Service) ResetPassword(ctx context.Context, merchantID, newPassword str
 	if err != nil {
 		return err
 	}
-	return s.repo.UpdateMerchantPassword(ctx, merchantID, hash)
+	if err := s.repo.UpdateMerchantPassword(ctx, merchantID, hash); err != nil {
+		return err
+	}
+	// Invalidate all active sessions so old tokens cannot be reused after a password reset
+	mid, parseErr := uuid.Parse(merchantID)
+	if parseErr == nil {
+		_ = s.repo.RevokeAllMerchantTokens(ctx, mid)
+	}
+	return nil
 }

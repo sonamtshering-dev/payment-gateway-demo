@@ -90,7 +90,7 @@ func (w *Worker) runPaytmVerification(ctx context.Context) {
 
 			// Telegram: payment received (auto-verified path)
 			w.enqueueTelegramForMerchant(ctx, payment.MerchantID, services.TGNotifPaymentReceived,
-				services.FormatPaymentReceived(payment.OrderID, payment.Amount))
+				services.FormatPaymentReceived(payment.OrderID, utr, payment.Amount))
 
 			// Auto-activate subscription if this is a SUB- payment
 			if len(payment.OrderID) > 4 && payment.OrderID[:4] == "SUB-" {

@@ -321,6 +321,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 			CreatedAt:    merchant.CreatedAt,
 			LogoURL:      derefStr(merchant.LogoURL),
 			BusinessName: derefStr(merchant.BusinessName),
+			PrimaryColor: derefStr(merchant.PrimaryColor),
 		},
 	})
 }
@@ -595,4 +596,25 @@ func (h *Handler) SavePaytmMID(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Paytm MID saved. Auto-verification enabled."})
+}
+
+func (h *Handler) SavePhonePeConfig(c *gin.Context) {
+	merchantID := c.MustGet("merchant_id").(uuid.UUID)
+	var req struct {
+		MerchantID string `json:"merchant_id" binding:"required"`
+		SaltKey    string `json:"salt_key"    binding:"required"`
+		SaltIndex  string `json:"salt_index"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "merchant_id and salt_key are required"})
+		return
+	}
+	if req.SaltIndex == "" {
+		req.SaltIndex = "1"
+	}
+	if err := h.service.SavePhonePeConfig(c.Request.Context(), merchantID, req.MerchantID, req.SaltKey, req.SaltIndex); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to save PhonePe config"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "PhonePe config saved. Auto-verification enabled."})
 }

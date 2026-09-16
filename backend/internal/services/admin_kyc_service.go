@@ -27,6 +27,6 @@ func (s *Service) AdminReviewKYC(ctx context.Context, merchantID uuid.UUID, stat
 	return nil
 }
 
-func (s *Service) AdminExtendSubscription(ctx context.Context, merchantID uuid.UUID, days int) error {
-	return s.repo.AdminExtendSubscription(ctx, merchantID, days)
+func (s *Service) AdminExtendSubscription(ctx context.Context, merchantID uuid.UUID, expiresAt string, days int) error {
+	return s.repo.AdminExtendSubscription(ctx, merchantID, expiresAt, days)
 }

@@ -45,13 +45,16 @@ func (w *Worker) telegramDispatchWorker(ctx context.Context) {
 func (w *Worker) deliverTelegram(ctx context.Context, msg services.TelegramQueueMessage) {
 	settings, err := w.repo.GetTelegramSettings(ctx, msg.MerchantID)
 	if err != nil || settings == nil {
-		return // merchant not connected
+		log.Debug().Str("merchant_id", msg.MerchantID.String()).Str("type", msg.NotificationType).Msg("Telegram skipped: merchant not connected")
+		return
 	}
 	if !settings.IsEnabled {
+		log.Debug().Str("merchant_id", msg.MerchantID.String()).Str("type", msg.NotificationType).Msg("Telegram skipped: notifications disabled by merchant")
 		return
 	}
 	if !containsString(settings.NotificationTypes, msg.NotificationType) {
-		return // this type not enabled for merchant
+		log.Debug().Str("merchant_id", msg.MerchantID.String()).Str("type", msg.NotificationType).Strs("enabled", settings.NotificationTypes).Msg("Telegram skipped: notification type not enabled")
+		return
 	}
 
 	chatID, err := utils.Decrypt(settings.ChatIDEncrypted, w.config.Security.EncryptionKey)

@@ -25,13 +25,13 @@ func scanPlan(rows interface{ Scan(...any) error }, p *models.Plan) error {
 		&p.ID, &p.Name, &p.Price, &p.BillingCycle, &p.Badge,
 		&p.IsFeatured, &p.IsActive, &p.CTALabel, &p.SortOrder,
 		&p.QRLimit, &p.LinkLimit, &p.APILimit, &p.FeaturesRaw,
-		&p.Discount6Month, &p.Discount1Year, &p.CreatedAt, &p.UpdatedAt,
+		&p.Discount6Month, &p.Discount1Year, &p.Price1Year, &p.CreatedAt, &p.UpdatedAt,
 	)
 }
 
 const planSelect = `SELECT id, name, price, billing_cycle, badge, is_featured, is_active,
 	cta_label, sort_order, qr_limit, link_limit, api_limit, features,
-	COALESCE(discount_6month,15), COALESCE(discount_1year,25), created_at, updated_at FROM plans`
+	COALESCE(discount_6month,15), COALESCE(discount_1year,25), COALESCE(price_1year,0), created_at, updated_at FROM plans`
 
 func (r *Repository) GetActivePlans(ctx context.Context) ([]models.Plan, error) {
 	rows, err := r.db.Query(ctx, planSelect+` WHERE is_active = TRUE ORDER BY sort_order ASC, created_at ASC`)
@@ -94,14 +94,15 @@ func (r *Repository) CreatePlan(ctx context.Context, req models.CreatePlanReques
 	if d1 == 0 { d1 = 25 }
 	id := utils.NewID()
 	now := time.Now()
+	p1y := req.Price1Year
 	_, err = r.db.Exec(ctx, `
 		INSERT INTO plans (id, name, price, billing_cycle, badge, is_featured, is_active,
 		  cta_label, sort_order, qr_limit, link_limit, api_limit, features,
-		  discount_6month, discount_1year, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15)
+		  discount_6month, discount_1year, price_1year, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
 	`, id, req.Name, req.Price, req.BillingCycle, badge, req.IsFeatured,
 		req.CTALabel, req.SortOrder, req.QRLimit, req.LinkLimit, req.APILimit,
-		string(featBytes), d6, d1, now,
+		string(featBytes), d6, d1, p1y, now, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("CreatePlan: %w", err)
@@ -128,6 +129,7 @@ func (r *Repository) UpdatePlan(ctx context.Context, id uuid.UUID, req models.Up
 	if req.Features != nil      { existing.Features = req.Features }
 	if req.Discount6Month != nil { existing.Discount6Month = *req.Discount6Month }
 	if req.Discount1Year != nil  { existing.Discount1Year = *req.Discount1Year }
+	if req.Price1Year != nil     { existing.Price1Year = *req.Price1Year }
 
 	featBytes, _ := json.Marshal(existing.Features)
 	_, err = r.db.Exec(ctx, `
@@ -135,12 +137,12 @@ func (r *Repository) UpdatePlan(ctx context.Context, id uuid.UUID, req models.Up
 		  name=$2, price=$3, billing_cycle=$4, badge=$5, is_featured=$6,
 		  is_active=$7, cta_label=$8, sort_order=$9, qr_limit=$10,
 		  link_limit=$11, api_limit=$12, features=$13,
-		  discount_6month=$14, discount_1year=$15, updated_at=NOW()
+		  discount_6month=$14, discount_1year=$15, price_1year=$16, updated_at=NOW()
 		WHERE id=$1
 	`, id, existing.Name, existing.Price, existing.BillingCycle, existing.Badge,
 		existing.IsFeatured, existing.IsActive, existing.CTALabel, existing.SortOrder,
 		existing.QRLimit, existing.LinkLimit, existing.APILimit, string(featBytes),
-		existing.Discount6Month, existing.Discount1Year,
+		existing.Discount6Month, existing.Discount1Year, existing.Price1Year,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("UpdatePlan: %w", err)

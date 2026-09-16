@@ -24,6 +24,7 @@ type Plan struct {
 	Features      []string        `json:"features"       db:"-"`
 	Discount6Month int            `json:"discount_6month" db:"discount_6month"`
 	Discount1Year  int            `json:"discount_1year"  db:"discount_1year"`
+	Price1Year     int64          `json:"price_1year"     db:"price_1year"`
 	CreatedAt     time.Time       `json:"created_at"     db:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"     db:"updated_at"`
 }
@@ -39,6 +40,7 @@ type PlanPublic struct {
 	Features      []string  `json:"features"`
 	Discount6Month int      `json:"discount_6month"`
 	Discount1Year  int      `json:"discount_1year"`
+	Price1Year     int64    `json:"price_1year"`
 }
 
 type CreatePlanRequest struct {
@@ -55,6 +57,7 @@ type CreatePlanRequest struct {
 	Features      []string `json:"features"      binding:"required"`
 	Discount6Month int     `json:"discount_6month"`
 	Discount1Year  int     `json:"discount_1year"`
+	Price1Year     int64   `json:"price_1year"`
 }
 
 type UpdatePlanRequest struct {
@@ -72,4 +75,5 @@ type UpdatePlanRequest struct {
 	Features      []string `json:"features"`
 	Discount6Month *int    `json:"discount_6month"`
 	Discount1Year  *int    `json:"discount_1year"`
+	Price1Year     *int64  `json:"price_1year"`
 }

@@ -88,14 +88,14 @@ type AdminWebhookLog struct {
 }
 
 type AdminSubscription struct {
-	ID           uuid.UUID  `json:"id"`
+	ID           *uuid.UUID `json:"id"`
 	MerchantID   uuid.UUID  `json:"merchant_id"`
 	MerchantName string     `json:"merchant_name"`
 	MerchantEmail string    `json:"merchant_email"`
-	PlanID       uuid.UUID  `json:"plan_id"`
+	PlanID       *uuid.UUID `json:"plan_id"`
 	PlanName     string     `json:"plan_name"`
 	Status       string     `json:"status"`
-	StartedAt    time.Time  `json:"started_at"`
+	StartedAt    *time.Time `json:"started_at"`
 	ExpiresAt    *time.Time `json:"expires_at"`
 }
 
@@ -353,17 +353,23 @@ func (r *Repository) GetAdminSubscriptions(ctx context.Context, page, limit int)
 	offset := (page - 1) * limit
 
 	var total int64
-	r.db.QueryRow(ctx, `SELECT COUNT(*) FROM merchant_subscriptions`).Scan(&total)
+	r.db.QueryRow(ctx, `SELECT COUNT(*) FROM merchants`).Scan(&total)
 
 	rows, err := r.db.Query(ctx, `
 		SELECT
-			s.id, s.merchant_id, m.name, m.email,
-			s.plan_id, COALESCE(p.name,''),
-			s.status, s.started_at, s.expires_at
-		FROM merchant_subscriptions s
-		LEFT JOIN merchants m ON s.merchant_id = m.id
+			s.id, m.id, m.name, m.email,
+			s.plan_id, COALESCE(p.name, '—'),
+			COALESCE(s.status, 'none'), s.started_at, s.expires_at
+		FROM merchants m
+		LEFT JOIN LATERAL (
+			SELECT id, plan_id, status, started_at, expires_at
+			FROM merchant_subscriptions
+			WHERE merchant_id = m.id
+			ORDER BY created_at DESC
+			LIMIT 1
+		) s ON true
 		LEFT JOIN plans p ON s.plan_id = p.id
-		ORDER BY s.created_at DESC
+		ORDER BY m.created_at DESC
 		LIMIT $1 OFFSET $2
 	`, limit, offset)
 	if err != nil {
@@ -375,7 +381,7 @@ func (r *Repository) GetAdminSubscriptions(ctx context.Context, page, limit int)
 	for rows.Next() {
 		var s AdminSubscription
 		rows.Scan(&s.ID, &s.MerchantID, &s.MerchantName, &s.MerchantEmail,
-			&s.PlanID, &s.PlanName, &s.Status, &s.StartedAt, &s.ExpiresAt)
+			&s.PlanID, &s.PlanName, &s.Status, &s.StartedAt, &s.ExpiresAt) //nolint:errcheck
 		subs = append(subs, s)
 	}
 	return subs, total, nil

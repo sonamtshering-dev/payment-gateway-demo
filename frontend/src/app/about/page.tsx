@@ -2,19 +2,16 @@
 import Link from 'next/link';
 
 const Logo = () => (
-  <svg width="30" height="30" viewBox="0 0 36 36" fill="none">
-    <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#60a5fa"/><stop offset="100%" stopColor="#2563eb"/></linearGradient></defs>
-    <path d="M8 28V8l7 13L22 8v20" stroke="url(#lg)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
+  <img src="/novapaylogo.jpeg" alt="NovaPay" style={{ width: 30, height: 30, objectFit: 'contain', borderRadius: 6 }} />
 );
 
 const NAV_LINKS = [['Features','/#features'],['Pricing','/#pricing'],['Contact','/contact']];
 
 const VALUES = [
-  { icon: '⚡', title: 'Speed First', desc: 'Payments should settle in seconds, not days. We engineered NovaPay around sub-2-second UPI settlements from day one.' },
-  { icon: '🔒', title: 'Security by Default', desc: 'AES-256 encryption, IP whitelisting, KYC verification, and AI fraud detection — not add-ons, but foundations.' },
-  { icon: '₹', title: 'Zero Fees', desc: "We believe India's merchants deserve to keep every rupee they earn. No per-transaction cuts, ever." },
-  { icon: '🌐', title: 'Built for Bharat', desc: 'UPI-native from day one, designed around the workflows of Indian businesses — from freelancers to enterprises.' },
+  { icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>, title: 'Speed First', desc: 'Payments should settle in seconds, not days. We engineered NovaPay around sub-2-second UPI settlements from day one.' },
+  { icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>, title: 'Security by Default', desc: 'AES-256 encryption, IP whitelisting, KYC verification, and AI fraud detection — not add-ons, but foundations.' },
+  { icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>, title: 'Zero Fees', desc: "We believe India's merchants deserve to keep every rupee they earn. No per-transaction cuts, ever." },
+  { icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>, title: 'Built for Bharat', desc: 'UPI-native from day one, designed around the workflows of Indian businesses — from freelancers to enterprises.' },
 ];
 
 const TIMELINE = [
@@ -88,7 +85,7 @@ export default function AboutPage() {
           <div className="values-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
             {VALUES.map(v => (
               <div key={v.title} style={{ background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 16, padding: '28px 24px' }}>
-                <div style={{ fontSize: 32, marginBottom: 16 }}>{v.icon}</div>
+                <div style={{ marginBottom: 16, display: 'flex' }}>{v.icon}</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 10 }}>{v.title}</div>
                 <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.7 }}>{v.desc}</div>
               </div>

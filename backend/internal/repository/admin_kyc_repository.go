@@ -41,12 +41,40 @@ func (r *Repository) AdminUpdateKYC(ctx context.Context, merchantID uuid.UUID, s
 	return err
 }
 
-func (r *Repository) AdminExtendSubscription(ctx context.Context, merchantID uuid.UUID, days int) error {
-	_, err := r.db.Exec(ctx, `
-		UPDATE merchant_subscriptions
-		SET expires_at = COALESCE(expires_at, NOW()) + ($2 || ' days')::interval,
-		    updated_at = NOW()
-		WHERE merchant_id=$1 AND status='active'
-	`, merchantID, days)
-	return err
+func (r *Repository) AdminExtendSubscription(ctx context.Context, merchantID uuid.UUID, expiresAt string, days int) error {
+	var q string
+	var args []interface{}
+	if expiresAt != "" {
+		// Set exact expiry date
+		q = `
+			UPDATE merchant_subscriptions
+			SET expires_at = $2::date + time '23:59:59',
+			    status     = CASE WHEN status = 'expired' THEN 'active' ELSE status END,
+			    updated_at = NOW()
+			WHERE merchant_id = $1
+			  AND status IN ('active', 'trial', 'expired')
+			  AND id = (SELECT id FROM merchant_subscriptions WHERE merchant_id = $1 ORDER BY created_at DESC LIMIT 1)
+		`
+		args = []interface{}{merchantID, expiresAt}
+	} else {
+		// Add days to current expiry (or from today if expired)
+		q = `
+			UPDATE merchant_subscriptions
+			SET expires_at = GREATEST(COALESCE(expires_at, NOW()), NOW()) + make_interval(days => $2),
+			    status     = CASE WHEN status = 'expired' THEN 'active' ELSE status END,
+			    updated_at = NOW()
+			WHERE merchant_id = $1
+			  AND status IN ('active', 'trial', 'expired')
+			  AND id = (SELECT id FROM merchant_subscriptions WHERE merchant_id = $1 ORDER BY created_at DESC LIMIT 1)
+		`
+		args = []interface{}{merchantID, days}
+	}
+	result, err := r.db.Exec(ctx, q, args...)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("no subscription found for merchant")
+	}
+	return nil
 }

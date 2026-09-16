@@ -23,6 +23,7 @@ type Merchant struct {
 	IsAdmin      bool         `json:"is_admin" db:"is_admin"`
 	LogoURL      *string       `json:"logo_url" db:"logo_url"`
 	BusinessName *string       `json:"business_name" db:"business_name"`
+	PrimaryColor *string       `json:"primary_color" db:"primary_color"`
 	DailyLimit   int64        `json:"daily_limit" db:"daily_limit"` // in paise
 	CreatedAt    time.Time    `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time    `json:"updated_at" db:"updated_at"`

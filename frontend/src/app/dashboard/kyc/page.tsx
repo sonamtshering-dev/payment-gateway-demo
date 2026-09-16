@@ -1,21 +1,12 @@
 'use client';
-import React, { useEffect, useState, useRef } from 'react';
-import { ShieldCheck, FileText, BookOpen, Mail, Upload, CheckCircle2, ChevronRight, Lock } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ShieldCheck, BookOpen, Mail, ChevronRight, Lock } from 'lucide-react';
+import api from '@/lib/api';
 
 const STEPS = [
   { id: 1, label: 'Business Details', sub: 'Basic information' },
   { id: 2, label: 'Owner Details',    sub: 'Personal information' },
-  { id: 3, label: 'Documents',        sub: 'Upload documents' },
-  { id: 4, label: 'Verification',     sub: 'Review & Confirm' },
-];
-
-const DOC_TYPES = [
-  { key: 'pan',       label: 'PAN Card',                          desc: 'Upload clear front side of PAN card',           color: '#2563EB', bg: '#EFF6FF' },
-  { key: 'aadhaar',   label: 'Aadhaar Card / ID Proof',           desc: 'Upload front & back side',                      color: '#D97706', bg: '#FFFBEB' },
-  { key: 'biz_cert',  label: 'Business Registration Certificate', desc: 'Upload Certificate of Incorporation',           color: '#059669', bg: '#ECFDF5' },
-  { key: 'bank',      label: 'Bank Account Proof',                desc: 'Upload Cancelled Cheque or Bank Statement',    color: '#7C3AED', bg: '#F5F3FF' },
-  { key: 'address',   label: 'Address Proof',                     desc: 'Upload Utility Bill / Rent Agreement',         color: '#0891B2', bg: '#F0F9FF' },
-  { key: 'signatory', label: 'Authorized Signatory Photo',        desc: 'Upload Passport Size Photo',                   color: '#DC2626', bg: '#FEF2F2' },
+  { id: 3, label: 'Verification',     sub: 'Review & Confirm' },
 ];
 
 const BUSINESS_TYPES = ['Sole Proprietorship', 'Partnership Firm', 'Private Limited Company', 'Public Limited Company', 'LLP', 'NGO / Trust', 'Other'];
@@ -37,89 +28,6 @@ function DonutChart({ pct }: { pct: number }) {
   );
 }
 
-function SelectableDocCard({
-  doc, selected, disabled, onToggle, file, onFile,
-}: {
-  doc: typeof DOC_TYPES[0];
-  selected: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-  file: File | null;
-  onFile: (f: File) => void;
-}) {
-  const ref = useRef<HTMLInputElement>(null);
-  return (
-    <div
-      onClick={!selected && disabled ? undefined : onToggle}
-      style={{
-        background: selected ? '#F0F9FF' : '#FFFFFF',
-        border: `2px solid ${selected ? '#2563EB' : '#E2E8F0'}`,
-        borderRadius: 12, padding: '16px',
-        cursor: disabled && !selected ? 'not-allowed' : 'pointer',
-        opacity: disabled && !selected ? 0.45 : 1,
-        transition: 'all .15s',
-        position: 'relative' as const,
-      }}
-    >
-      {/* Selection indicator */}
-      <div style={{
-        position: 'absolute' as const, top: 12, right: 12,
-        width: 20, height: 20, borderRadius: '50%',
-        background: selected ? '#2563EB' : '#F1F5F9',
-        border: `2px solid ${selected ? '#2563EB' : '#CBD5E1'}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
-      }}>
-        {selected && (
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M2 5L4 7.5L8 3" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12, paddingRight: 28 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 9, background: doc.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <FileText size={16} color={doc.color} />
-        </div>
-        <div>
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: '#0F172A', lineHeight: 1.4 }}>{doc.label}</div>
-          <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, lineHeight: 1.4 }}>{doc.desc}</div>
-        </div>
-      </div>
-
-      {selected && (
-        <>
-          <input ref={ref} type="file" accept=".jpg,.jpeg,.png,.pdf" style={{ display: 'none' }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }}
-          />
-          <button
-            onClick={e => { e.stopPropagation(); ref.current?.click(); }}
-            style={{
-              width: '100%', background: file ? '#ECFDF5' : '#F8FAFC',
-              border: `1px dashed ${file ? '#A7F3D0' : '#CBD5E1'}`,
-              borderRadius: 8, padding: '8px 0', color: file ? '#059669' : '#475569',
-              fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              fontFamily: 'DM Sans, sans-serif',
-            }}
-          >
-            {file
-              ? <><CheckCircle2 size={12} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 160 }}>{file.name}</span></>
-              : <><Upload size={13} /> Upload File</>
-            }
-          </button>
-        </>
-      )}
-
-      {!selected && (
-        <div style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center' as const, padding: '4px 0' }}>
-          {disabled ? 'Already selected 2 documents' : 'Click to select'}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function KYCPage() {
   const [kyc, setKyc]               = useState<any>(null);
   const [loading, setLoading]       = useState(true);
@@ -127,40 +35,22 @@ export default function KYCPage() {
   const [step, setStep]             = useState(1);
   const [success, setSuccess]       = useState('');
   const [error, setError]           = useState('');
-  const [files, setFiles]           = useState<Record<string, File | null>>({});
-  const [selectedDocKeys, setSelectedDocKeys] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({
     business_name: '', business_type: 'Private Limited Company',
     phone: '', email: '', pan_number: '', registration_number: '',
     owner_name: '', dob: '', aadhaar_number: '',
   });
 
-  const token   = typeof window !== 'undefined' ? localStorage.getItem('upay_access_token') : '';
-  const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-
   useEffect(() => {
-    fetch('/api/v1/dashboard/kyc', { headers })
-      .then(r => r.json()).then(d => { if (d.success && d.data) setKyc(d.data); })
+    api.getKYC()
+      .then(d => { if (d.success && d.data) setKyc(d.data); })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
-  const setFile = (key: string, file: File) => setFiles(prev => ({ ...prev, [key]: file }));
 
-  const toggleDoc = (key: string) => {
-    setSelectedDocKeys(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else if (next.size < 2) {
-        next.add(key);
-      }
-      return next;
-    });
-  };
-
-  const selectedDocsList = DOC_TYPES.filter(d => selectedDocKeys.has(d.key));
-  const progress = Math.round(((step - 1) / 4) * 100);
+  const progress = Math.round(((step - 1) / 3) * 100);
 
   const validateStep = (s: number): string => {
     if (s === 1) {
@@ -169,11 +59,6 @@ export default function KYCPage() {
     }
     if (s === 2) {
       if (!form.aadhaar_number.trim()) return 'Aadhaar number is required';
-    }
-    if (s === 3) {
-      if (selectedDocKeys.size < 2) return 'Please select exactly 2 documents';
-      const allUploaded = Array.from(selectedDocKeys).every(k => files[k]);
-      if (!allUploaded) return 'Please upload both selected documents';
     }
     return '';
   };
@@ -189,27 +74,13 @@ export default function KYCPage() {
     setError('');
     setSubmitting(true);
     try {
-      const r = await fetch('/api/v1/dashboard/kyc', {
-        method: 'POST', headers,
-        body: JSON.stringify({
-          aadhaar_number: form.aadhaar_number,
-          pan_number: form.pan_number,
-          business_name: form.business_name,
-          bank_account: 'N/A', bank_ifsc: 'N/A', bank_name: 'N/A',
-        }),
+      const d = await api.submitKYC({
+        aadhaar_number: form.aadhaar_number,
+        pan_number: form.pan_number,
+        business_name: form.business_name,
+        bank_account: 'N/A', bank_ifsc: 'N/A', bank_name: 'N/A',
       });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Submission failed');
-      for (const key of Array.from(selectedDocKeys)) {
-        const file = files[key];
-        if (file) {
-          const fd = new FormData();
-          fd.append('document', file); fd.append('type', key);
-          await fetch('/api/v1/dashboard/kyc/document', {
-            method: 'POST', headers: { 'Authorization': headers['Authorization'] }, body: fd,
-          });
-        }
-      }
+      if (!d.success) throw new Error(d.error || 'Submission failed');
       setKyc(d.data);
       setSuccess('KYC submitted! We will review within 2-3 business days.');
     } catch (e: any) { setError(e.message); }
@@ -228,7 +99,6 @@ export default function KYCPage() {
     .kyc-main { flex: 1; min-width: 0; }
     .kyc-sidebar { width: 256px; flex-shrink: 0; }
     .kyc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .kyc-doc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
     .kyc-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .kyc-status-layout { display: flex; gap: 20px; align-items: flex-start; }
     .kyc-status-main { flex: 1; min-width: 0; }
@@ -239,9 +109,8 @@ export default function KYCPage() {
       .kyc-status-layout { flex-direction: column; }
       .kyc-status-side { width: 100%; }
     }
-    @media (max-width: 850px) { .kyc-doc-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 640px) { .kyc-grid-2 { grid-template-columns: 1fr; } }
-    @media (max-width: 560px) { .kyc-doc-grid { grid-template-columns: 1fr; } .kyc-status-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 560px) { .kyc-status-grid { grid-template-columns: 1fr; } }
   `;
 
   if (loading) return (
@@ -330,7 +199,7 @@ export default function KYCPage() {
               </div>
               {isRejected && (
                 <button
-                  onClick={() => { setKyc(null); setStep(1); setSelectedDocKeys(new Set()); setFiles({}); }}
+                  onClick={() => { setKyc(null); setStep(1); }}
                   style={{ marginTop: 20, background: '#2563EB', border: 'none', borderRadius: 10, padding: '12px 28px', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 8 }}
                 >
                   Resubmit KYC
@@ -443,7 +312,7 @@ export default function KYCPage() {
                 </div>
                 <div>
                   <label style={lbl}>Business / Company Name *</label>
-                  <input style={inp} value={form.business_name} onChange={e => set('business_name', e.target.value)} placeholder="NovaPay Technologies Pvt. Ltd." />
+                  <input style={inp} value={form.business_name} onChange={e => set('business_name', e.target.value)} placeholder="e.g. Acme Technologies Pvt. Ltd." />
                 </div>
               </div>
               <div className="kyc-grid-2" style={{ marginBottom: 16 }}>
@@ -496,55 +365,12 @@ export default function KYCPage() {
             </div>
           )}
 
-          {/* Step 3: Document Upload — choose any 2 */}
+          {/* Step 3: Review & Confirm */}
           {step === 3 && (
-            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 14, padding: '24px', marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 10 }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Upload Documents</div>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  background: selectedDocKeys.size === 2 ? '#ECFDF5' : '#EFF6FF',
-                  border: `1px solid ${selectedDocKeys.size === 2 ? '#A7F3D0' : '#BFDBFE'}`,
-                  borderRadius: 100, padding: '4px 14px',
-                }}>
-                  <div style={{
-                    width: 20, height: 20, borderRadius: '50%',
-                    background: selectedDocKeys.size === 2 ? '#059669' : '#2563EB',
-                    color: '#fff', fontSize: 11, fontWeight: 800,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>{selectedDocKeys.size}/2</div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: selectedDocKeys.size === 2 ? '#059669' : '#2563EB' }}>
-                    {selectedDocKeys.size === 2 ? 'Documents selected' : 'Select any 2 documents'}
-                  </span>
-                </div>
-              </div>
-              <div style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
-                Choose <strong>any 2</strong> documents from the list below, then upload them. Files must be PNG, JPG or PDF (max 5 MB each).
-              </div>
-
-              <div className="kyc-doc-grid">
-                {DOC_TYPES.map(doc => (
-                  <SelectableDocCard
-                    key={doc.key}
-                    doc={doc}
-                    selected={selectedDocKeys.has(doc.key)}
-                    disabled={selectedDocKeys.size >= 2 && !selectedDocKeys.has(doc.key)}
-                    onToggle={() => toggleDoc(doc.key)}
-                    file={files[doc.key] || null}
-                    onFile={f => setFile(doc.key, f)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Review & Confirm */}
-          {step === 4 && (
             <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 14, padding: '24px', marginBottom: 16 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>Review & Confirm</div>
               <div style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>Please review your information before submitting</div>
 
-              {/* Business info */}
               <div style={{ fontSize: 13, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 12 }}>Business</div>
               {[
                 ['Business Type', form.business_type],
@@ -560,7 +386,6 @@ export default function KYCPage() {
                 </div>
               ))}
 
-              {/* Owner info */}
               <div style={{ fontSize: 13, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginTop: 20, marginBottom: 12 }}>Owner</div>
               {[
                 ['Owner Name', form.owner_name || '—'],
@@ -571,26 +396,6 @@ export default function KYCPage() {
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{v}</span>
                 </div>
               ))}
-
-              {/* Documents */}
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginTop: 20, marginBottom: 12 }}>Documents</div>
-              {selectedDocsList.map(doc => {
-                const f = files[doc.key];
-                return (
-                  <div key={doc.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #F1F5F9', gap: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 7, background: doc.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <FileText size={13} color={doc.color} />
-                      </div>
-                      <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 500 }}>{doc.label}</span>
-                    </div>
-                    {f
-                      ? <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#059669', fontSize: 12, fontWeight: 600 }}><CheckCircle2 size={13} /> Uploaded</div>
-                      : <span style={{ fontSize: 12, color: '#DC2626', fontWeight: 600 }}>Missing</span>
-                    }
-                  </div>
-                );
-              })}
 
               <div style={{ background: '#EFF6FF', border: '1px solid #DBEAFE', borderRadius: 10, padding: '12px 16px', marginTop: 18, fontSize: 12, color: '#2563EB', lineHeight: 1.6 }}>
                 By submitting, I confirm all information is accurate and I agree to the Terms of Service and Privacy Policy.
@@ -613,11 +418,11 @@ export default function KYCPage() {
               {step > 1 ? '← Back' : 'Save as Draft'}
             </button>
             <button
-              onClick={step === 4 ? handleSubmit : handleNext}
+              onClick={step === 3 ? handleSubmit : handleNext}
               disabled={submitting}
               style={{ flex: 1, background: submitting ? '#93C5FD' : '#2563EB', border: 'none', borderRadius: 10, padding: '11px 0', color: '#fff', fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
             >
-              {submitting ? 'Submitting…' : step === 4 ? 'Submit KYC' : 'Continue →'}
+              {submitting ? 'Submitting…' : step === 3 ? 'Submit KYC' : 'Continue →'}
             </button>
           </div>
         </div>
@@ -649,36 +454,6 @@ export default function KYCPage() {
               <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB' }}>Secure & Compliant</div>
             </div>
             <div style={{ fontSize: 12, color: '#1E40AF', lineHeight: 1.6 }}>Your KYC information is encrypted and stored securely. We comply with RBI guidelines and PMLA regulations.</div>
-          </div>
-
-          {/* Document selection summary */}
-          <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 14, padding: '20px', marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>Documents</div>
-            <div style={{ fontSize: 11.5, color: '#64748B', marginBottom: 14, lineHeight: 1.5 }}>
-              Choose <strong>any 2</strong> from the 6 available documents — whichever you have handy.
-            </div>
-            {DOC_TYPES.map(doc => {
-              const sel = selectedDocKeys.has(doc.key);
-              const uploaded = !!files[doc.key];
-              return (
-                <div key={doc.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: sel ? (uploaded ? '#059669' : '#2563EB') : '#CBD5E1', flexShrink: 0 }} />
-                    <span style={{ fontSize: 11.5, color: sel ? '#0F172A' : '#94A3B8' }}>{doc.label}</span>
-                  </div>
-                  {sel && (
-                    <span style={{
-                      background: uploaded ? '#ECFDF5' : '#EFF6FF',
-                      color: uploaded ? '#059669' : '#2563EB',
-                      fontSize: 9.5, fontWeight: 700,
-                      padding: '2px 7px', borderRadius: 5, whiteSpace: 'nowrap' as const,
-                    }}>
-                      {uploaded ? 'Uploaded' : 'Selected'}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
           </div>
 
           <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 14, padding: '20px' }}>

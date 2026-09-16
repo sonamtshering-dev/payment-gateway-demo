@@ -87,7 +87,7 @@ func (s *Service) LinkTelegramChat(ctx context.Context, code, chatID string) err
 	allTypes := []string{
 		TGNotifPaymentReceived, TGNotifPaymentFailed, TGNotifPaymentExpired,
 		TGNotifKYCApproved, TGNotifKYCRejected,
-		TGNotifSubscriptionActive, TGNotifSubscriptionExpiry,
+		TGNotifSubscriptionActive, TGNotifSubscriptionExpiry, TGNotifSubscriptionExpired,
 		TGNotifWebhookFailure, TGNotifAPIKeyRotated, TGNotifSuspiciousActivity,
 		TGNotifDailySummary, TGNotifWeeklySummary,
 	}
@@ -208,8 +208,8 @@ func generateConnectCode() (string, error) {
 // NOTIFICATION TRIGGER HELPERS (called from service methods)
 // ============================================================================
 
-func (s *Service) notifyTelegramPaymentReceived(ctx context.Context, merchantID uuid.UUID, orderID string, amount int64) {
-	s.EnqueueTelegram(ctx, merchantID, TGNotifPaymentReceived, FormatPaymentReceived(orderID, amount))
+func (s *Service) notifyTelegramPaymentReceived(ctx context.Context, merchantID uuid.UUID, orderID, utr string, amount int64) {
+	s.EnqueueTelegram(ctx, merchantID, TGNotifPaymentReceived, FormatPaymentReceived(orderID, utr, amount))
 }
 
 func (s *Service) notifyTelegramPaymentFailed(ctx context.Context, merchantID uuid.UUID, orderID string, amount int64) {

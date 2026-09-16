@@ -22,8 +22,9 @@ const (
 	TGNotifPaymentExpired     = "payment_expired"
 	TGNotifKYCApproved        = "kyc_approved"
 	TGNotifKYCRejected        = "kyc_rejected"
-	TGNotifSubscriptionActive = "subscription_activated"
-	TGNotifSubscriptionExpiry = "subscription_expiring"
+	TGNotifSubscriptionActive  = "subscription_activated"
+	TGNotifSubscriptionExpiry  = "subscription_expiring"
+	TGNotifSubscriptionExpired = "subscription_expired"
 	TGNotifWebhookFailure     = "webhook_failure"
 	TGNotifAPIKeyRotated      = "api_key_rotated"
 	TGNotifSuspiciousActivity = "suspicious_activity"
@@ -145,23 +146,27 @@ func (t *TelegramService) SetWebhook(webhookURL, secretToken string) error {
 // MESSAGE FORMATTERS
 // ============================================================================
 
-func FormatPaymentReceived(orderID string, amount int64) string {
+func FormatPaymentReceived(orderID, utr string, amount int64) string {
+	utrLine := ""
+	if utr != "" {
+		utrLine = fmt.Sprintf("\nUTR: <code>%s</code>", utr)
+	}
 	return fmt.Sprintf(
-		"<b>Payment Received</b>\n\nOrder: <code>%s</code>\nAmount: <b>₹%.2f</b>\nStatus: Paid",
-		orderID, float64(amount)/100,
+		"✅ <b>Payment Received</b>\n\nOrder: <code>%s</code>%s\nAmount: <b>₹%.2f</b>\nStatus: Paid",
+		orderID, utrLine, float64(amount)/100,
 	)
 }
 
 func FormatPaymentFailed(orderID string, amount int64) string {
 	return fmt.Sprintf(
-		"<b>Payment Failed</b>\n\nOrder: <code>%s</code>\nAmount: ₹%.2f\nStatus: Failed",
+		"❌ <b>Payment Failed</b>\n\nOrder: <code>%s</code>\nAmount: ₹%.2f\nStatus: Failed",
 		orderID, float64(amount)/100,
 	)
 }
 
 func FormatPaymentExpired(orderID string, amount int64) string {
 	return fmt.Sprintf(
-		"<b>Payment Expired</b>\n\nOrder: <code>%s</code>\nAmount: ₹%.2f\nStatus: Expired",
+		"⏰ <b>Payment Expired</b>\n\nOrder: <code>%s</code>\nAmount: ₹%.2f\nStatus: Expired",
 		orderID, float64(amount)/100,
 	)
 }
@@ -176,6 +181,13 @@ func FormatKYCRejected(reason string) string {
 
 func FormatSubscriptionActivated(planName string) string {
 	return fmt.Sprintf("<b>Subscription Active</b>\n\nPlan: <b>%s</b>\nFull API and gateway access unlocked.", planName)
+}
+
+func FormatSubscriptionExpired(planName string) string {
+	return fmt.Sprintf(
+		"🚫 <b>Subscription Expired</b>\n\nPlan: <b>%s</b>\nYour subscription has expired. Renew now to restore gateway access.",
+		planName,
+	)
 }
 
 func FormatSubscriptionExpiring(planName string, daysLeft int) string {

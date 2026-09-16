@@ -3,12 +3,14 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import ChatWidget from './chat-widget';
+import ReportModal from './report-modal';
 import {
   LayoutDashboard, ArrowLeftRight, Link2, Plug,
   FileCode2, Shield, Home, LogOut, Bell, Menu, X,
   BarChart2, Palette, CreditCard, Users,
   ShieldCheck, AlertTriangle, PackagePlus, ChevronDown,
-  ChevronLeft, ChevronRight, Send, Coins, UserCircle,
+  ChevronLeft, ChevronRight, Send, Coins, UserCircle, Flag,
 } from 'lucide-react';
 
 // ── Navigation structure ─────────────────────────────────────────
@@ -63,6 +65,13 @@ const NAV_GROUPS = [
       { label: 'Fraud Alerts', href: '/dashboard/fraud', icon: AlertTriangle },
     ],
   },
+  {
+    label: 'Support',
+    icon: Flag,
+    items: [
+      { label: 'My Reports', href: '/dashboard/my-reports', icon: Flag },
+    ],
+  },
 ];
 
 const PAGE_TITLES: Record<string, string> = {
@@ -82,6 +91,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/dashboard/crypto':              'Crypto Payments',
   '/dashboard/profile':             'Profile',
   '/dashboard/team':                'Team Management',
+  '/dashboard/my-reports':         'My Reports',
 };
 
 const STYLES = `
@@ -338,6 +348,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [merchantLogo, setMerchantLogo] = useState<string | null>(null);
+  const [showReport, setShowReport] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('upay_access_token');
+    if (!token) return;
+    fetch('/api/v1/dashboard/profile', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.logo_url) {
+          setMerchantLogo(d.data.logo_url);
+          localStorage.setItem('merchant_logo_url', d.data.logo_url);
+        } else {
+          setMerchantLogo(null);
+          localStorage.removeItem('merchant_logo_url');
+        }
+      })
+      .catch(() => {});
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'merchant_logo_url') setMerchantLogo(e.newValue);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const isActive = (href: string) =>
     href === '/dashboard' ? pathname === '/dashboard' : pathname?.startsWith(href);
@@ -481,6 +515,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <span className="np-nav-label">Admin Panel</span>
               </a>
             )}
+            <button
+              className="np-nav-item"
+              onClick={() => setShowReport(true)}
+              title={collapsed ? 'Report Issue' : undefined}
+              style={{ color: '#DC2626' }}
+            >
+              <Flag size={15} className="np-nav-icon" style={{ opacity: 0.7 }} />
+              <span className="np-nav-label">Report Issue</span>
+            </button>
             <a
               href="/"
               className="np-nav-item"
@@ -507,7 +550,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* User footer */}
           <div className="np-sidebar-footer">
             <div className="np-user-row">
-              <div className="np-avatar">{initials}</div>
+              <div className="np-avatar" style={merchantLogo ? { background: 'none', padding: 0, overflow: 'hidden' } : undefined}>
+                {merchantLogo
+                  ? <img src={merchantLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                  : initials}
+              </div>
               <div className="np-user-info">
                 <div className="np-user-name">{merchant?.name || 'Merchant'}</div>
                 <div className="np-user-role">{merchant?.is_admin ? 'Master Admin' : 'Merchant'}</div>
@@ -525,11 +572,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="np-page-title">{pageTitle}</span>
             </div>
             <div className="np-topbar-right">
+              <button className="np-topbar-btn" aria-label="Report Issue" onClick={() => setShowReport(true)} title="Report Issue" style={{ color: '#DC2626', borderColor: '#FECACA' }}>
+                <Flag size={15} />
+              </button>
               <button className="np-topbar-btn" aria-label="Notifications">
                 <Bell size={15} />
               </button>
               <div className="np-user-chip">
-                <div className="np-avatar" style={{ width: 26, height: 26, fontSize: 10 }}>{initials}</div>
+                <div className="np-avatar" style={merchantLogo ? { width: 26, height: 26, fontSize: 10, background: 'none', padding: 0, overflow: 'hidden' } : { width: 26, height: 26, fontSize: 10 }}>
+                  {merchantLogo
+                    ? <img src={merchantLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                    : initials}
+                </div>
                 <div>
                   <div className="np-chip-name">{merchant?.name || 'Merchant'}</div>
                   <div className="np-chip-role">{merchant?.is_admin ? 'Admin' : 'Merchant'}</div>
@@ -540,6 +594,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="np-content">{children}</div>
         </main>
       </div>
+      <ChatWidget />
+      {showReport && <ReportModal onClose={() => setShowReport(false)} />}
     </>
   );
 }

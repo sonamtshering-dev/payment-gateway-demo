@@ -11,8 +11,9 @@ import (
 
 func (r *Repository) GetMerchantProviders(ctx context.Context, merchantID uuid.UUID) ([]models.MerchantProvider, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, merchant_id, provider, merchant_name, merchant_mid,
-		       upi_id, is_active, is_default, created_at, updated_at
+		SELECT id, merchant_id, provider, merchant_name,
+		       COALESCE(merchant_mid, ''), COALESCE(upi_id, ''),
+		       is_active, is_default, created_at, updated_at
 		FROM merchant_providers
 		WHERE merchant_id = $1
 		ORDER BY is_default DESC, created_at ASC
@@ -47,8 +48,9 @@ func (r *Repository) CreateMerchantProvider(ctx context.Context, p *models.Merch
 func (r *Repository) GetProviderByID(ctx context.Context, id, merchantID uuid.UUID) (*models.MerchantProvider, error) {
 	var p models.MerchantProvider
 	err := r.db.QueryRow(ctx, `
-		SELECT id, merchant_id, provider, merchant_name, merchant_mid,
-		       upi_id, is_active, is_default, created_at, updated_at
+		SELECT id, merchant_id, provider, merchant_name,
+		       COALESCE(merchant_mid, ''), COALESCE(upi_id, ''),
+		       is_active, is_default, created_at, updated_at
 		FROM merchant_providers
 		WHERE id = $1 AND merchant_id = $2
 	`, id, merchantID).Scan(&p.ID, &p.MerchantID, &p.Provider, &p.MerchantName,

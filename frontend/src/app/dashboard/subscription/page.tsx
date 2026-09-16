@@ -8,9 +8,9 @@ interface Plan {
   id: string; name: string; price: number; billing_cycle: string;
   badge?: string; is_featured: boolean; cta_label: string;
   features: string[]; qr_limit: number; link_limit: number; api_limit: number;
-  discount_6month?: number; discount_1year?: number;
+  discount_6month?: number; discount_1year?: number; price_1year?: number;
 }
-interface Sub { id: string; plan_id: string; status: string; started_at: string; expires_at?: string; }
+interface Sub { id: string; plan_id: string; status: string; started_at: string; expires_at?: string | null; }
 
 const BILLING_OPTIONS = [
   { label: 'Monthly', months: 1,  discountKey: '' },
@@ -138,8 +138,14 @@ export default function SubscriptionPage() {
   };
 
   const getDisplayPrice = (plan: Plan) => {
-    if (plan.price === 0) return { price: 0, perMonth: 0, total: 0 };
+    if (plan.price === 0) return { price: 0, perMonth: 0, total: 0, discount: 0 };
     const opt = BILLING_OPTIONS[billingIdx];
+    if (opt.months === 12 && plan.price_1year && plan.price_1year > 0) {
+      const total = plan.price_1year;
+      const saving = plan.price * 12 - total;
+      const discountPct = Math.round(saving / (plan.price * 12) * 100);
+      return { price: Math.round(total / 12), perMonth: Math.round(total / 12), total, discount: discountPct };
+    }
     const discount = opt.discountKey ? ((plan as any)[opt.discountKey] || 0) : 0;
     const total = Math.round(plan.price * opt.months * (1 - discount / 100));
     return { price: Math.round(total / opt.months), perMonth: Math.round(total / opt.months), total, discount };
@@ -147,6 +153,12 @@ export default function SubscriptionPage() {
 
   const billing = BILLING_OPTIONS[billingIdx];
   const currentPlan = plans.find(p => p.id === current?.plan_id);
+
+  const isTrial = current?.status === 'trial';
+  const trialExpired = isTrial && current?.expires_at ? new Date(current.expires_at) < new Date() : false;
+  const trialHoursLeft = isTrial && current?.expires_at
+    ? Math.max(0, Math.ceil((new Date(current.expires_at).getTime() - Date.now()) / 3600000))
+    : 0;
   const qrUsed      = stats?.qr_used      ?? 0;
   const linksActive = stats?.links_active  ?? 0;
   const apiToday    = stats?.api_today     ?? 0;
@@ -168,11 +180,33 @@ export default function SubscriptionPage() {
       {error   && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', color: '#DC2626', fontSize: 13, marginBottom: 16 }}>{error}</div>}
       {success && <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 10, padding: '12px 16px', color: '#059669', fontSize: 13, marginBottom: 16 }}>{success}</div>}
 
+      {/* Trial expired banner */}
+      {trialExpired && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 12, padding: '14px 18px', marginBottom: 20 }}>
+          <AlertTriangle size={18} color="#DC2626" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#DC2626' }}>Your 2-day free trial has ended</div>
+            <div style={{ fontSize: 12, color: '#991B1B', marginTop: 2 }}>Purchase a plan below to continue accepting payments.</div>
+          </div>
+        </div>
+      )}
+
+      {/* Trial active banner */}
+      {isTrial && !trialExpired && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: 12, padding: '14px 18px', marginBottom: 20 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EA580C" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#C2410C' }}>Free trial active — {trialHoursLeft}h remaining</div>
+            <div style={{ fontSize: 12, color: '#9A3412', marginTop: 2 }}>You have full access for 2 days. Subscribe to a plan before your trial ends to keep accepting payments.</div>
+          </div>
+        </div>
+      )}
+
       {/* Hard limit banner — blocks new payments */}
       {currentPlan && (
-        (currentPlan.qr_limit > 0 && qrUsed >= currentPlan.qr_limit) ||
-        (currentPlan.link_limit > 0 && linksActive >= currentPlan.link_limit) ||
-        (currentPlan.api_limit > 0 && apiToday >= currentPlan.api_limit)
+        (currentPlan.qr_limit !== -1 && qrUsed >= currentPlan.qr_limit) ||
+        (currentPlan.link_limit !== -1 && linksActive >= currentPlan.link_limit) ||
+        (currentPlan.api_limit !== -1 && apiToday >= currentPlan.api_limit)
       ) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: '14px 18px', marginBottom: 20 }}>
           <AlertTriangle size={18} color="#DC2626" style={{ flexShrink: 0 }} />
@@ -185,9 +219,9 @@ export default function SubscriptionPage() {
 
       {/* Soft warning — near limit */}
       {currentPlan && !(
-        (currentPlan.qr_limit > 0 && qrUsed >= currentPlan.qr_limit) ||
-        (currentPlan.link_limit > 0 && linksActive >= currentPlan.link_limit) ||
-        (currentPlan.api_limit > 0 && apiToday >= currentPlan.api_limit)
+        (currentPlan.qr_limit !== -1 && qrUsed >= currentPlan.qr_limit) ||
+        (currentPlan.link_limit !== -1 && linksActive >= currentPlan.link_limit) ||
+        (currentPlan.api_limit !== -1 && apiToday >= currentPlan.api_limit)
       ) && (
         (currentPlan.qr_limit > 0 && qrUsed / currentPlan.qr_limit >= 0.8) ||
         (currentPlan.api_limit > 0 && apiToday / currentPlan.api_limit >= 0.8)
@@ -217,8 +251,8 @@ export default function SubscriptionPage() {
             <button key={opt.label} onClick={() => setBillingIdx(i)}
               style={{ padding: '7px 18px', borderRadius: 50, border: 'none', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontSize: 13, fontWeight: 600, background: billingIdx === i ? '#FFFFFF' : 'transparent', color: billingIdx === i ? '#0F172A' : '#64748B', boxShadow: billingIdx === i ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 6 }}>
               {opt.label}
-              {i === 1 && plans[0]?.discount_1year && plans[0].discount_1year > 0 && (
-                <span style={{ fontSize: 10, background: '#DCFCE7', color: '#16A34A', padding: '2px 6px', borderRadius: 20, fontWeight: 700 }}>-{plans[0].discount_1year}%</span>
+              {i === 1 && plans[0] && getDisplayPrice(plans[0]).discount > 0 && (
+                <span style={{ fontSize: 10, background: '#DCFCE7', color: '#16A34A', padding: '2px 6px', borderRadius: 20, fontWeight: 700 }}>-{getDisplayPrice(plans[0]).discount}%</span>
               )}
             </button>
           ))}
@@ -235,7 +269,7 @@ export default function SubscriptionPage() {
             <>
               <div className="plan-grid" style={{ marginBottom: 20 }}>
                 {plans.map(plan => {
-                  const isCurrent = current?.plan_id === plan.id && current?.status === 'active';
+                  const isCurrent = current?.plan_id === plan.id && (current?.status === 'active' || current?.status === 'trial');
                   const isLoading = subscribing === plan.id;
                   const isDowngrade = plan.price === 0 && !isCurrent && !!(current?.status === 'active' && currentPlan && currentPlan.price > 0);
                   const { price, total, discount } = getDisplayPrice(plan);
@@ -275,10 +309,21 @@ export default function SubscriptionPage() {
                         )}
                       </div>
 
+                      {/* Limits grid */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 14, padding: '10px 0', borderTop: '1px solid #F1F5F9', borderBottom: '1px solid #F1F5F9' }}>
+                        {([['QR Codes', plan.qr_limit, '/ period'], ['Pay Links', plan.link_limit, 'active'], ['API Calls', plan.api_limit, '/ day']] as [string, number, string][]).map(([l, v, unit]) => (
+                          <div key={l} style={{ textAlign: 'center' as const }}>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' as const, letterSpacing: '.06em', marginBottom: 2 }}>{l}</div>
+                            <div style={{ fontSize: 16, fontWeight: 900, color: (v == null || v === -1) ? '#059669' : meta.color }}>{(v == null || v === -1) ? '∞' : v.toLocaleString('en-IN')}</div>
+                            <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 1 }}>{unit}</div>
+                          </div>
+                        ))}
+                      </div>
+
                       <button
                         onClick={() => !isCurrent && handlePay(plan)}
                         disabled={isCurrent || isLoading}
-                        style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: `1.5px solid ${isCurrent ? meta.color : isDowngrade ? '#DC2626' : plan.is_featured ? 'transparent' : '#E2E8F0'}`, background: isCurrent ? meta.color : isDowngrade ? '#FEF2F2' : plan.is_featured ? meta.color : '#F8FAFC', color: isCurrent ? '#fff' : isDowngrade ? '#DC2626' : plan.is_featured ? '#fff' : '#475569', fontFamily: 'DM Sans, sans-serif', fontWeight: 700, fontSize: 13, cursor: isCurrent ? 'default' : 'pointer', marginBottom: 18 }}>
+                        style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: `1.5px solid ${isCurrent ? meta.color : isDowngrade ? '#DC2626' : plan.is_featured ? 'transparent' : '#E2E8F0'}`, background: isCurrent ? meta.color : isDowngrade ? '#FEF2F2' : plan.is_featured ? meta.color : '#F8FAFC', color: isCurrent ? '#fff' : isDowngrade ? '#DC2626' : plan.is_featured ? '#fff' : '#475569', fontFamily: 'DM Sans, sans-serif', fontWeight: 700, fontSize: 13, cursor: isCurrent ? 'default' : 'pointer', marginBottom: 14 }}>
                         {isCurrent ? '✓ Current Plan' : isLoading ? 'Processing…' : isDowngrade ? 'Downgrade to Free' : plan.price === 0 ? (plan.cta_label || 'Get Started') : 'Upgrade'}
                       </button>
 
@@ -292,13 +337,6 @@ export default function SubscriptionPage() {
                           </div>
                         ))}
                       </div>
-
-                      {(plan.qr_limit > 0 || plan.api_limit > 0) && (
-                        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #F1F5F9', display: 'flex', gap: 12, fontSize: 11, color: '#94A3B8' }}>
-                          {plan.qr_limit > 0 && <span>QR: {plan.qr_limit === 0 ? '∞' : plan.qr_limit}</span>}
-                          {plan.api_limit > 0 && <span>API: {plan.api_limit === 0 ? '∞' : plan.api_limit}/day</span>}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -374,12 +412,12 @@ export default function SubscriptionPage() {
             )}
             {currentPlan ? (() => {
               const rows = [
-                { label: 'Payments Created',  used: qrUsed      ?? 0, limit: currentPlan.qr_limit   ?? 0, color: '#2563EB', unit: '' },
-                { label: 'Active Pay Links',  used: linksActive ?? 0, limit: currentPlan.link_limit ?? 0, color: '#7C3AED', unit: '' },
-                { label: 'API Calls (24h)',   used: apiToday    ?? 0, limit: currentPlan.api_limit  ?? 0, color: '#059669', unit: '/day' },
+                { label: 'Payments Created',  used: qrUsed      ?? 0, limit: currentPlan.qr_limit   ?? -1, color: '#2563EB', unit: '' },
+                { label: 'Active Pay Links',  used: linksActive ?? 0, limit: currentPlan.link_limit ?? -1, color: '#7C3AED', unit: '' },
+                { label: 'API Calls (24h)',   used: apiToday    ?? 0, limit: currentPlan.api_limit  ?? -1, color: '#059669', unit: '/day' },
               ];
               return rows.map(({ label, used, limit, color, unit }) => {
-                const unlimited = limit === 0;
+                const unlimited = limit === -1;
                 const pct = unlimited ? 0 : Math.min((used / limit) * 100, 100);
                 const atLimit = !unlimited && used >= limit;
                 const nearLimit = !unlimited && pct >= 80;
@@ -441,7 +479,7 @@ export default function SubscriptionPage() {
       {downgradeModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' }}>
           <div style={{ background: '#FFFFFF', border: '1px solid #FECACA', borderRadius: 20, padding: 32, width: 420, maxWidth: '92vw', textAlign: 'center' }}>
-            <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 28 }}>⚠️</div>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 28 }}></div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', marginBottom: 8 }}>Downgrade to Free?</div>
             <div style={{ fontSize: 14, color: '#64748B', lineHeight: 1.6, marginBottom: 24 }}>
               Your current <strong style={{ color: '#0F172A' }}>{currentPlan?.name}</strong> plan will be <strong style={{ color: '#DC2626' }}>cancelled immediately</strong>. You'll lose access to all paid features and your limits will drop to the Free tier. This cannot be undone without repurchasing a plan.
@@ -486,7 +524,7 @@ export default function SubscriptionPage() {
                 <div style={{ background: '#F8FAFC', borderRadius: 12, padding: '16px 20px', marginBottom: 20, textAlign: 'left', border: '1px solid #E2E8F0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid #E2E8F0' }}>
                     <span style={{ fontSize: 13, color: '#64748B' }}>Amount due</span>
-                    <span style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>{fmtRaw(getDisplayPrice(payModal).total || getDisplayPrice(payModal).price)}</span>
+                    <span style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>{fmtRaw(payModal.price)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid #E2E8F0' }}>
                     <span style={{ fontSize: 13, color: '#64748B' }}>Payment method</span>
@@ -556,7 +594,7 @@ export default function SubscriptionPage() {
                     </div>
                   )}
                   <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '14px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 11, color: '#374151' }}>🔒 256-bit encrypted · Powered by NovaPay</span>
+                    <span style={{ fontSize: 11, color: '#374151' }}> 256-bit encrypted · Powered by NovaPay</span>
                     <button onClick={() => setPaymentStep('confirm')} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>Cancel</button>
                   </div>
                 </div>
@@ -564,7 +602,7 @@ export default function SubscriptionPage() {
             )}
             {paymentStep === 'done' && (
               <>
-                <div style={{ fontSize: 64, marginBottom: 16 }}>🎉</div>
+                <div style={{ fontSize: 64, marginBottom: 16 }}></div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: '#2563EB', marginBottom: 8 }}>Payment Confirmed!</div>
                 <div style={{ color: '#64748B', fontSize: 14 }}>Your subscription is now active. Gateway access enabled.</div>
               </>

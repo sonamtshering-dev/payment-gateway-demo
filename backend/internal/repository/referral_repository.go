@@ -167,8 +167,9 @@ func (r *Repository) GetSubscriptionsExpiringInDays(ctx context.Context, days in
 	rows, err := r.db.Query(ctx, `
 		SELECT id, merchant_id, plan_id, status, started_at, expires_at
 		FROM merchant_subscriptions
-		WHERE status = 'active'
-		AND expires_at::date = (CURRENT_DATE + $1 * INTERVAL '1 day')::date
+		WHERE status IN ('active','trial')
+		AND expires_at IS NOT NULL
+		AND expires_at::date = (CURRENT_DATE + ($1 || ' days')::interval)::date
 	`, days)
 	if err != nil {
 		return nil, err

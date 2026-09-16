@@ -20,14 +20,17 @@ func (s *Service) GetPublicPlans(ctx context.Context) ([]models.PlanPublic, erro
 	out := make([]models.PlanPublic, 0, len(plans))
 	for _, p := range plans {
 		pub := models.PlanPublic{
-			ID:           p.ID,
-			Name:         p.Name,
-			Price:        p.Price,
-			BillingCycle: p.BillingCycle,
-			Badge:        p.Badge,
-			IsFeatured:   p.IsFeatured,
-			CTALabel:     p.CTALabel,
-			Features:     p.Features,
+			ID:             p.ID,
+			Name:           p.Name,
+			Price:          p.Price,
+			BillingCycle:   p.BillingCycle,
+			Badge:          p.Badge,
+			IsFeatured:     p.IsFeatured,
+			CTALabel:       p.CTALabel,
+			Features:       p.Features,
+			Discount6Month: p.Discount6Month,
+			Discount1Year:  p.Discount1Year,
+			Price1Year:     p.Price1Year,
 		}
 		out = append(out, pub)
 	}

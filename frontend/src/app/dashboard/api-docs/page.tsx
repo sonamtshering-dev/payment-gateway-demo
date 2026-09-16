@@ -227,7 +227,7 @@ const ENDPOINT_GROUPS: { name: string; color: string; note?: string; endpoints: 
           { name: 'amount', type: 'integer', required: true, desc: 'Amount in paise. Min 100 (₹1.00).' },
           { name: 'currency', type: 'string', required: true, desc: 'Must be "INR". USDT conversion happens at checkout.' },
           { name: 'customer_reference', type: 'string', required: false, desc: 'Shown on the checkout page (max 128).' },
-          { name: 'redirect_url', type: 'string', required: false, desc: 'Where the customer returns after paying.' },
+          { name: 'redirect_url', type: 'string', required: false, desc: 'Where the customer is sent after paying. The checkout page auto-redirects after 5 seconds with ?order_id=…&status=paid appended.' },
           { name: 'expires_in_hours', type: 'integer', required: false, desc: 'Payment window. Default: 15 minutes.' },
           { name: 'notify_on_paid', type: 'boolean', required: false, desc: 'Email you when this payment completes.' },
           { name: 'collect_customer_details', type: 'boolean', required: false, desc: 'Ask the customer for name/email/phone at checkout.' },
@@ -296,7 +296,7 @@ const ERRORS = [
   { status: '401', code: 'INVALID_TIMESTAMP', desc: 'Timestamp outside the ±5 minute window — check server clock' },
   { status: '401', code: 'INVALID_SIGNATURE', desc: 'HMAC mismatch — sign the exact raw body you send, as timestamp.body' },
   { status: '400', code: '—', desc: 'Validation error — the message says which field' },
-  { status: '429', code: 'RATE_LIMIT_EXCEEDED', desc: 'Over 100 requests/min per merchant — back off and retry' },
+  { status: '429', code: 'RATE_LIMIT_EXCEEDED', desc: 'Payments API: 60 req/min per IP. Auth endpoints (login, OTP): 10/min. Forgot-password: 5/min. Back off and retry.' },
   { status: '500', code: '—', desc: 'Gateway error — safe to retry with the same Idempotency-Key' },
 ];
 
@@ -649,7 +649,7 @@ export default function ApiDocsPage() {
 
         {[
           { n: 3, t: 'Send the customer to checkout', d: <>Redirect to <code>{BASE_URL}/pay/{'{payment_id}'}</code> — QR, UPI apps, and USDT (if you enabled it) are all handled there. Or render the returned QR yourself.</> },
-          { n: 4, t: 'Get paid', d: <>Payments confirm automatically. Your webhook receives a signed <code>paid</code> event (see Webhooks below) and the customer is returned to your <code>redirect_url</code>.</> },
+          { n: 4, t: 'Get paid', d: <>Payments confirm automatically. Your webhook receives a signed <code>paid</code> event (see Webhooks below). The checkout page auto-redirects the customer to your <code>redirect_url</code> after 5 seconds with <code>?order_id=…&amp;status=paid</code> appended — or immediately on button click.</> },
         ].map(step => (
           <div key={step.n} style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
             <div style={{ width: 24, height: 24, borderRadius: 12, background: '#EFF6FF', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0, marginTop: 1 }}>{step.n}</div>

@@ -88,6 +88,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [sub, setSub] = useState<any>(null);
   const [plan, setPlan] = useState<any>(null);
+  const [usage, setUsage] = useState<any>(null);
   const [txns, setTxns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -104,6 +105,7 @@ export default function DashboardPage() {
       if (sd.success && sd.data?.subscription) {
         setSub(sd.data.subscription);
         setPlan(sd.data.plan);
+        setUsage(sd.data.usage || null);
       }
       if (t.success) setTxns(t.data?.data || []);
     }).finally(() => setLoading(false));
@@ -112,6 +114,15 @@ export default function DashboardPage() {
   const daysLeft = sub?.expires_at
     ? Math.max(0, Math.ceil((new Date(sub.expires_at).getTime() - Date.now()) / 86400000))
     : null;
+
+  const isExpired = sub && sub.status !== 'active' && sub.status !== 'trial';
+  const isExpiringSoon = !isExpired && daysLeft !== null && daysLeft <= 7;
+
+  const fmtLimit = (n: number) => (n === -1 ? '∞' : n?.toLocaleString('en-IN') ?? '—');
+  const usagePct = (used: number, limit: number) =>
+    limit === -1 ? 0 : Math.min(100, Math.round((used / limit) * 100));
+  const barColor = (pct: number) =>
+    pct >= 90 ? C.red : pct >= 70 ? C.amber : C.blue;
 
   const statValues: Record<string, string> = {
     volume:       stats ? fmt(stats.total_volume) : '—',
@@ -168,6 +179,35 @@ export default function DashboardPage() {
           View All Transactions
         </button>
       </div>
+
+      {/* Subscription expiry banners */}
+      {isExpired && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, background: C.redBg, border: `1px solid #FECACA`, borderRadius: 10, padding: '11px 16px', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.red }}>Subscription expired — payments are paused</div>
+              <div style={{ fontSize: 11.5, color: '#B91C1C', marginTop: 1 }}>Renew your plan to resume accepting UPI payments.</div>
+            </div>
+          </div>
+          <button onClick={() => router.push('/dashboard/subscription')} style={{ background: C.red, border: 'none', borderRadius: 7, padding: '7px 14px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+            Renew Now →
+          </button>
+        </div>
+      )}
+      {isExpiringSoon && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, background: C.amberBg, border: `1px solid #FDE68A`, borderRadius: 10, padding: '11px 16px', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#92400E" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#92400E' }}>
+              Subscription expires in <b>{daysLeft} day{daysLeft !== 1 ? 's' : ''}</b> — renew to avoid service interruption.
+            </div>
+          </div>
+          <button onClick={() => router.push('/dashboard/subscription')} style={{ background: C.amber, border: 'none', borderRadius: 7, padding: '7px 14px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+            Renew Plan →
+          </button>
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="ov-stat-row" style={{ marginBottom: 14 }}>
@@ -289,31 +329,65 @@ export default function DashboardPage() {
         {/* Right column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-          {/* Subscription status */}
-          {sub?.status === 'active' ? (
-            <div style={{ ...card, padding: '16px', borderColor: C.blue100, background: C.blue50 }}>
+          {/* Subscription + usage card */}
+          {sub ? (
+            <div style={{ ...card, padding: '16px', borderColor: isExpired ? '#FECACA' : C.blue100, background: isExpired ? '#FFF5F5' : C.blue50 }}>
               <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 10 }}>
-                Subscription
+                Plan &amp; Usage
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-                <Package size={16} color={C.blue} />
-                <span style={{ fontSize: 14, fontWeight: 800, color: C.text, letterSpacing: '-.02em' }}>{plan?.name || 'Active Plan'}</span>
-              </div>
-              <div style={{ fontSize: 12, color: C.text2, marginBottom: 10 }}>
-                {sub.expires_at ? `Expires ${fmtDate(sub.expires_at)}` : 'Never expires'}
-                {daysLeft !== null && daysLeft <= 7 && (
-                  <span style={{ color: C.amber, marginLeft: 6, fontWeight: 700 }}>{daysLeft}d left</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <Package size={15} color={isExpired ? C.red : C.blue} />
+                  <span style={{ fontSize: 14, fontWeight: 800, color: C.text, letterSpacing: '-.02em' }}>{plan?.name || 'Active Plan'}</span>
+                </div>
+                {isExpired ? (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: C.redBg, color: C.red, border: '1px solid #FECACA', borderRadius: 4, padding: '2px 6px' }}>EXPIRED</span>
+                ) : (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: '#ECFDF5', color: C.green, border: '1px solid #BBF7D0', borderRadius: 4, padding: '2px 6px' }}>ACTIVE</span>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 8, fontSize: 11.5, color: C.text2, marginBottom: 12, flexWrap: 'wrap' } as React.CSSProperties}>
-                <span>QR: <b style={{ color: C.text }}>{plan?.qr_limit === 0 ? 'Unlimited' : plan?.qr_limit || '—'}</b></span>
-                <span>Links: <b style={{ color: C.text }}>{plan?.link_limit === 0 ? 'Unlimited' : plan?.link_limit || '—'}</b></span>
+              <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 14 }}>
+                {sub.expires_at
+                  ? isExpired
+                    ? `Expired ${fmtDate(sub.expires_at)}`
+                    : `Renews ${fmtDate(sub.expires_at)}`
+                  : 'No expiry'}
+                {!isExpired && daysLeft !== null && daysLeft <= 7 && (
+                  <span style={{ color: C.amber, marginLeft: 5, fontWeight: 700 }}>{daysLeft}d left</span>
+                )}
               </div>
+
+              {/* Usage bars */}
+              {[
+                { label: 'QR Codes', used: usage?.qr_used ?? 0, limit: plan?.qr_limit ?? 0 },
+                { label: 'Payment Links', used: usage?.links_active ?? 0, limit: plan?.link_limit ?? 0 },
+                { label: 'API Calls Today', used: usage?.api_today ?? 0, limit: plan?.api_limit ?? 0 },
+              ].map(row => {
+                const pct = usagePct(row.used, row.limit);
+                const color = barColor(pct);
+                const unlimited = row.limit === -1;
+                return (
+                  <div key={row.label} style={{ marginBottom: 11 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, color: C.text2, fontWeight: 600 }}>{row.label}</span>
+                      <span style={{ fontSize: 11, color: unlimited ? C.green : pct >= 90 ? C.red : C.text2, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                        {unlimited ? '∞ Unlimited' : `${row.used.toLocaleString('en-IN')} / ${fmtLimit(row.limit)}`}
+                      </span>
+                    </div>
+                    {!unlimited && (
+                      <div style={{ height: 5, background: C.border, borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 99, transition: 'width .4s ease' }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
               <button
-                onClick={() => router.push('/dashboard/active-subscription')}
-                style={{ background: C.blue, border: 'none', borderRadius: 7, padding: '7px 13px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                onClick={() => router.push('/dashboard/subscription')}
+                style={{ width: '100%', marginTop: 4, background: isExpired ? C.red : C.blue, border: 'none', borderRadius: 7, padding: '8px 13px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
               >
-                View Details
+                {isExpired ? 'Renew Plan →' : 'Manage Plan'}
               </button>
             </div>
           ) : (

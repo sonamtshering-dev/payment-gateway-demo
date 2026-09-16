@@ -91,6 +91,22 @@ func main() {
 	middleware.SetRedisClient(rdb)
 
 	// ========================================================================
+	// SECURITY STARTUP CHECKS
+	// ========================================================================
+	if cfg.Database.SSLMode == "disable" {
+		log.Warn().Msg("SECURITY: DB_SSL_MODE=disable — database connection is unencrypted. Set DB_SSL_MODE=require in .env")
+	}
+	if cfg.JWT.AccessExpiry > 60*time.Minute {
+		log.Warn().Dur("expiry", cfg.JWT.AccessExpiry).Msg("SECURITY: JWT access token lifetime exceeds 60 minutes. Reduce JWT_ACCESS_EXPIRY_MINUTES to 15")
+	}
+	if len(cfg.Security.AdminAllowedIPs) == 0 || (len(cfg.Security.AdminAllowedIPs) == 1 && cfg.Security.AdminAllowedIPs[0] == "") {
+		log.Warn().Msg("SECURITY: ADMIN_ALLOWED_IPS is not set — admin panel is accessible from any IP. Set ADMIN_ALLOWED_IPS in .env")
+	}
+	if appBase := os.Getenv("APP_BASE_URL"); appBase == "" || appBase == "http://localhost:3000" {
+		log.Warn().Msg("SECURITY: APP_BASE_URL is not set or points to localhost — password reset emails will contain broken links")
+	}
+
+	// ========================================================================
 	// INITIALIZE PROVIDERS
 	// ========================================================================
 	providerRegistry := providers.InitProviders(ctx)
@@ -120,7 +136,7 @@ func main() {
 	r.Use(middleware.RequestID())
 	r.Use(middleware.StructuredLogger())
 	r.Use(middleware.SecurityHeaders())
-	r.Use(middleware.CORS([]string{"http://localhost:3000", "https://dashboard.novapay.in"}))
+	r.Use(middleware.CORS([]string{"http://localhost:3000", "https://nova-pay.in", "https://www.nova-pay.in"}))
 	r.Use(middleware.RateLimiter(rdb, cfg.Security.RateLimitPerMinute, time.Minute))
 	r.Use(middleware.RequestBodyLimit(1 << 20)) // 1MB max body
 	r.Use(middleware.MetricsCollector())
@@ -149,15 +165,15 @@ func main() {
 		// ---- AUTH (public) ----
 		auth := v1.Group("/auth")
 		{
-			auth.POST("/register", h.Register)
-			auth.POST("/login", h.Login)
+			auth.POST("/register", middleware.RateLimiter(rdb, 10, time.Minute, "register"), h.Register)
+			auth.POST("/login", middleware.RateLimiter(rdb, 10, time.Minute, "login"), h.Login)
 			auth.POST("/refresh", h.RefreshToken)
-			auth.POST("/forgot-password", h.ForgotPassword)
-			auth.POST("/reset-password", h.ResetPassword)
+			auth.POST("/forgot-password", middleware.RateLimiter(rdb, 5, time.Minute, "forgot-pw"), h.ForgotPassword)
+			auth.POST("/reset-password", middleware.RateLimiter(rdb, 5, time.Minute, "reset-pw"), h.ResetPassword)
 			auth.POST("/accept-invite", h.AcceptTeamInvite)
-			auth.POST("/otp/request", h.RequestLoginOTP)
-			auth.POST("/otp/verify", h.VerifyLoginOTP)
-			auth.POST("/telegram/login", h.TelegramLoginAuth)
+			auth.POST("/otp/request", middleware.RateLimiter(rdb, 5, time.Minute, "otp-req"), h.RequestLoginOTP)
+			auth.POST("/otp/verify", middleware.RateLimiter(rdb, 10, time.Minute, "otp-verify"), h.VerifyLoginOTP)
+			auth.POST("/telegram/login", middleware.RateLimiter(rdb, 10, time.Minute, "tg-login"), h.TelegramLoginAuth)
 		}
 
 		// ---- PAYMENT API (API-key + signature authenticated) ----
@@ -180,6 +196,9 @@ func main() {
 			dashboard.GET("/stats", h.GetDashboardStats)
 			dashboard.GET("/transactions", h.GetTransactions)
 			dashboard.GET("/profile", h.GetProfile)
+
+			// Payment link creation from dashboard (JWT auth, no HMAC required)
+			dashboard.POST("/payments/create", h.CreatePayment)
 
 			// UPI management
 			dashboard.POST("/upi", adm, h.AddUPI)
@@ -223,12 +242,17 @@ func main() {
 					dashboard.POST("/logo", adm, h.UploadMerchantLogo)
 					dashboard.DELETE("/logo", adm, h.DeleteMerchantLogo)
 					dashboard.PUT("/business-name", adm, h.UpdateBusinessName)
+					dashboard.PUT("/branding", adm, h.UpdateBranding)
+					dashboard.POST("/chat", h.Chat)
+					dashboard.POST("/tickets", h.CreateTicket)
+					dashboard.GET("/tickets", h.ListMyTickets)
 					dashboard.GET("/referral", h.GetReferralStats)
 					dashboard.POST("/referral/apply", h.ApplyReferralCode)
 					dashboard.POST("/paytm-mid", adm, h.SavePaytmMID)
+					dashboard.POST("/phonepe-config", adm, h.SavePhonePeConfig)
 				dashboard.GET("/kyc", h.GetKYC)
 					dashboard.POST("/kyc", h.SubmitKYC)
-					dashboard.POST("/payments/create", h.CreatePayment)
+					dashboard.POST("/kyc/document", h.UploadKYCDocument)
 
 				// Telegram notifications
 				// Crypto / USDT settings
@@ -283,6 +307,8 @@ func main() {
 			admin.GET("/top-merchants",                  h.AdminGetTopMerchants)
 			admin.GET("/payments-v2",                    h.AdminListPaymentsPaginated)
 			admin.GET("/fraud-v2",                       h.AdminListFraudPaginated)
+			admin.GET("/tickets",                        h.AdminListTickets)
+			admin.PUT("/tickets/:id",                    h.AdminUpdateTicket)
 		}
 	}
 
@@ -316,6 +342,23 @@ func main() {
 			log.Fatal().Err(err).Msg("Server failed")
 		}
 	}()
+
+	// Auto-register Telegram webhook on startup
+	if cfg.Telegram.BotToken != "" {
+		appURL := os.Getenv("APP_BASE_URL")
+		if appURL == "" {
+			appURL = "https://nova-pay.in"
+		}
+		webhookURL := appURL + "/api/v1/telegram/webhook"
+		tgSvc := services.NewTelegramService(cfg.Telegram.BotToken, cfg.Telegram.BotName, nil)
+		if err := tgSvc.SetWebhook(webhookURL, cfg.Telegram.WebhookSecret); err != nil {
+			log.Error().Err(err).Msg("Failed to register Telegram webhook")
+		} else {
+			log.Info().Str("url", webhookURL).Msg("Telegram webhook registered")
+		}
+	} else {
+		log.Warn().Msg("TELEGRAM_BOT_TOKEN not set — Telegram notifications disabled")
+	}
 
 	// ========================================================================
 	// GRACEFUL SHUTDOWN

@@ -121,7 +121,14 @@ func AdminIPWhitelist(allowedIPs []string) gin.HandlerFunc {
 	for _, ip := range exactIPs {
 		allowed[ip] = true
 	}
+	noRestriction := len(exactIPs) == 0 && len(networks) == 0
 	return func(c *gin.Context) {
+		if noRestriction {
+			// SECURITY: ADMIN_ALLOWED_IPS is not configured — all IPs are permitted.
+			// Set ADMIN_ALLOWED_IPS in .env to restrict admin access to known IPs.
+			c.Next()
+			return
+		}
 		ip := c.GetHeader("CF-Connecting-IP")
 		if ip == "" {
 			ip = c.ClientIP()
@@ -308,14 +315,27 @@ func cfg_redis(c *gin.Context) *redis.Client {
 // RATE LIMITER (Token Bucket with Redis)
 // ============================================================================
 
-func RateLimiter(rdb *redis.Client, limit int, window time.Duration) gin.HandlerFunc {
+func RateLimiter(rdb *redis.Client, limit int, window time.Duration, prefixes ...string) gin.HandlerFunc {
+	prefix := "global"
+	if len(prefixes) > 0 && prefixes[0] != "" {
+		prefix = prefixes[0]
+	}
+	fallback := NewIPRateLimiter(limit, window)
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
-		key := fmt.Sprintf("ratelimit:%s", ip)
+		key := fmt.Sprintf("ratelimit:%s:%s", prefix, ip)
 
 		current, err := rdb.Incr(c.Request.Context(), key).Result()
 		if err != nil {
-			// If Redis is down, allow request but log
+			// Redis is down — use in-memory fallback limiter rather than allowing all traffic
+			if !fallback.Allow(ip) {
+				c.JSON(http.StatusTooManyRequests, models.ErrorResponse{
+					Error: "rate limit exceeded, try again later",
+					Code:  "RATE_LIMIT_EXCEEDED",
+				})
+				c.Abort()
+				return
+			}
 			c.Next()
 			return
 		}

@@ -3,10 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 
 const Logo = () => (
-  <svg width="28" height="28" viewBox="0 0 36 36" fill="none">
-    <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#60a5fa"/><stop offset="100%" stopColor="#2563eb"/></linearGradient></defs>
-    <path d="M8 28V8l7 13L22 8v20" stroke="url(#lg)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
+  <img src="/novapaylogo.jpeg" alt="NovaPay" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6 }} />
 );
 
 const CHANNELS = [

@@ -69,9 +69,10 @@ export default function PaymentsPage() {
       } else {
         // Show specific gating errors nicely
         const msg = d.error || 'Failed to create payment';
-        if (msg.includes('KYC_REQUIRED')) setError('⚠️ Complete your KYC verification before creating payments.');
-        else if (msg.includes('SUBSCRIPTION_REQUIRED')) setError('⚠️ Purchase a subscription plan to start accepting payments.');
-        else if (msg.includes('UPI_REQUIRED')) setError('⚠️ Add a UPI ID in Connect Merchant before creating payments.');
+        if (msg.includes('KYC_REQUIRED')) setError(' Complete your KYC verification before creating payments.');
+        else if (msg.includes('TRIAL_EXPIRED')) setError(' Your 2-day free trial has ended. Purchase a plan to continue accepting payments.');
+        else if (msg.includes('SUBSCRIPTION_REQUIRED') || msg.includes('SUBSCRIPTION_EXPIRED')) setError(' Purchase a subscription plan to start accepting payments.');
+        else if (msg.includes('UPI_REQUIRED')) setError(' Add a UPI ID in Connect Merchant before creating payments.');
         else setError(msg);
       }
     } catch {
@@ -113,7 +114,7 @@ export default function PaymentsPage() {
       </div>
 
       <button style={S.btn} onClick={generate} disabled={loading}>
-        {loading ? 'Generating…' : '⚡ Generate Payment Link'}
+        {loading ? 'Generating…' : ' Generate Payment Link'}
       </button>
 
       {error && <div style={S.error}>{error}</div>}

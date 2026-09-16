@@ -160,6 +160,18 @@ class APIClient {
   async updateBusinessName(name: string) {
     return this.request<any>('PUT', '/api/v1/dashboard/business-name', { business_name: name });
   }
+
+  async getSubscriptionDetail() {
+    return this.request<any>('GET', '/api/v1/dashboard/subscription/detail');
+  }
+
+  async getKYC() {
+    return this.request<any>('GET', '/api/v1/dashboard/kyc');
+  }
+
+  async submitKYC(body: Record<string, string>) {
+    return this.request<any>('POST', '/api/v1/dashboard/kyc', body);
+  }
 }
 
 export const api = new APIClient(API_BASE);

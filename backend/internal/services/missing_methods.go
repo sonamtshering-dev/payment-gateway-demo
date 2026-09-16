@@ -141,6 +141,15 @@ func (s *Service) SavePaytmMID(ctx context.Context, merchantID uuid.UUID, upiID,
 	return s.repo.SavePaytmMID(ctx, merchantID, upiID, mid)
 }
 
+// SavePhonePeConfig encrypts the salt key and stores PhonePe PG credentials.
+func (s *Service) SavePhonePeConfig(ctx context.Context, merchantID uuid.UUID, phonePeMerchantID, saltKey, saltIndex string) error {
+	encSaltKey, err := utils.Encrypt(saltKey, s.config.Security.EncryptionKey)
+	if err != nil {
+		return fmt.Errorf("encrypt phonepe salt key: %w", err)
+	}
+	return s.repo.SavePhonePeConfig(ctx, merchantID, phonePeMerchantID, encSaltKey, saltIndex)
+}
+
 func (s *Service) UpdateKYCDocument(ctx context.Context, merchantID uuid.UUID, docURL string) error {
 	return s.repo.UpdateKYCDocumentURL(ctx, merchantID, docURL)
 }

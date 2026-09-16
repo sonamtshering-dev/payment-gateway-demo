@@ -57,15 +57,20 @@ func (h *Handler) AdminExtendSubscription(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Days int `json:"days" binding:"required,min=1"`
+		ExpiresAt string `json:"expires_at"` // exact date (YYYY-MM-DD), preferred
+		Days      int    `json:"days"`        // fallback: days to add
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
-	if err := h.service.AdminExtendSubscription(c.Request.Context(), merchantID, req.Days); err != nil {
+	if req.ExpiresAt == "" && req.Days < 1 {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "provide expires_at date or days"})
+		return
+	}
+	if err := h.service.AdminExtendSubscription(c.Request.Context(), merchantID, req.ExpiresAt, req.Days); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Subscription extended"})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Subscription updated"})
 }

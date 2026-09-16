@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Package } from 'lucide-react';
+import api from '@/lib/api';
 
 interface Plan {
   id: string; name: string; price: number; billing_cycle: string;
@@ -20,8 +21,8 @@ const fmtDate = (s: string) => new Date(s).toLocaleDateString('en-IN', { day: '2
 const fmtRev = (p: number) => `₹${(p/100).toLocaleString('en-IN')}`;
 
 function UsageBar({ used, limit, label, color }: { used: number; limit: number; label: string; color: string }) {
-  const pct = limit === 0 ? 0 : Math.min(100, Math.round((used / limit) * 100));
-  const isUnlimited = limit === 0;
+  const isUnlimited = limit < 0;
+  const pct = isUnlimited ? 0 : (limit === 0 ? 0 : Math.min(100, Math.round((used / limit) * 100)));
   const isHigh = pct >= 80;
   return (
     <div style={{ marginBottom: 18 }}>
@@ -58,12 +59,9 @@ export default function ActiveSubscriptionPage() {
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('upay_access_token');
-    if (!token) return;
-    const headers = { Authorization: `Bearer ${token}` };
     Promise.all([
-      fetch('/api/v1/dashboard/subscription/detail', { headers }).then(r => r.json()),
-      fetch('/api/v1/dashboard/stats', { headers }).then(r => r.json()),
+      api.getSubscriptionDetail(),
+      api.getStats(),
     ]).then(([subRes, statsRes]) => {
       if (subRes.success && subRes.data?.subscription) {
         setSub(subRes.data.subscription);
@@ -84,7 +82,7 @@ export default function ActiveSubscriptionPage() {
           revenue_total: d.total_revenue || 0,
         });
       }
-    }).finally(() => setLoading(false));
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   if (loading) return (
@@ -109,7 +107,7 @@ export default function ActiveSubscriptionPage() {
   );
 
   const isExpiringSoon = daysLeft !== null && daysLeft <= 7;
-  const isExpired = daysLeft === 0;
+  const isExpired = sub?.status === 'expired' || daysLeft === 0;
 
   return (
     <div style={{ maxWidth: 860, color: '#0F172A', fontFamily: 'DM Sans, sans-serif' }}>
@@ -155,7 +153,7 @@ export default function ActiveSubscriptionPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 16 }}>
           <StatCard label="Total Revenue" value={fmtRev(usage.revenue_total)} sub="All time" />
           <StatCard label="Total Payments" value={String(usage.payments_total)} sub="All time" />
-          <StatCard label="API Calls Today" value={String(usage.api_used_today)} sub={plan.api_limit === 0 ? 'Unlimited' : `of ${plan.api_limit} limit`} />
+          <StatCard label="API Calls Today" value={String(usage.api_used_today)} sub={plan.api_limit < 0 ? 'Unlimited' : `of ${plan.api_limit} limit`} />
         </div>
       )}
 

@@ -84,7 +84,8 @@ export default function PaymentsPage() {
       } else {
         const msg = d.error || 'Failed';
         if (msg.includes('KYC_REQUIRED')) setError('Complete KYC verification first.');
-        else if (msg.includes('SUBSCRIPTION_REQUIRED')) setError('Purchase a plan to start accepting payments.');
+        else if (msg.includes('TRIAL_EXPIRED')) setError('Your 2-day free trial has ended. Purchase a plan to continue accepting payments.');
+        else if (msg.includes('SUBSCRIPTION_REQUIRED') || msg.includes('SUBSCRIPTION_EXPIRED')) setError('Purchase a plan to start accepting payments.');
         else if (msg.includes('UPI_REQUIRED')) setError('Add a UPI ID in Connect Merchant first.');
         else setError(msg);
       }

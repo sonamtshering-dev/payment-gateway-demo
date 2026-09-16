@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +17,8 @@ import (
 	"github.com/upay/gateway/internal/repository"
 	"github.com/upay/gateway/internal/utils"
 )
+
+var orderIDRe = regexp.MustCompile(`^[a-zA-Z0-9_\-]{1,64}$`)
 
 type Service struct {
 	repo       *repository.Repository
@@ -95,6 +98,32 @@ func (s *Service) Register(ctx context.Context, req models.RegisterRequest) (*mo
 	if err := s.repo.CreateMerchant(ctx, merchant); err != nil {
 		return nil, err
 	}
+
+	// Create 2-day free trial subscription using the first active free plan
+	go func() {
+		bgCtx := context.Background()
+		plans, err := s.repo.GetActivePlans(bgCtx)
+		if err != nil || len(plans) == 0 {
+			return
+		}
+		// Pick the free (price=0) plan, or fallback to first plan
+		trialPlan := plans[0]
+		for _, p := range plans {
+			if p.Price == 0 {
+				trialPlan = p
+				break
+			}
+		}
+		trialExpiry := time.Now().Add(48 * time.Hour)
+		_ = s.repo.UpsertMerchantSubscription(bgCtx, &repository.MerchantSubscription{
+			ID:         uuid.New(),
+			MerchantID: merchant.ID,
+			PlanID:     trialPlan.ID,
+			Status:     "trial",
+			StartedAt:  time.Now(),
+			ExpiresAt:  &trialExpiry,
+		})
+	}()
 
 	return s.generateAuthResponse(ctx, merchant, apiSecret)
 }
@@ -218,6 +247,11 @@ func (s *Service) CreatePayment(ctx context.Context, req models.CreatePaymentReq
 		return nil, fmt.Errorf("RATE_LIMIT_EXCEEDED: too many payment requests, slow down")
 	}
 
+	// Validate order_id: only alphanumeric, hyphens, underscores (prevents XSS via payment page)
+	if !orderIDRe.MatchString(req.OrderID) {
+		return nil, fmt.Errorf("order_id may only contain letters, digits, hyphens, and underscores")
+	}
+
 	// Check merchant gating (KYC + subscription + UPI)
 	if err := s.CheckMerchantGating(ctx, merchantID); err != nil {
 		return nil, err
@@ -310,7 +344,7 @@ func (s *Service) GetPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*m
 	}
 
 	merchant, _ := s.repo.GetMerchantByID(ctx, payment.MerchantID)
-	var merchantLogo, businessName string
+	var merchantLogo, businessName, primaryColor string
 	if merchant != nil {
 		if merchant.LogoURL != nil {
 			merchantLogo = *merchant.LogoURL
@@ -320,6 +354,9 @@ func (s *Service) GetPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*m
 		}
 		if businessName == "" {
 			businessName = merchant.Name
+		}
+		if merchant.PrimaryColor != nil {
+			primaryColor = *merchant.PrimaryColor
 		}
 	}
 	// Advertise USDT only when enabled AND at least one network has an active wallet.
@@ -356,6 +393,7 @@ func (s *Service) GetPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*m
 		CustomerRef:   payment.CustomerReference,
 		MerchantLogo:  merchantLogo,
 		BusinessName:  businessName,
+		PrimaryColor:  primaryColor,
 		USDTEnabled:    usdtEnabled,
 		CryptoNetworks: cryptoNets,
 	}, nil
@@ -398,6 +436,11 @@ func (s *Service) VerifyPayment(ctx context.Context, req models.VerifyPaymentReq
 		return fmt.Errorf("amount mismatch")
 	}
 
+	// Reject UTRs already used on another paid payment (prevents UTR reuse fraud)
+	if dup, err := s.repo.CheckDuplicateUTR(ctx, req.UTR); err == nil && dup {
+		return fmt.Errorf("this UTR has already been used for another payment")
+	}
+
 	utr := req.UTR
 
 	if err := s.repo.UpdatePaymentStatus(ctx, paymentID, models.PaymentStatusPaid, &utr); err != nil {
@@ -406,7 +449,7 @@ func (s *Service) VerifyPayment(ctx context.Context, req models.VerifyPaymentReq
 
 	go s.dispatchWebhook(context.Background(), payment, utr)
 
-	s.notifyTelegramPaymentReceived(context.Background(), payment.MerchantID, payment.OrderID, payment.Amount)
+	s.notifyTelegramPaymentReceived(context.Background(), payment.MerchantID, payment.OrderID, utr, payment.Amount)
 
 	if payment.NotifyOnPaid {
 		go func() {
@@ -502,6 +545,20 @@ func (s *Service) UpdateBusinessName(ctx context.Context, merchantID uuid.UUID, 
 	return s.repo.UpdateMerchantField(ctx, merchantID, "business_name", name)
 }
 
+func (s *Service) UpdateBranding(ctx context.Context, merchantID uuid.UUID, businessName, primaryColor string) error {
+	if businessName != "" {
+		if err := s.repo.UpdateMerchantField(ctx, merchantID, "business_name", businessName); err != nil {
+			return err
+		}
+	}
+	if primaryColor != "" {
+		if err := s.repo.UpdateMerchantField(ctx, merchantID, "primary_color", primaryColor); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) GetReferralStats(merchantId string) (map[string]interface{}, error) {
 	return s.repo.GetReferralStats(merchantId)
 }
@@ -539,4 +596,20 @@ func (s *Service) GetRecentPublicPayments(ctx context.Context) ([]map[string]int
 
 func (s *Service) GetPlanByID(ctx context.Context, id uuid.UUID) (*models.Plan, error) {
 	return s.repo.GetPlanByID(ctx, id)
+}
+
+func (s *Service) ListMerchantTickets(ctx context.Context, merchantID uuid.UUID) ([]repository.SupportTicket, error) {
+	return s.repo.ListMerchantTickets(ctx, merchantID)
+}
+
+func (s *Service) CreateSupportTicket(ctx context.Context, merchantID uuid.UUID, subject, message, chatContext string) error {
+	return s.repo.CreateSupportTicket(ctx, merchantID, subject, message, chatContext)
+}
+
+func (s *Service) ListSupportTickets(ctx context.Context, status string) ([]repository.SupportTicket, error) {
+	return s.repo.ListSupportTickets(ctx, status)
+}
+
+func (s *Service) UpdateSupportTicket(ctx context.Context, id uuid.UUID, status, adminNote string) error {
+	return s.repo.UpdateSupportTicket(ctx, id, status, adminNote)
 }

@@ -13,7 +13,8 @@ interface PaymentData {
   order_id?: string;
   merchant_name?: string;
   merchant_logo?: string;
-  merchant_business_name?: string;
+  business_name?: string;
+  primary_color?: string;
   customer_reference?: string;
   utr?: string;
   redirect_url?: string;
@@ -33,18 +34,15 @@ interface CryptoInit {
   expires_at: string;
 }
 
-// Same logo assets as the Connect Merchant page. Scheme rewrites the generic
-// upi:// intent into the app-specific deep link; empty scheme opens the
-// system chooser via the plain upi:// link.
 const UPI_APPS = [
   {
     name: 'GPay',
-    scheme: 'gpay://upi/pay?',
+    scheme: 'tez://upi/pay?',
     svg: `<img src="/payment-logos/gpay.png" style="width:48px;height:48px;border-radius:11px;object-fit:contain;background:#fff" alt="Google Pay"/>`,
   },
   {
     name: 'PhonePe',
-    scheme: 'phonepe://pay?',
+    scheme: 'phonepe://upi/pay?',
     svg: `<img src="/payment-logos/phonepe.jpeg" style="width:48px;height:48px;border-radius:11px;object-fit:cover" alt="PhonePe"/>`,
   },
   {
@@ -63,18 +61,26 @@ const extractUPIId = (link?: string): string | null => {
   try { return new URL(link.replace('upi://', 'https://')).searchParams.get('pa'); } catch { return null; }
 };
 
+const goBack = (redirectUrl?: string | null) => {
+  if (redirectUrl) { window.location.href = redirectUrl; return; }
+  if (window.history.length > 1) { window.history.back(); return; }
+  window.location.href = '/';
+};
+
 export default function PayPage() {
   const params = useParams();
   const paymentId = params?.id as string;
   const [payment, setPayment] = useState<PaymentData | null>(null);
   const [pageStatus, setPageStatus] = useState<'loading' | 'pending' | 'success' | 'expired' | 'failed'>('loading');
   const [timeLeft, setTimeLeft] = useState(0);
+  const [initialTime, setInitialTime] = useState(0);
   const [qrLoaded, setQrLoaded] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [utrCopied, setUtrCopied] = useState(false);
   const [orderCopied, setOrderCopied] = useState(false);
   const [upiCopied, setUpiCopied] = useState(false);
   const [paidAt, setPaidAt] = useState('');
+  const [redirectCountdown, setRedirectCountdown] = useState(5);
 
   // Crypto / USDT flow
   const [method, setMethod] = useState<'upi' | 'usdt'>('upi');
@@ -133,7 +139,9 @@ export default function PayPage() {
         else if (s === 'failed') setPageStatus('failed');
         else setPageStatus('pending');
         const exp = new Date(data.data.expires_at).getTime();
-        setTimeLeft(Math.max(0, Math.floor((exp - Date.now()) / 1000)));
+        const t = Math.max(0, Math.floor((exp - Date.now()) / 1000));
+        setTimeLeft(t);
+        setInitialTime(prev => prev === 0 ? t : prev);
       }
     } catch { setPageStatus('failed'); }
   }, [paymentId]);
@@ -164,6 +172,23 @@ export default function PayPage() {
     return () => clearInterval(t);
   }, [pageStatus, timeLeft]);
 
+  // Auto-redirect countdown after successful payment (only when redirect_url is present)
+  useEffect(() => {
+    if (pageStatus !== 'success' || !payment?.redirect_url) return;
+    setRedirectCountdown(5);
+    const t = setInterval(() => {
+      setRedirectCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(t);
+          window.location.href = `${payment.redirect_url}?order_id=${payment.order_id || ''}&status=paid`;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [pageStatus, payment?.redirect_url]);
+
   const downloadQR = () => {
     if (!payment?.qr_code_base64) return;
     const a = document.createElement('a'); a.href = payment.qr_code_base64; a.download = `novapay-qr-${payment.order_id || payment.payment_id}.png`; a.click();
@@ -171,8 +196,6 @@ export default function PayPage() {
 
   const handleUPI = (app: typeof UPI_APPS[0]) => {
     if (!payment?.upi_intent_link) return;
-    // upi://pay?pa=... -> gpay://upi/pay?pa=... (replace the full upi://pay? prefix,
-    // otherwise the app link ends up with a duplicated "pay?" and fails to open)
     const url = app.scheme ? payment.upi_intent_link.replace('upi://pay?', app.scheme) : payment.upi_intent_link;
     window.location.href = url;
   };
@@ -265,8 +288,15 @@ export default function PayPage() {
   };
 
   const isUrgent = timeLeft > 0 && timeLeft < 60;
-  const merchantDisplay = payment?.merchant_business_name || payment?.merchant_name || 'NovaPay';
+  const brandColor = payment?.primary_color || '#2563EB';
+  const merchantDisplay = payment?.business_name || payment?.merchant_name || 'NovaPay';
   const upiId = extractUPIId(payment?.upi_intent_link);
+  const timerPct = initialTime > 0 ? Math.max(0, Math.min(100, (timeLeft / initialTime) * 100)) : 60;
+  const fmtUsdt = (v: string) => {
+    const n = parseFloat(v);
+    if (isNaN(n)) return v;
+    return n.toFixed(6).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  };
 
   const CopyIcon = () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -279,98 +309,257 @@ export default function PayPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { background: #EEF2F7; min-height: 100vh; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
-        body { padding: 0; }
+        html, body { background: #F0F4FF; min-height: 100vh; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
 
-        .pay-page { min-height: 100vh; background: #EEF2F7; padding: 28px 16px 48px; }
-        .pay-inner { max-width: 500px; margin: 0 auto; }
-
-        /* Header */
-        .pay-header { text-align: center; margin-bottom: 28px; }
-        .pay-logo { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .pay-logo-icon { width: 48px; height: 48px; border-radius: 14px; background: linear-gradient(135deg, #1D4ED8 0%, #2563EB 100%); display: flex; align-items: center; justify-content: center; }
-        .pay-logo-n { font-size: 26px; font-weight: 900; color: #fff; font-family: 'DM Sans', sans-serif; letter-spacing: -1px; }
-        .pay-logo-text { font-size: 28px; font-weight: 800; color: #0F172A; letter-spacing: -0.5px; }
-        .pay-secure-line { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: #2563EB; font-weight: 500; }
-        .pay-secure-dot { color: #CBD5E1; }
-
-        /* Cards */
-        .pay-card { background: #fff; border-radius: 18px; padding: 20px 22px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.05); }
-
-        /* Payment details */
-        .pay-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
-        .pay-detail-col { padding: 4px 0; }
-        .pay-detail-col + .pay-detail-col { padding-left: 16px; border-left: 1px solid #F1F5F9; }
-        .pay-detail-label { font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
-        .pay-detail-value { font-size: 15px; font-weight: 700; color: '#0F172A'; margin-bottom: 14px; }
-        .pay-detail-value:last-child { margin-bottom: 0; }
-        .pay-amount-value { font-size: 30px; font-weight: 800; color: #2563EB; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-        .pay-copy-btn { background: #F1F5F9; border: none; border-radius: 6px; padding: 4px 6px; color: #64748B; cursor: pointer; display: inline-flex; align-items: center; font-size: 11px; font-family: inherit; transition: all 0.15s; flex-shrink: 0; }
-        .pay-copy-btn:hover { background: #E2E8F0; color: #0F172A; }
-        .pay-copy-btn.copied { background: #DCFCE7; color: #16A34A; }
-        .pay-order-value { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; font-family: 'DM Mono', monospace; }
-        .pay-merchant-desc { font-size: 13px; color: #64748B; margin-top: -10px; margin-bottom: 0; font-weight: 400; }
-
-        /* Scan section */
-        .scan-section { text-align: center; }
-        .scan-title { font-size: 22px; font-weight: 800; color: #0F172A; margin-bottom: 6px; }
-        .scan-sub { font-size: 13px; color: #64748B; margin-bottom: 22px; line-height: 1.5; }
-        .qr-container { display: inline-flex; background: #fff; border-radius: 16px; border: 1px solid #E2E8F0; padding: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.07); position: relative; margin-bottom: 14px; }
-        .qr-shimmer { width: 220px; height: 220px; background: linear-gradient(90deg,#f0f0f0 25%,#f8f8f8 50%,#f0f0f0 75%); background-size:200% 100%; animation:shimmer 1.5s infinite; border-radius:8px; }
+        /* ── keyframes ── */
         @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-        .qr-img { width: 220px; height: 220px; object-fit: contain; border-radius: 8px; display: block; }
-        .qr-actions { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 2px; }
-        .upi-id-row { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: #475569; font-weight: 500; }
-        .upi-id-mono { font-family: 'DM Mono', monospace; color: #0F172A; font-weight: 600; }
-
-        /* OR divider */
-        .or-divider { display: flex; align-items: center; gap: 14px; margin: 14px 0; }
-        .or-line { flex: 1; height: 1px; background: #E2E8F0; }
-        .or-text { font-size: 12px; color: #94A3B8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
-
-        /* UPI apps */
-        .upi-title { font-size: 14px; font-weight: 700; color: '#0F172A'; text-align: center; margin-bottom: 16px; }
-        .upi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-        .upi-app-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px 8px; border-radius: 12px; border: 1.5px solid #F1F5F9; background: #fff; cursor: pointer; transition: all 0.18s; font-family: inherit; -webkit-tap-highlight-color: transparent; }
-        .upi-app-btn:hover { border-color: #BFDBFE; background: #EFF6FF; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(37,99,235,0.1); }
-        .upi-app-btn:active { transform: scale(0.95); }
-        .upi-app-icon { width: 42px; height: 42px; border-radius: 11px; overflow: hidden; flex-shrink: 0; }
-        .upi-app-icon svg { width: 42px; height: 42px; display: block; }
-        .upi-app-name { font-size: 10px; color: #64748B; font-weight: 500; text-align: center; line-height: 1.2; }
-        @media (max-width: 420px) { .upi-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; } .upi-app-btn { padding: 12px 4px 10px; } }
-
-        /* Timer */
-        .timer-row { display: flex; align-items: center; justify-content: space-between; }
-        .timer-left-col { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #475569; font-weight: 500; }
-        .timer-clock { width: 34px; height: 34px; border-radius: 10px; border: 1.5px solid #E2E8F0; display: flex; align-items: center; justify-content: center; background: #F8FAFC; }
-        .timer-val { font-size: 22px; font-weight: 800; color: #2563EB; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
-        .timer-val.urgent { color: #DC2626; }
-        .help-link { font-size: 12px; color: #94A3B8; text-align: right; }
-        .help-link a { color: #2563EB; font-weight: 600; text-decoration: none; cursor: pointer; }
-        .help-link a:hover { text-decoration: underline; }
-
-        /* Instructions */
-        .inst-label { font-size: 11px; font-weight: 700; color: '#94A3B8'; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 18px; }
-        .inst-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .inst-step { text-align: center; padding: 4px; }
-        .inst-num { width: 24px; height: 24px; border-radius: 50%; background: #2563EB; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; }
-        .inst-icon-wrap { width: 44px; height: 44px; border-radius: 12px; border: 1.5px solid #E2E8F0; background: #F8FAFC; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; }
-        .inst-step-title { font-size: 12px; font-weight: 700; color: #0F172A; margin-bottom: 3px; line-height: 1.3; }
-        .inst-step-desc { font-size: 11px; color: #94A3B8; line-height: 1.4; }
-
-        /* Footer */
-        .pay-footer { text-align: center; padding: 16px; display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
-        .pay-footer-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: '#94A3B8'; font-weight: 500; }
-
-        /* Loading spinner */
-        .spin { animation: spinA 0.8s linear infinite; }
         @keyframes spinA { to{transform:rotate(360deg)} }
-
-        /* Success full-page layout */
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
         @keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
         @keyframes ripple { 0%{transform:scale(0.85);opacity:1} 100%{transform:scale(2.4);opacity:0} }
         @keyframes checkDraw { from{stroke-dashoffset:100} to{stroke-dashoffset:0} }
+        @keyframes floatQR { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+        @keyframes scanLine { 0%{top:10px;opacity:.8} 100%{top:calc(100% - 10px);opacity:.8} }
+        @keyframes barShimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+        .pay-page { min-height: 100vh; background: #F0F4FF; padding: 20px 16px 56px; }
+        .pay-inner { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+
+        /* ── Banner ── */
+        .banner {
+          background: linear-gradient(135deg, ${brandColor}dd 0%, ${brandColor} 100%);
+          border-radius: 22px;
+          padding: 20px 20px 18px;
+          position: relative;
+          overflow: hidden;
+        }
+        .banner::before {
+          content: '';
+          position: absolute;
+          right: -30px; top: -30px;
+          width: 130px; height: 130px;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.07);
+        }
+        .banner::after {
+          content: '';
+          position: absolute;
+          right: 20px; bottom: -50px;
+          width: 160px; height: 160px;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.04);
+        }
+        .banner-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; position: relative; z-index: 1; }
+        .banner-merchant { display: flex; align-items: center; gap: 10px; }
+        .banner-logo { width: 36px; height: 36px; border-radius: 11px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; color: #fff; flex-shrink: 0; overflow: hidden; }
+        .banner-logo img { width: 36px; height: 36px; object-fit: cover; }
+        .banner-mname { font-size: 14px; font-weight: 700; color: #fff; line-height: 1.2; }
+        .banner-msub { font-size: 10px; color: rgba(255,255,255,0.6); }
+        .banner-secure { display: flex; align-items: center; gap: 5px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 4px 10px; font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.9); flex-shrink: 0; }
+
+        .banner-amount-section { position: relative; z-index: 1; margin-bottom: 16px; }
+        .banner-amt-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+        .banner-amt { font-size: 36px; font-weight: 800; color: #fff; letter-spacing: -1.5px; line-height: 1; }
+        .banner-amt-dec { font-size: 20px; opacity: 0.6; }
+        .banner-ref { font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 5px; }
+
+        .banner-timer { position: relative; z-index: 1; }
+        .banner-bar-bg { height: 4px; border-radius: 3px; background: rgba(255,255,255,0.15); overflow: hidden; margin-bottom: 6px; }
+        .banner-bar-fill {
+          height: 100%;
+          border-radius: 3px;
+          background: linear-gradient(90deg, rgba(255,255,255,0.7), rgba(255,255,255,0.9), rgba(255,255,255,0.7));
+          background-size: 200% 100%;
+          animation: barShimmer 2s linear infinite;
+          transition: width 1s linear;
+        }
+        .banner-timer-row { display: flex; align-items: center; justify-content: space-between; }
+        .banner-timer-label { font-size: 11px; color: rgba(255,255,255,0.55); }
+        .banner-timer-val { font-size: 13px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+        .banner-timer-val.urgent { color: #FCA5A5; }
+
+        /* ── White content card ── */
+        .content-card { background: #fff; border-radius: 18px; box-shadow: 0 2px 20px rgba(37,99,235,0.08); overflow: hidden; }
+
+        /* ── Tabs ── */
+        .tabs-row { padding: 5px; display: flex; gap: 4px; background: #F8FAFC; }
+        .tab-btn {
+          flex: 1; padding: 9px; border-radius: 11px; border: none; cursor: pointer;
+          font-family: inherit; font-size: 13px; font-weight: 700; transition: all 0.2s;
+        }
+        .tab-btn.active {
+          background: #fff;
+          color: #1D4ED8;
+          border: 1.5px solid #BFDBFE;
+          box-shadow: 0 1px 8px rgba(37,99,235,0.12);
+        }
+        .tab-btn.inactive { background: transparent; color: #94A3B8; border: 1.5px solid transparent; }
+
+        /* ── UPI content ── */
+        .upi-body { padding: 20px; }
+        .qr-float-wrap { display: flex; justify-content: center; margin-bottom: 16px; animation: floatQR 3.5s ease-in-out infinite; }
+        .qr-outer {
+          position: relative;
+          padding: 16px;
+          background: #fff;
+          border-radius: 22px;
+          border: 1.5px solid #DBEAFE;
+          box-shadow: 0 8px 40px rgba(37,99,235,0.14), 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .qr-outer::before {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          border-radius: 23px;
+          background: linear-gradient(135deg, rgba(37,99,235,0.15), rgba(79,70,229,0.08), transparent 60%);
+          pointer-events: none;
+          z-index: 0;
+        }
+        .qr-scan-line {
+          position: absolute;
+          left: 16px; right: 16px;
+          height: 2px;
+          background: linear-gradient(90deg, transparent, #3B82F6 30%, #6366F1 70%, transparent);
+          top: 16px;
+          animation: scanLine 2s ease-in-out infinite;
+          border-radius: 2px;
+          z-index: 3;
+          opacity: 0.9;
+        }
+        .qr-shimmer { width: 200px; height: 200px; background: linear-gradient(90deg,#f0f0f0 25%,#f8f8f8 50%,#f0f0f0 75%); background-size:200% 100%; animation:shimmer 1.5s infinite; border-radius:8px; }
+        .qr-img { width: 200px; height: 200px; object-fit: contain; border-radius: 8px; display: block; }
+
+        .upi-id-row { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: #475569; font-weight: 500; margin-bottom: 8px; }
+        .upi-id-mono { font-family: 'DM Mono', monospace; color: #1D4ED8; font-weight: 700; }
+        .save-qr-btn { display: flex; align-items: center; gap: 5px; background: #F1F5F9; border: none; border-radius: 8px; padding: 6px 14px; color: #475569; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; margin: 0 auto 4px; }
+        .save-qr-btn:hover { background: #E2E8F0; }
+
+        .or-divider { display: flex; align-items: center; gap: 14px; margin: 16px 0; }
+        .or-line { flex: 1; height: 1px; background: #F1F5F9; }
+        .or-text { font-size: 11px; color: #94A3B8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+
+        .upi-apps-label { font-size: 11px; font-weight: 700; color: #94A3B8; text-align: center; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+        .upi-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+        .upi-app-btn {
+          display: flex; flex-direction: column; align-items: center; gap: 7px;
+          padding: 12px 4px 10px; border-radius: 14px; border: 1.5px solid #F1F5F9;
+          background: #FAFAFA; cursor: pointer; transition: all 0.18s; font-family: inherit;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .upi-app-btn:hover { border-color: #BFDBFE; background: #EFF6FF; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(37,99,235,0.1); }
+        .upi-app-btn:active { transform: scale(0.95); }
+        .upi-app-icon { width: 48px; height: 48px; border-radius: 12px; overflow: hidden; }
+        .upi-app-name { font-size: 10.5px; color: #64748B; font-weight: 600; }
+
+        /* ── USDT content (blue) ── */
+        .usdt-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+
+        .net-btn {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 13px 15px; border-radius: 12px; cursor: pointer;
+          font-family: inherit; text-align: left; transition: all 0.15s;
+        }
+        .net-btn.net-active { border: 1.5px solid #2563EB; background: #EFF6FF; }
+        .net-btn.net-inactive { border: 1.5px solid #E2E8F0; background: #FAFAFA; }
+        .net-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .net-icon.net-active { background: #DBEAFE; }
+        .net-icon.net-inactive { background: #F1F5F9; }
+        .net-label { font-size: 13.5px; font-weight: 700; }
+        .net-label.net-active { color: #1D4ED8; }
+        .net-label.net-inactive { color: #0F172A; }
+        .net-sub { font-size: 11px; color: #94A3B8; margin-top: 1px; }
+
+        .send-box {
+          background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+          border: 1.5px solid #BFDBFE;
+          border-radius: 16px;
+          padding: 16px 18px;
+        }
+        .send-box-label { font-size: 10px; font-weight: 800; color: #2563EB; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px; }
+        .send-box-amt { font-size: 30px; font-weight: 800; color: #1D4ED8; letter-spacing: -1px; line-height: 1; }
+        .send-box-unit { font-size: 14px; font-weight: 700; color: #2563EB; margin-left: 6px; }
+        .send-box-meta { font-size: 11.5px; color: #3B82F6; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+        .copy-btn-blue {
+          background: ${brandColor}; border: none; border-radius: 10px;
+          padding: 9px 18px; color: #fff; font-size: 12.5px; font-weight: 700;
+          cursor: pointer; font-family: inherit; flex-shrink: 0; transition: background 0.15s;
+        }
+        .copy-btn-blue:hover { background: ${brandColor}cc; }
+        .copy-btn-blue.copied { background: #16A34A; }
+
+        .qr-addr-row { display: flex; gap: 12px; align-items: center; }
+        .qr-sm-box { padding: 8px; background: #fff; border-radius: 12px; border: 1.5px solid #E2E8F0; flex-shrink: 0; }
+        .addr-block { flex: 1; }
+        .addr-block-label { font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+        .addr-block-val {
+          font-size: 11px; font-family: monospace; color: #334155; word-break: break-all;
+          line-height: 1.5; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px;
+          padding: 8px 10px; display: flex; align-items: flex-start; gap: 8px;
+        }
+        .addr-copy { background: #EFF6FF; border: none; border-radius: 7px; padding: 5px 10px; color: #2563EB; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; flex-shrink: 0; white-space: nowrap; margin-top: 2px; }
+        .addr-copy.copied { background: #DCFCE7; color: #16A34A; }
+
+        .after-divider { display: flex; align-items: center; gap: 10px; }
+        .after-line { flex: 1; height: 1px; background: #F1F5F9; }
+        .after-text { font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.08em; }
+
+        .txid-input {
+          width: 100%; padding: 12px 14px;
+          border: 1.5px solid #E2E8F0; border-radius: 12px;
+          font-size: 12px; font-family: monospace; color: #0F172A;
+          outline: none; background: #FAFAFA; transition: border 0.15s;
+        }
+        .txid-input:focus { border-color: #2563EB; background: #fff; }
+        .txid-input.has-value { border-color: #2563EB; }
+
+        .verify-btn {
+          width: 100%; padding: 14px; border-radius: 12px; border: none;
+          font-size: 14px; font-weight: 700; font-family: inherit;
+          cursor: pointer; transition: all 0.15s;
+          background: linear-gradient(135deg, ${brandColor}dd, ${brandColor});
+          color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px;
+          box-shadow: 0 4px 16px ${brandColor}40;
+        }
+        .verify-btn:hover { opacity: 0.92; }
+        .verify-btn:disabled { background: #93C5FD; cursor: not-allowed; box-shadow: none; }
+
+        .warn-box {
+          padding: 11px 13px; background: #FFFBEB; border: 1px solid #FDE68A;
+          border-radius: 10px; display: flex; align-items: flex-start; gap: 8px;
+          font-size: 11.5px; color: #92400E; line-height: 1.6;
+        }
+
+        /* ── Instructions card ── */
+        .inst-card { background: #fff; border-radius: 18px; box-shadow: 0 2px 20px rgba(37,99,235,0.06); padding: 18px 20px; }
+        .inst-label { font-size: 10.5px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px; }
+        .inst-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+        .inst-step { text-align: center; }
+        .inst-num { width: 24px; height: 24px; border-radius: 50%; background: #2563EB; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; }
+        .inst-icon-wrap { width: 44px; height: 44px; border-radius: 12px; border: 1.5px solid #E2E8F0; background: #F8FAFC; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; }
+        .inst-step-title { font-size: 12px; font-weight: 700; color: #0F172A; margin-bottom: 3px; line-height: 1.3; }
+        .inst-step-desc { font-size: 10.5px; color: #94A3B8; line-height: 1.4; }
+
+        /* ── Copy btn generic ── */
+        .pay-copy-btn { background: #F1F5F9; border: none; border-radius: 6px; padding: 4px 6px; color: #64748B; cursor: pointer; display: inline-flex; align-items: center; font-size: 11px; font-family: inherit; transition: all 0.15s; flex-shrink: 0; }
+        .pay-copy-btn:hover { background: #E2E8F0; color: #0F172A; }
+        .pay-copy-btn.copied { background: #DCFCE7; color: #16A34A; }
+
+        /* ── Footer ── */
+        .pay-footer { text-align: center; padding: 8px 0; display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
+        .pay-footer-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #94A3B8; font-weight: 500; }
+
+        /* ── Overlay ── */
+        .overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(15,23,42,0.7); backdrop-filter: blur(16px); animation: fadeIn 0.3s; }
+        .overlay-box { background: #fff; border-radius: 24px; padding: 40px 32px; text-align: center; max-width: 300px; width: 90%; animation: slideUp 0.4s cubic-bezier(0.16,1,0.3,1); box-shadow: 0 24px 64px rgba(0,0,0,0.2); }
+        .ov-icon { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+        .ov-title { font-size: 20px; font-weight: 800; color: #0F172A; margin-bottom: 6px; }
+        .ov-sub { font-size: 13px; color: #94A3B8; line-height: 1.6; }
+        .ov-btn { margin-top: 24px; padding: 14px 32px; border-radius: 14px; background: linear-gradient(135deg,#1D4ED8,#2563EB); border: none; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; font-family: 'DM Sans', sans-serif; width: 100%; box-shadow: 0 4px 14px rgba(37,99,235,0.35); transition: opacity 0.15s, transform 0.15s; }
+        .ov-btn:hover { opacity: 0.92; transform: translateY(-1px); }
+        .ov-btn:active { transform: translateY(0); opacity: 1; }
+
+        /* ── Success ── */
+        @keyframes popUp { from{opacity:0;transform:scale(.9) translateY(10px)} to{opacity:1;transform:scale(1) translateY(0)} }
         .suc-hero { text-align: center; padding: 32px 0 20px; animation: fadeIn 0.4s ease; }
         .suc-check-outer { position: relative; display: inline-block; margin-bottom: 18px; }
         .suc-ring { position: absolute; inset: -12px; border-radius: 50%; border: 2px solid rgba(22,163,74,.22); animation: ripple 2.2s ease-out infinite; }
@@ -380,7 +569,7 @@ export default function PayPage() {
         .suc-title { font-size: 24px; font-weight: 800; color: #0F172A; margin-bottom: 6px; letter-spacing: -.03em; }
         .suc-sub { font-size: 14px; color: #64748B; line-height: 1.6; }
 
-        /* Summary card */
+        .pay-card { background: #fff; border-radius: 18px; padding: 20px 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.05); }
         .sum-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
         .sum-left { padding-right: 16px; border-right: 1px solid #F1F5F9; }
         .sum-right { padding-left: 16px; }
@@ -393,8 +582,6 @@ export default function PayPage() {
         .sum-copy:hover { background: #E2E8F0; color: #0F172A; }
         .sum-copy.ok { background: #DCFCE7; color: #16A34A; }
         .sum-time { font-size: 12.5px; color: #0F172A; font-weight: 600; }
-
-        /* Payment Details card */
         .det-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #F1F5F9; }
         .det-head-icon { width: 32px; height: 32px; border-radius: 9px; background: #EFF6FF; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .det-head-title { font-size: 14px; font-weight: 700; color: #0F172A; }
@@ -404,48 +591,72 @@ export default function PayPage() {
         .det-icon { width: 28px; height: 28px; border-radius: 7px; background: #EFF6FF; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .det-lbl { font-size: 13px; color: #64748B; font-weight: 500; }
         .det-val { font-size: 13px; color: #0F172A; font-weight: 600; text-align: right; word-break: break-all; }
-
-        /* Thank you card */
-        .ty-card { background: linear-gradient(120deg, #EFF6FF 0%, #F0FDF4 100%); border: 1px solid #DBEAFE; border-radius: 16px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+        .ty-card { background: linear-gradient(120deg, #EFF6FF 0%, #F0FDF4 100%); border: 1px solid #DBEAFE; border-radius: 16px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; }
         .ty-illo { width: 50px; height: 50px; border-radius: 14px; background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .ty-title { font-size: 13.5px; font-weight: 700; color: #0F172A; margin-bottom: 4px; }
         .ty-sub { font-size: 12px; color: #475569; line-height: 1.5; }
-
-        /* Download receipt row */
         .dl-row { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; cursor: pointer; transition: background .12s; }
         .dl-row:hover { background: #F8FAFC; }
         .dl-row-l { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: #2563EB; }
         .dl-icon { width: 32px; height: 32px; border-radius: 8px; background: #EFF6FF; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-
-        /* Action buttons */
         .act-label { font-size: 13px; color: #64748B; text-align: center; margin-bottom: 12px; font-weight: 500; }
-        .act-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 24px; }
-        .act-btn { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 6px; background: #fff; border: 1.5px solid #E2E8F0; border-radius: 14px; cursor: pointer; font-family: inherit; transition: all .15s; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+        .act-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+        .act-btn { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 6px; background: #fff; border: 1.5px solid #E2E8F0; border-radius: 14px; cursor: pointer; font-family: inherit; transition: all .15s; }
         .act-btn:hover { border-color: #BFDBFE; background: #EFF6FF; }
         .act-btn:active { transform: scale(.97); }
-        .act-btn-icon { width: 36px; height: 36px; border-radius: 10px; background: #F1F5F9; display: flex; align-items: center; justify-content: center; transition: background .15s; }
+        .act-btn-icon { width: 36px; height: 36px; border-radius: 10px; background: #F1F5F9; display: flex; align-items: center; justify-content: center; }
         .act-btn:hover .act-btn-icon { background: #DBEAFE; }
         .act-btn-lbl { font-size: 11.5px; font-weight: 600; color: #475569; text-align: center; line-height: 1.4; }
-
-        /* Redirect CTA */
-        .redirect-cta { width: 100%; padding: 14px; border-radius: 12px; background: linear-gradient(135deg,#1D4ED8,#2563EB); border: none; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; margin-bottom: 14px; transition: opacity .15s; }
+        .redirect-cta { width: 100%; padding: 14px; border-radius: 12px; background: linear-gradient(135deg,#1D4ED8,#2563EB); border: none; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; transition: opacity .15s; }
         .redirect-cta:hover { opacity: .9; }
 
-        /* Expired/Failed overlay */
-        .overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(15,23,42,0.7); backdrop-filter: blur(16px); animation: fadeIn 0.3s; }
-        .overlay-box { background: #fff; border-radius: 24px; padding: 40px 32px; text-align: center; max-width: 300px; width: 90%; animation: popUp 0.4s cubic-bezier(0.16,1,0.3,1); box-shadow: 0 24px 64px rgba(0,0,0,0.2); }
-        .ov-icon { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
-        .ov-title { font-size: 20px; font-weight: 800; color: #0F172A; margin-bottom: 6px; }
-        .ov-sub { font-size: 13px; color: '#94A3B8'; line-height: 1.6; }
-        .ov-btn { margin-top: 20px; padding: 12px 24px; border-radius: 12px; background: #F1F5F9; border: none; color: '#0F172A'; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
-        .ov-btn:hover { background: #E2E8F0; }
+        /* ── Sticky redirect bar ── */
+        .sticky-redirect-bar {
+          position: fixed;
+          bottom: 0; left: 0; right: 0;
+          background: rgba(240,244,255,0.85);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          padding: 12px 16px;
+          padding-bottom: max(12px, env(safe-area-inset-bottom));
+          z-index: 50;
+          animation: slideUp 0.4s cubic-bezier(0.16,1,0.3,1);
+        }
+        .sticky-redirect-inner { max-width: 480px; margin: 0 auto; }
+        .sticky-redirect-btn {
+          width: 100%;
+          display: flex; align-items: center;
+          background: linear-gradient(135deg, #2563EB, #1D4ED8);
+          border: none; border-radius: 18px;
+          padding: 14px 18px;
+          cursor: pointer;
+          font-family: 'DM Sans', sans-serif;
+          box-shadow: 0 6px 24px rgba(37,99,235,0.35);
+          transition: opacity 0.15s, transform 0.15s;
+          gap: 14px;
+        }
+        .sticky-redirect-btn:hover { opacity: 0.93; transform: translateY(-1px); }
+        .sticky-redirect-btn:active { transform: translateY(0); opacity: 1; }
+        .sticky-timer-circle {
+          width: 46px; height: 46px; border-radius: 50%;
+          background: #fff;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+          font-size: 18px; font-weight: 800; color: #2563EB;
+          font-variant-numeric: tabular-nums;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        }
+        .sticky-btn-text { flex: 1; text-align: left; }
+        .sticky-btn-title { font-size: 15px; font-weight: 800; color: #fff; line-height: 1.2; }
+        .sticky-btn-sub { font-size: 11.5px; color: rgba(255,255,255,0.72); margin-top: 2px; font-weight: 500; }
+        .sticky-chevron { flex-shrink: 0; opacity: 0.7; }
 
+        .spin { animation: spinA 0.8s linear infinite; }
       `}</style>
 
-      {/* confetti layer – fires when showSuccess is true (live detection) */}
       <div ref={confettiRef} style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 200, overflow: 'hidden' }} />
 
-      {/* ─── Expired overlay ─── */}
+      {/* Expired overlay */}
       {pageStatus === 'expired' && !showSuccess && (
         <div className="overlay">
           <div className="overlay-box">
@@ -455,13 +666,13 @@ export default function PayPage() {
               </svg>
             </div>
             <div className="ov-title">Link Expired</div>
-            <div className="ov-sub" style={{ color: '#94A3B8' }}>This payment link has expired.<br />Please request a new one.</div>
-            <button className="ov-btn" onClick={() => window.history.back()}>Go Back</button>
+            <div className="ov-sub">This payment link has expired.<br />Please request a new one from the merchant.</div>
+            <button className="ov-btn" onClick={() => goBack(payment?.redirect_url)}>← Go Back</button>
           </div>
         </div>
       )}
 
-      {/* ─── Failed overlay ─── */}
+      {/* Failed overlay */}
       {pageStatus === 'failed' && !showSuccess && (
         <div className="overlay">
           <div className="overlay-box">
@@ -471,44 +682,26 @@ export default function PayPage() {
               </svg>
             </div>
             <div className="ov-title">Payment Failed</div>
-            <div className="ov-sub" style={{ color: '#94A3B8' }}>Something went wrong.<br />Please try again.</div>
-            <button className="ov-btn" onClick={() => window.history.back()}>Go Back</button>
+            <div className="ov-sub">Something went wrong.<br />Please try again or contact the merchant.</div>
+            <button className="ov-btn" onClick={() => goBack(payment?.redirect_url)}>← Go Back</button>
           </div>
         </div>
       )}
 
-      {/* ─── Main page ─── */}
       <div className="pay-page">
         <div className="pay-inner">
 
-          {/* Header */}
-          <div className="pay-header">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
-              <div className="pay-logo-icon">
-                <span className="pay-logo-n">N</span>
-              </div>
-              <span className="pay-logo-text">NovaPay</span>
-            </div>
-            <div className="pay-secure-line">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.5" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              Secure Payment
-              <span className="pay-secure-dot">•</span>
-              Powered by <strong>NovaPay</strong>
-            </div>
-          </div>
-
           {/* Loading */}
           {pageStatus === 'loading' && (
-            <div className="pay-card" style={{ textAlign: 'center', padding: '60px 24px' }}>
+            <div className="pay-card" style={{ textAlign: 'center', padding: '60px 24px', background: '#fff', borderRadius: 18 }}>
               <div style={{ width: 32, height: 32, border: '2.5px solid #E2E8F0', borderTopColor: '#2563EB', borderRadius: '50%', margin: '0 auto 14px' }} className="spin" />
               <div style={{ fontSize: 14, color: '#94A3B8', fontWeight: 500 }}>Loading payment…</div>
             </div>
           )}
 
-          {/* ─── Success full-page ─── */}
+          {/* ── Success ── */}
           {pageStatus === 'success' && (
             <>
-              {/* Hero */}
               <div className="suc-hero">
                 <div className="suc-check-outer">
                   <div className="suc-ring" /><div className="suc-ring suc-ring2" />
@@ -522,8 +715,7 @@ export default function PayPage() {
                 <div className="suc-sub">Your payment has been completed successfully.</div>
               </div>
 
-              {/* Summary card */}
-              <div className="pay-card" style={{ marginBottom: 14 }}>
+              <div className="pay-card">
                 <div className="sum-grid">
                   <div className="sum-left">
                     <div className="sum-lbl">Amount Paid</div>
@@ -553,8 +745,7 @@ export default function PayPage() {
                 </div>
               </div>
 
-              {/* Payment Details card */}
-              <div className="pay-card" style={{ padding: 0, marginBottom: 14 }}>
+              <div className="pay-card" style={{ padding: 0 }}>
                 <div className="det-head">
                   <div className="det-head-icon">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round">
@@ -581,7 +772,6 @@ export default function PayPage() {
                 ))}
               </div>
 
-              {/* Thank you card */}
               <div className="ty-card">
                 <div className="ty-illo">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
@@ -594,8 +784,7 @@ export default function PayPage() {
                 </div>
               </div>
 
-              {/* Download Receipt */}
-              <div className="pay-card" style={{ padding: 0, marginBottom: 14 }}>
+              <div className="pay-card" style={{ padding: 0 }}>
                 <div className="dl-row" onClick={downloadReceipt}>
                   <div className="dl-row-l">
                     <div className="dl-icon">
@@ -613,29 +802,9 @@ export default function PayPage() {
                 </div>
               </div>
 
-              {/* Merchant redirect CTA */}
-              {payment?.redirect_url && (
-                <button className="redirect-cta" onClick={() => window.location.href = `${payment.redirect_url}?order_id=${payment.order_id || ''}&status=paid`}>
-                  Back to Merchant →
-                </button>
-              )}
+              {/* Extra bottom padding so sticky bar doesn't overlap footer when redirect_url present */}
+              {payment?.redirect_url && <div style={{ height: 84 }} />}
 
-              {/* Action buttons */}
-              <div className="act-label">What would you like to do next?</div>
-              <div className="act-grid">
-                {([
-                  { icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>, label: 'Make Another\nPayment', href: '/' },
-                  { icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>, label: 'Go to\nDashboard', href: '/dashboard' },
-                  { icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>, label: 'Back to\nHome', href: '/' },
-                ] as {icon:React.ReactNode;label:string;href:string}[]).map((btn, i) => (
-                  <button key={i} className="act-btn" onClick={() => window.location.href = btn.href}>
-                    <div className="act-btn-icon">{btn.icon}</div>
-                    <span className="act-btn-lbl">{btn.label}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Footer */}
               <div style={{ textAlign: 'center', paddingBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 12, color: '#94A3B8', fontWeight: 500, marginBottom: 8 }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
@@ -648,261 +817,265 @@ export default function PayPage() {
             </>
           )}
 
-          {/* Main pending UI */}
+          {/* ── Pending ── */}
           {pageStatus === 'pending' && (
             <>
-              {/* Payment details card */}
-              <div className="pay-card">
-                <div className="pay-details-grid">
-                  <div className="pay-detail-col">
-                    <div className="pay-detail-label">Payment to</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: payment?.customer_reference ? 12 : 0 }}>{merchantDisplay}</div>
-                    {payment?.customer_reference && (
-                      <>
-                        <div className="pay-detail-label" style={{ marginTop: 0 }}>Payment for</div>
-                        <div style={{ fontSize: 13, color: '#64748B' }}>{payment.customer_reference}</div>
-                      </>
-                    )}
-                  </div>
-                  <div className="pay-detail-col">
-                    <div className="pay-detail-label">Amount</div>
-                    <div className="pay-amount-value">
-                      ₹{payment ? fmtAmount(payment.amount) : '—'}
-                      <button className="pay-copy-btn" onClick={() => payment && copyText((payment.amount / 100).toFixed(2), setUpiCopied)} title="Copy amount">
-                        <CopyIcon />
-                      </button>
+              {/* Blue gradient banner */}
+              <div className="banner">
+                <div className="banner-top">
+                  <div className="banner-merchant">
+                    <div className="banner-logo">
+                      {payment?.merchant_logo
+                        ? <img src={payment.merchant_logo} alt={merchantDisplay} />
+                        : <span>{merchantDisplay.charAt(0).toUpperCase()}</span>}
                     </div>
-                    {payment?.order_id && (
-                      <>
-                        <div className="pay-detail-label">Order ID</div>
-                        <div className="pay-order-value">
-                          <span style={{ fontSize: 12, color: '#475569' }}>{payment.order_id}</span>
-                          <button className="pay-copy-btn" onClick={() => payment.order_id && copyText(payment.order_id, setOrderCopied)} title="Copy order ID">
-                            {orderCopied ? <span style={{ fontSize: 11 }}>✓</span> : <CopyIcon />}
-                          </button>
-                        </div>
-                      </>
-                    )}
+                    <div>
+                      <div className="banner-mname">{merchantDisplay}</div>
+                      <div className="banner-msub">via NovaPay</div>
+                    </div>
+                  </div>
+                  <div className="banner-secure">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    Secure
+                  </div>
+                </div>
+
+                <div className="banner-amount-section">
+                  <div className="banner-amt-label">Amount Due</div>
+                  <div className="banner-amt">
+                    ₹{payment ? fmtAmount(payment.amount) : '—'}
+                  </div>
+                  {(payment?.customer_reference || payment?.order_id) && (
+                    <div className="banner-ref">
+                      {payment?.customer_reference || ''}{payment?.customer_reference && payment?.order_id ? ' · ' : ''}{payment?.order_id || ''}
+                    </div>
+                  )}
+                </div>
+
+                <div className="banner-timer">
+                  <div className="banner-bar-bg">
+                    <div className="banner-bar-fill" style={{ width: `${timerPct}%` }} />
+                  </div>
+                  <div className="banner-timer-row">
+                    <span className="banner-timer-label">Time remaining</span>
+                    <span className={`banner-timer-val ${isUrgent ? 'urgent' : ''}`}>
+                      {timeLeft > 0 ? fmtTime(timeLeft) : '--:--'}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* Payment method toggle (shown only if merchant enabled USDT) */}
-              {payment?.usdt_enabled && (payment?.crypto_networks?.length ?? 0) > 0 && (
-                <div className="pay-card" style={{ padding: 6, display: 'flex', gap: 6 }}>
-                  {([['upi', 'UPI / INR'], ['usdt', 'USDT']] as const).map(([m, label]) => (
-                    <button key={m} onClick={() => setMethod(m)}
-                      style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                        fontSize: 13.5, fontWeight: 700, transition: 'all .15s',
-                        background: method === m ? (m === 'usdt' ? '#26A17B' : '#2563EB') : 'transparent',
-                        color: method === m ? '#fff' : '#64748B' }}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* ── USDT PANEL ── */}
-              {method === 'usdt' && (
-                <div className="pay-card">
-                  {/* Network selector */}
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 10 }}>Select network</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: cryptoData ? 18 : 0 }}>
-                    {payment?.crypto_networks?.map(n => (
-                      <button key={n.id} onClick={() => initCrypto(n.id)} disabled={cryptoLoading}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 11,
-                          cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-                          border: `1.5px solid ${cryptoNetwork === n.id ? '#26A17B' : '#E2E8F0'}`,
-                          background: cryptoNetwork === n.id ? '#F0FDF9' : '#fff' }}>
-                        <span style={{ fontSize: 13.5, fontWeight: 600, color: '#0F172A' }}>{n.label}</span>
-                        {cryptoLoading && cryptoNetwork === n.id
-                          ? <span style={{ width: 14, height: 14, border: '2px solid #A7F3D0', borderTopColor: '#26A17B', borderRadius: '50%', display: 'inline-block', animation: 'pp-spin .7s linear infinite' }} />
-                          : <span style={{ fontSize: 18, color: '#26A17B' }}>›</span>}
+              {/* White content card with tabs */}
+              <div className="content-card">
+                {/* Tabs — only shown if USDT is enabled */}
+                {payment?.usdt_enabled && (payment?.crypto_networks?.length ?? 0) > 0 && (
+                  <div className="tabs-row">
+                    {(['upi', 'usdt'] as const).map(m => (
+                      <button key={m} className={`tab-btn ${method === m ? 'active' : 'inactive'}`} onClick={() => setMethod(m)}>
+                        {m === 'upi' ? 'UPI / INR' : 'USDT'}
                       </button>
                     ))}
                   </div>
+                )}
 
-                  {cryptoErr && <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 9, fontSize: 12.5, background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626' }}>{cryptoErr}</div>}
-
-                  {cryptoData && (
-                    <>
-                      {/* Amount to send */}
-                      <div style={{ background: '#F0FDF9', border: '1px solid #A7F3D0', borderRadius: 12, padding: 16, marginBottom: 14 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Send exactly</div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ fontSize: 26, fontWeight: 800, color: '#065F46', letterSpacing: '-.5px' }}>{cryptoData.expected_usdt} <span style={{ fontSize: 15 }}>USDT</span></div>
-                          <button onClick={() => copyText(cryptoData.expected_usdt, setAmtCopied)}
-                            style={{ background: '#26A17B', border: 'none', borderRadius: 8, padding: '7px 12px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                            {amtCopied ? 'Copied' : 'Copy'}
-                          </button>
-                        </div>
-                        <div style={{ fontSize: 11.5, color: '#047857', marginTop: 6 }}>
-                          ₹{fmtAmount(cryptoData.inr_amount)} · rate ₹{cryptoData.exchange_rate.toFixed(2)}/USDT · send the exact amount incl. decimals
-                        </div>
+                {/* UPI tab */}
+                {method === 'upi' && (
+                  <div className="upi-body">
+                    {/* Floating QR */}
+                    <div className="qr-float-wrap">
+                      <div className="qr-outer">
+                        <div className="qr-scan-line" />
+                        {!qrLoaded && <div className="qr-shimmer" />}
+                        {payment?.qr_code_base64 && (
+                          <img src={payment.qr_code_base64} alt="UPI QR Code" className="qr-img"
+                            style={{ opacity: qrLoaded ? 1 : 0, position: qrLoaded ? 'static' : 'absolute' }}
+                            onLoad={() => setQrLoaded(true)} />
+                        )}
                       </div>
+                    </div>
 
-                      {/* Wallet QR */}
-                      <div style={{ textAlign: 'center', marginBottom: 12 }}>
-                        <div style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>Scan or copy the {cryptoData.network_label} address</div>
-                        {cryptoData.qr_code_base64 && <img src={cryptoData.qr_code_base64} alt="Wallet QR" style={{ width: 168, height: 168, borderRadius: 12, border: '1px solid #E2E8F0' }} />}
+                    {upiId && (
+                      <div className="upi-id-row" style={{ cursor: 'default', userSelect: 'none' }}>
+                        UPI ID: <span className="upi-id-mono">{upiId}</span>
                       </div>
+                    )}
 
-                      {/* Wallet address */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: '10px 12px', marginBottom: 16 }}>
-                        <span style={{ flex: 1, fontSize: 12, fontFamily: 'monospace', color: '#334155', wordBreak: 'break-all' }}>{cryptoData.merchant_wallet}</span>
-                        <button onClick={() => copyText(cryptoData.merchant_wallet, setWalletCopied)}
-                          style={{ background: '#26A17B', border: 'none', borderRadius: 7, padding: '6px 11px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
-                          {walletCopied ? 'Copied' : 'Copy'}
-                        </button>
-                      </div>
-
-                      {/* Paste TxID + verify */}
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>After sending, paste your transaction hash</div>
-                      <input value={txHash} onChange={e => setTxHash(e.target.value)} placeholder="Transaction hash (TxID)"
-                        style={{ width: '100%', padding: '11px 12px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 12.5, fontFamily: 'monospace', color: '#0F172A', outline: 'none', marginBottom: 10 }} />
-                      <button onClick={verifyCrypto} disabled={verifying || !txHash.trim()}
-                        style={{ width: '100%', padding: '13px', borderRadius: 11, border: 'none', fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
-                          cursor: verifying || !txHash.trim() ? 'not-allowed' : 'pointer',
-                          background: verifying || !txHash.trim() ? '#94D3BF' : '#26A17B', color: '#fff' }}>
-                        {verifying ? 'Verifying…' : 'Verify Payment'}
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <button className="save-qr-btn" onClick={downloadQR}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Save QR
                       </button>
+                    </div>
 
-                      {verifyMsg && (
-                        <div style={{ marginTop: 12, padding: '11px 14px', borderRadius: 9, fontSize: 13, fontWeight: 500,
-                          background: verifyMsg.ok ? '#F0FDF4' : '#FEF2F2', border: `1px solid ${verifyMsg.ok ? '#BBF7D0' : '#FECACA'}`,
-                          color: verifyMsg.ok ? '#059669' : '#DC2626' }}>
-                          {verifyMsg.text}
-                        </div>
-                      )}
+                    <div className="or-divider">
+                      <div className="or-line" /><span className="or-text">or pay using</span><div className="or-line" />
+                    </div>
 
-                      <div style={{ marginTop: 12, fontSize: 11, color: '#94A3B8', lineHeight: 1.6 }}>
-                        Send only <strong>USDT on {cryptoData.network_label}</strong> to this address. Sending a different token or network will result in loss of funds.
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {method === 'upi' && (<>
-              {/* Scan & Pay card */}
-              <div className="pay-card scan-section">
-                <div className="scan-title">Scan &amp; Pay</div>
-                <div className="scan-sub">Scan the QR code using any UPI app to make the payment</div>
-
-                <div className="qr-container">
-                  {!qrLoaded && <div className="qr-shimmer" />}
-                  {payment?.qr_code_base64 && (
-                    <img src={payment.qr_code_base64} alt="UPI QR Code" className="qr-img"
-                      style={{ opacity: qrLoaded ? 1 : 0, position: qrLoaded ? 'static' : 'absolute' }}
-                      onLoad={() => setQrLoaded(true)} />
-                  )}
-                </div>
-
-                {upiId && (
-                  <div className="upi-id-row">
-                    UPI ID: <span className="upi-id-mono">{upiId}</span>
-                    <button className={`pay-copy-btn ${upiCopied ? 'copied' : ''}`} onClick={() => upiId && copyText(upiId, setUpiCopied)} title="Copy UPI ID">
-                      {upiCopied ? <span style={{ fontSize: 11 }}>✓</span> : <CopyIcon />}
-                    </button>
+                    <div className="upi-apps-label">UPI Apps</div>
+                    <div className="upi-grid">
+                      {UPI_APPS.map(app => (
+                        <button key={app.name} className="upi-app-btn" onClick={() => handleUPI(app)}>
+                          <div className="upi-app-icon" dangerouslySetInnerHTML={{ __html: app.svg }} />
+                          <span className="upi-app-name">{app.name}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}>
-                  <button onClick={downloadQR} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#F1F5F9', border: 'none', borderRadius: 8, padding: '6px 14px', color: '#475569', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Save QR
-                  </button>
-                </div>
-              </div>
+                {/* USDT tab */}
+                {method === 'usdt' && (
+                  <div className="usdt-body">
+                    {/* Network selector */}
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Select network</div>
+                    {payment?.crypto_networks?.map(n => {
+                      const active = cryptoNetwork === n.id;
+                      return (
+                        <button key={n.id} className={`net-btn ${active ? 'net-active' : 'net-inactive'}`} onClick={() => initCrypto(n.id)} disabled={cryptoLoading}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div className={`net-icon ${active ? 'net-active' : 'net-inactive'}`}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={active ? '#2563EB' : '#94A3B8'} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                            </div>
+                            <div>
+                              <div className={`net-label ${active ? 'net-active' : 'net-inactive'}`}>{n.label}</div>
+                              <div className="net-sub">Tap to load address & QR</div>
+                            </div>
+                          </div>
+                          {cryptoLoading && active
+                            ? <span style={{ width: 16, height: 16, border: '2px solid #BFDBFE', borderTopColor: '#2563EB', borderRadius: '50%', display: 'inline-block', animation: 'spinA .7s linear infinite', flexShrink: 0 }} />
+                            : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? '#2563EB' : '#CBD5E1'} strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>}
+                        </button>
+                      );
+                    })}
 
-              {/* OR divider */}
-              <div className="or-divider">
-                <div className="or-line" /><span className="or-text">or pay using</span><div className="or-line" />
-              </div>
+                    {cryptoErr && (
+                      <div style={{ padding: '10px 14px', borderRadius: 10, fontSize: 12.5, background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626' }}>{cryptoErr}</div>
+                    )}
 
-              {/* UPI apps card */}
-              <div className="pay-card">
-                <div className="upi-title" style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', textAlign: 'center', marginBottom: 16 }}>Pay using UPI Apps</div>
-                <div className="upi-grid">
-                  {UPI_APPS.map(app => (
-                    <button key={app.name} className="upi-app-btn" onClick={() => handleUPI(app)}>
-                      <div className="upi-app-icon" dangerouslySetInnerHTML={{ __html: app.svg }} />
-                      <span className="upi-app-name">{app.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+                    {cryptoData && (
+                      <>
+                        {/* Send exactly — blue */}
+                        <div className="send-box">
+                          <div className="send-box-label">Send Exactly</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <span className="send-box-amt" style={{ fontSize: fmtUsdt(cryptoData.expected_usdt).length > 10 ? 22 : 30 }}>{fmtUsdt(cryptoData.expected_usdt)}</span>
+                              <span className="send-box-unit">USDT</span>
+                            </div>
+                            <button className={`copy-btn-blue ${amtCopied ? 'copied' : ''}`} onClick={() => copyText(cryptoData.expected_usdt, setAmtCopied)} style={{ flexShrink: 0 }}>
+                              {amtCopied ? '✓ Copied' : 'Copy'}
+                            </button>
+                          </div>
+                          <div className="send-box-meta">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                            ₹{fmtAmount(cryptoData.inr_amount)} · rate ₹{cryptoData.exchange_rate.toFixed(2)}/USDT · send exact incl. decimals
+                          </div>
+                        </div>
 
-              </>)}
+                        {/* QR + address */}
+                        <div className="qr-addr-row">
+                          {cryptoData.qr_code_base64 && (
+                            <div className="qr-sm-box">
+                              <img src={cryptoData.qr_code_base64} alt="Wallet QR" style={{ width: 72, height: 72, borderRadius: 6, display: 'block' }} />
+                            </div>
+                          )}
+                          <div className="addr-block">
+                            <div className="addr-block-label">Wallet Address</div>
+                            <div className="addr-block-val">
+                              <span style={{ flex: 1 }}>{cryptoData.merchant_wallet}</span>
+                              <button className={`addr-copy ${walletCopied ? 'copied' : ''}`} onClick={() => copyText(cryptoData.merchant_wallet, setWalletCopied)}>
+                                {walletCopied ? '✓' : 'Copy'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
 
-              {/* Timer card */}
-              <div className="pay-card" style={{ padding: '14px 20px' }}>
-                <div className="timer-row">
-                  <div className="timer-left-col">
-                    <div className="timer-clock">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" strokeLinecap="round">
-                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                      </svg>
-                    </div>
-                    <span>This QR code will expire in</span>
+                        {/* After sending divider */}
+                        <div className="after-divider">
+                          <div className="after-line" />
+                          <span className="after-text">After Sending</span>
+                          <div className="after-line" />
+                        </div>
+
+                        {/* TxID */}
+                        <input
+                          value={txHash}
+                          onChange={e => setTxHash(e.target.value)}
+                          placeholder="Paste transaction hash (TxID)"
+                          className={`txid-input ${txHash ? 'has-value' : ''}`}
+                        />
+
+                        {/* Verify */}
+                        <button className="verify-btn" onClick={verifyCrypto} disabled={verifying || !txHash.trim()}>
+                          {verifying
+                            ? <><span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spinA .7s linear infinite' }} /> Verifying…</>
+                            : <><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> Verify Payment</>}
+                        </button>
+
+                        {verifyMsg && (
+                          <div style={{ padding: '12px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8,
+                            background: verifyMsg.ok ? '#F0FDF4' : '#FEF2F2', border: `1px solid ${verifyMsg.ok ? '#BBF7D0' : '#FECACA'}`,
+                            color: verifyMsg.ok ? '#059669' : '#DC2626' }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                              {verifyMsg.ok ? <polyline points="20 6 9 17 4 12"/> : <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>}
+                            </svg>
+                            {verifyMsg.text}
+                          </div>
+                        )}
+
+                        {/* Warning */}
+                        <div className="warn-box">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                          <div>Send only <strong>USDT on {cryptoData.network_label}</strong> to this address. A different token or network will result in permanent loss of funds.</div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <span className={`timer-val ${isUrgent ? 'urgent' : ''}`}>{timeLeft > 0 ? fmtTime(timeLeft) : '--:--'}</span>
-                </div>
+                )}
               </div>
 
-              <div style={{ textAlign: 'right', marginTop: -8, marginBottom: 14, paddingRight: 4 }}>
-                <span style={{ fontSize: 12, color: '#94A3B8' }}>Need help? <a style={{ color: '#2563EB', fontWeight: 600, cursor: 'pointer', textDecoration: 'none' }}>Contact Support</a></span>
+              <div style={{ textAlign: 'center', paddingTop: 4 }}>
+                <span style={{ fontSize: 12, color: '#94A3B8' }}>
+                  Need help? <a style={{ color: '#2563EB', fontWeight: 600, cursor: 'pointer', textDecoration: 'none' }}>Contact Support</a>
+                </span>
               </div>
-
-              {/* Payment instructions card (UPI only) */}
-              {method === 'upi' && (
-              <div className="pay-card">
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: 18 }}>Payment Instructions</div>
-                <div className="inst-grid">
-                  {[
-                    {
-                      title: 'Open any UPI app',
-                      desc: 'Launch your preferred UPI application',
-                      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>,
-                    },
-                    {
-                      title: 'Scan QR code',
-                      desc: 'Scan this QR code or enter UPI ID',
-                      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="4" height="4"/><rect x="13" y="7" width="4" height="4"/><rect x="7" y="13" width="4" height="4"/><rect x="13" y="13" width="4" height="4"/></svg>,
-                    },
-                    {
-                      title: 'Enter amount & pay',
-                      desc: 'Verify details and complete the payment',
-                      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>,
-                    },
-                  ].map((step, i) => (
-                    <div key={i} className="inst-step">
-                      <div className="inst-num">{i + 1}</div>
-                      <div className="inst-icon-wrap">{step.icon}</div>
-                      <div className="inst-step-title">{step.title}</div>
-                      <div className="inst-step-desc">{step.desc}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              )}
             </>
           )}
 
           {/* Footer */}
           <div className="pay-footer">
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#94A3B8' }}>
+            <span className="pay-footer-item">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-              Your payment is secured with industry-standard encryption
+              SSL Encrypted
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#16A34A', fontWeight: 600 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               PCI DSS Compliant
             </span>
+            <span className="pay-footer-item">Powered by <strong>NovaPay</strong></span>
           </div>
 
         </div>
       </div>
+
+      {/* ── Sticky redirect bar — always visible above bottom edge ── */}
+      {pageStatus === 'success' && payment?.redirect_url && (
+        <div className="sticky-redirect-bar">
+          <div className="sticky-redirect-inner">
+            <button
+              className="sticky-redirect-btn"
+              onClick={() => { window.location.href = `${payment.redirect_url}?order_id=${payment.order_id || ''}&status=paid`; }}
+            >
+              <div className="sticky-timer-circle">{Math.max(0, redirectCountdown)}</div>
+              <div className="sticky-btn-text">
+                <div className="sticky-btn-title">Back to Merchant</div>
+                <div className="sticky-btn-sub">You will be redirected shortly</div>
+              </div>
+              <svg className="sticky-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
