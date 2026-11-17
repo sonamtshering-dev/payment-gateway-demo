@@ -7,6 +7,7 @@ const API = '/api/v1/dashboard/crypto';
 
 interface CryptoConfig {
   usdt_enabled: boolean;
+  upi_enabled: boolean;
   pricing_mode: string;
   fixed_rate: number;
   adjustment_pct: number;
@@ -53,7 +54,7 @@ export default function CryptoSettingsPage() {
   const [err, setErr] = useState('');
 
   const [cfg, setCfg] = useState<CryptoConfig>({
-    usdt_enabled: false, pricing_mode: 'live', fixed_rate: 0, adjustment_pct: 0,
+    usdt_enabled: false, upi_enabled: true, pricing_mode: 'live', fixed_rate: 0, adjustment_pct: 0,
     required_confirmations: 1, payment_timeout_min: 30, auto_verify: false,
   });
   const [networks, setNetworks] = useState<NetworkOption[]>([]);
@@ -133,16 +134,34 @@ export default function CryptoSettingsPage() {
         </div>
       </div>
 
-      {/* Enable */}
-      <div className="cr-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Enable USDT payments</div>
-          <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>Customers can pay in USDT on your checkout page.</div>
+      {/* Payment method toggles */}
+      <div className="cr-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>UPI / INR payments</div>
+            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>Customers can pay via UPI (GPay, PhonePe, etc.).</div>
+          </div>
+          <div onClick={() => setCfg(c => ({ ...c, upi_enabled: !c.upi_enabled }))}
+            style={{ width: 44, height: 24, borderRadius: 12, cursor: 'pointer', background: cfg.upi_enabled ? '#2563EB' : '#CBD5E1', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+            <div style={{ position: 'absolute', top: 3, left: cfg.upi_enabled ? 23 : 3, width: 18, height: 18, borderRadius: 9, background: '#fff', transition: 'left .2s', boxShadow: '0 1px 4px rgba(0,0,0,.18)' }} />
+          </div>
         </div>
-        <div onClick={() => setCfg(c => ({ ...c, usdt_enabled: !c.usdt_enabled }))}
-          style={{ width: 44, height: 24, borderRadius: 12, cursor: 'pointer', background: cfg.usdt_enabled ? '#26A17B' : '#CBD5E1', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
-          <div style={{ position: 'absolute', top: 3, left: cfg.usdt_enabled ? 23 : 3, width: 18, height: 18, borderRadius: 9, background: '#fff', transition: 'left .2s', boxShadow: '0 1px 4px rgba(0,0,0,.18)' }} />
+        <div style={{ height: 1, background: '#F1F5F9' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>USDT payments</div>
+            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>Customers can pay in USDT on your checkout page.</div>
+          </div>
+          <div onClick={() => setCfg(c => ({ ...c, usdt_enabled: !c.usdt_enabled }))}
+            style={{ width: 44, height: 24, borderRadius: 12, cursor: 'pointer', background: cfg.usdt_enabled ? '#26A17B' : '#CBD5E1', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+            <div style={{ position: 'absolute', top: 3, left: cfg.usdt_enabled ? 23 : 3, width: 18, height: 18, borderRadius: 9, background: '#fff', transition: 'left .2s', boxShadow: '0 1px 4px rgba(0,0,0,.18)' }} />
+          </div>
         </div>
+        {!cfg.upi_enabled && !cfg.usdt_enabled && (
+          <div style={{ padding: '10px 12px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', fontSize: 12, color: '#DC2626', fontWeight: 500 }}>
+            ⚠️ At least one payment method must be enabled.
+          </div>
+        )}
       </div>
 
       {/* Non-custodial notice */}

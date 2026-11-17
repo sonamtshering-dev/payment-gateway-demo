@@ -19,6 +19,7 @@ interface PaymentData {
   utr?: string;
   redirect_url?: string;
   usdt_enabled?: boolean;
+  upi_enabled?: boolean;
   crypto_networks?: { id: string; label: string }[];
 }
 
@@ -82,7 +83,8 @@ export default function PayPage() {
   const [paidAt, setPaidAt] = useState('');
   const [redirectCountdown, setRedirectCountdown] = useState(5);
 
-  // Crypto / USDT flow
+  // Crypto / USDT flow — default method depends on what the merchant has enabled.
+  // We start with 'upi' and switch to 'usdt' once we know UPI is off.
   const [method, setMethod] = useState<'upi' | 'usdt'>('upi');
   const [cryptoNetwork, setCryptoNetwork] = useState<string>('');
   const [cryptoData, setCryptoData] = useState<CryptoInit | null>(null);
@@ -147,6 +149,14 @@ export default function PayPage() {
   }, [paymentId]);
 
   useEffect(() => { fetchPayment(); }, [fetchPayment]);
+
+  // Once payment loads, force the right default method based on what's enabled.
+  useEffect(() => {
+    if (!payment) return;
+    const upiOn = payment.upi_enabled !== false; // default true when field absent
+    const usdtOn = payment.usdt_enabled && (payment.crypto_networks?.length ?? 0) > 0;
+    if (!upiOn && usdtOn) setMethod('usdt');
+  }, [payment]);
 
   useEffect(() => {
     if (pageStatus !== 'pending') return;
@@ -867,8 +877,8 @@ export default function PayPage() {
 
               {/* White content card with tabs */}
               <div className="content-card">
-                {/* Tabs — only shown if USDT is enabled */}
-                {payment?.usdt_enabled && (payment?.crypto_networks?.length ?? 0) > 0 && (
+                {/* Tabs — only shown when BOTH UPI and USDT are available */}
+                {payment?.upi_enabled !== false && payment?.usdt_enabled && (payment?.crypto_networks?.length ?? 0) > 0 && (
                   <div className="tabs-row">
                     {(['upi', 'usdt'] as const).map(m => (
                       <button key={m} className={`tab-btn ${method === m ? 'active' : 'inactive'}`} onClick={() => setMethod(m)}>
@@ -878,8 +888,8 @@ export default function PayPage() {
                   </div>
                 )}
 
-                {/* UPI tab */}
-                {method === 'upi' && (
+                {/* UPI tab — shown when UPI is enabled and selected */}
+                {method === 'upi' && payment?.upi_enabled !== false && (
                   <div className="upi-body">
                     {/* Floating QR */}
                     <div className="qr-float-wrap">

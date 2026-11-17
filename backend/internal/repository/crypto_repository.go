@@ -14,12 +14,12 @@ import (
 // ============================================================================
 
 func (r *Repository) GetCryptoConfig(ctx context.Context, merchantID uuid.UUID) (*models.MerchantCryptoConfig, error) {
-	q := `SELECT merchant_id, usdt_enabled, pricing_mode, fixed_rate, adjustment_pct,
+	q := `SELECT merchant_id, usdt_enabled, COALESCE(upi_enabled, true), pricing_mode, fixed_rate, adjustment_pct,
 	             required_confirmations, payment_timeout_min, auto_verify, created_at, updated_at
 	      FROM merchant_crypto_config WHERE merchant_id = $1`
 	c := &models.MerchantCryptoConfig{}
 	err := r.db.QueryRow(ctx, q, merchantID).Scan(
-		&c.MerchantID, &c.USDTEnabled, &c.PricingMode, &c.FixedRate, &c.AdjustmentPct,
+		&c.MerchantID, &c.USDTEnabled, &c.UPIEnabled, &c.PricingMode, &c.FixedRate, &c.AdjustmentPct,
 		&c.RequiredConfirmations, &c.PaymentTimeoutMin, &c.AutoVerify, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -30,14 +30,14 @@ func (r *Repository) GetCryptoConfig(ctx context.Context, merchantID uuid.UUID) 
 
 func (r *Repository) UpsertCryptoConfig(ctx context.Context, c *models.MerchantCryptoConfig) error {
 	q := `INSERT INTO merchant_crypto_config
-	        (merchant_id, usdt_enabled, pricing_mode, fixed_rate, adjustment_pct,
+	        (merchant_id, usdt_enabled, upi_enabled, pricing_mode, fixed_rate, adjustment_pct,
 	         required_confirmations, payment_timeout_min, auto_verify, created_at, updated_at)
-	      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+	      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
 	      ON CONFLICT (merchant_id) DO UPDATE SET
-	        usdt_enabled=$2, pricing_mode=$3, fixed_rate=$4, adjustment_pct=$5,
-	        required_confirmations=$6, payment_timeout_min=$7, auto_verify=$8, updated_at=NOW()`
+	        usdt_enabled=$2, upi_enabled=$3, pricing_mode=$4, fixed_rate=$5, adjustment_pct=$6,
+	        required_confirmations=$7, payment_timeout_min=$8, auto_verify=$9, updated_at=NOW()`
 	_, err := r.db.Exec(ctx, q,
-		c.MerchantID, c.USDTEnabled, c.PricingMode, c.FixedRate, c.AdjustmentPct,
+		c.MerchantID, c.USDTEnabled, c.UPIEnabled, c.PricingMode, c.FixedRate, c.AdjustmentPct,
 		c.RequiredConfirmations, c.PaymentTimeoutMin, c.AutoVerify,
 	)
 	return err

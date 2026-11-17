@@ -99,8 +99,9 @@ type PaymentStatusResponse struct {
 	BusinessName  string `json:"business_name,omitempty"`
 	PrimaryColor  string `json:"primary_color,omitempty"`
 
-	// Crypto availability for the checkout page (only networks with a wallet set).
+	// Payment method availability for the checkout page.
 	USDTEnabled    bool                  `json:"usdt_enabled"`
+	UPIEnabled     bool                  `json:"upi_enabled"`
 	CryptoNetworks []CryptoNetworkOption `json:"crypto_networks,omitempty"`
 }
 

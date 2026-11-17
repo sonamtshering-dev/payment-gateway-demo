@@ -22,6 +22,7 @@ const (
 type MerchantCryptoConfig struct {
 	MerchantID            uuid.UUID `json:"merchant_id" db:"merchant_id"`
 	USDTEnabled           bool      `json:"usdt_enabled" db:"usdt_enabled"`
+	UPIEnabled            bool      `json:"upi_enabled" db:"upi_enabled"`
 	PricingMode           string    `json:"pricing_mode" db:"pricing_mode"`
 	FixedRate             float64   `json:"fixed_rate" db:"fixed_rate"`             // INR per 1 USDT
 	AdjustmentPct         float64   `json:"adjustment_pct" db:"adjustment_pct"`     // +/- %
@@ -78,6 +79,7 @@ type CryptoPayment struct {
 
 type UpdateCryptoConfigRequest struct {
 	USDTEnabled           bool    `json:"usdt_enabled"`
+	UPIEnabled            bool    `json:"upi_enabled"`
 	PricingMode           string  `json:"pricing_mode"`
 	FixedRate             float64 `json:"fixed_rate"`
 	AdjustmentPct         float64 `json:"adjustment_pct"`

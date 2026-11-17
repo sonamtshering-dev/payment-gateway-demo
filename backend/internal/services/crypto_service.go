@@ -71,8 +71,8 @@ func (s *Service) UpdateCryptoConfig(ctx context.Context, merchantID uuid.UUID, 
 		return fmt.Errorf("timeout must be between 5 and 180 minutes")
 	}
 	cfg := &models.MerchantCryptoConfig{
-		MerchantID: merchantID, USDTEnabled: req.USDTEnabled, PricingMode: req.PricingMode,
-		FixedRate: req.FixedRate, AdjustmentPct: req.AdjustmentPct,
+		MerchantID: merchantID, USDTEnabled: req.USDTEnabled, UPIEnabled: req.UPIEnabled,
+		PricingMode: req.PricingMode, FixedRate: req.FixedRate, AdjustmentPct: req.AdjustmentPct,
 		RequiredConfirmations: req.RequiredConfirmations, PaymentTimeoutMin: req.PaymentTimeoutMin,
 		AutoVerify: req.AutoVerify,
 	}

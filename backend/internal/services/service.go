@@ -365,42 +365,55 @@ func (s *Service) GetPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*m
 			primaryColor = *merchant.PrimaryColor
 		}
 	}
-	// Advertise USDT only when enabled AND at least one network has an active wallet.
+	// Determine which payment methods are available for this merchant.
 	usdtEnabled := false
+	upiEnabled := true // default on for existing merchants with no config
 	var cryptoNets []models.CryptoNetworkOption
-	if cc, _ := s.repo.GetCryptoConfig(ctx, payment.MerchantID); cc != nil && cc.USDTEnabled {
-		if wallets, _ := s.repo.ListCryptoWallets(ctx, payment.MerchantID); len(wallets) > 0 {
-			for _, w := range wallets {
-				if !w.IsActive || w.Address == "" {
-					continue
+	if cc, _ := s.repo.GetCryptoConfig(ctx, payment.MerchantID); cc != nil {
+		upiEnabled = cc.UPIEnabled
+		if cc.USDTEnabled {
+			if wallets, _ := s.repo.ListCryptoWallets(ctx, payment.MerchantID); len(wallets) > 0 {
+				for _, w := range wallets {
+					if !w.IsActive || w.Address == "" {
+						continue
+					}
+					if net, ok := config.CryptoNetworks[w.Network]; ok {
+						cryptoNets = append(cryptoNets, models.CryptoNetworkOption{ID: net.ID, Label: net.Label})
+					}
 				}
-				if net, ok := config.CryptoNetworks[w.Network]; ok {
-					cryptoNets = append(cryptoNets, models.CryptoNetworkOption{ID: net.ID, Label: net.Label})
-				}
+				usdtEnabled = len(cryptoNets) > 0
 			}
-			usdtEnabled = len(cryptoNets) > 0
 		}
 	}
 
+	// Suppress UPI data if merchant has disabled UPI payments.
+	qrCode := payment.QRCodeData
+	upiLink := payment.UPIIntentLink
+	if !upiEnabled {
+		qrCode = ""
+		upiLink = ""
+	}
+
 	return &models.PaymentStatusResponse{
-		PaymentID:     payment.ID,
-		OrderID:       payment.OrderID,
-		MerchantID:    payment.MerchantID,
-		Amount:        payment.Amount,
-		Currency:      payment.Currency,
-		Status:        payment.Status,
-		UTR:           payment.UTR,
-		PaidAt:        payment.PaidAt,
-		ExpiresAt:     payment.ExpiresAt,
-		CreatedAt:     payment.CreatedAt,
-		QRCodeBase64:  payment.QRCodeData,
-		UPIIntentLink: payment.UPIIntentLink,
-		RedirectURL:   payment.RedirectURL,
-		CustomerRef:   payment.CustomerReference,
-		MerchantLogo:  merchantLogo,
-		BusinessName:  businessName,
-		PrimaryColor:  primaryColor,
+		PaymentID:      payment.ID,
+		OrderID:        payment.OrderID,
+		MerchantID:     payment.MerchantID,
+		Amount:         payment.Amount,
+		Currency:       payment.Currency,
+		Status:         payment.Status,
+		UTR:            payment.UTR,
+		PaidAt:         payment.PaidAt,
+		ExpiresAt:      payment.ExpiresAt,
+		CreatedAt:      payment.CreatedAt,
+		QRCodeBase64:   qrCode,
+		UPIIntentLink:  upiLink,
+		RedirectURL:    payment.RedirectURL,
+		CustomerRef:    payment.CustomerReference,
+		MerchantLogo:   merchantLogo,
+		BusinessName:   businessName,
+		PrimaryColor:   primaryColor,
 		USDTEnabled:    usdtEnabled,
+		UPIEnabled:     upiEnabled,
 		CryptoNetworks: cryptoNets,
 	}, nil
 }
